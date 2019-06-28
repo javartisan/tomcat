@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,105 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp.tagext;
 
+/**
+ * Information on Tag Attributes;
+ * this class is instantiated from the Tag Library Descriptor file (TLD).
+ *
+ * Only the information needed to generate code is included here.  Other information
+ * like SCHEMA for validation belongs elsewhere.
+ */
 
+public class TagAttributeInfo {
+    /**
+     * "id" is wired in to be ID.  There is no real benefit in having it be something else
+     * IDREFs are not handled any differently.
+     */
 
+    public static final String ID = "id";
 
+    /**
+     * Constructor for TagAttributeInfo.
+     * No public constructor; this class is to be instantiated only from the
+     * TagLibrary code under request from some JSP code that is parsing a
+     * TLD (Tag Library Descriptor).
+     *
+     * @param name The name of the attribute
+     * @param type The name of the type of the attribute
+     * @param reqTime Can this attribute hold a request-time Attribute
+     */
+    // TODO -- add the content descriptor...
 
+    public TagAttributeInfo(String name, boolean required,
+                            String type, boolean reqTime)
+    {
+	this.name = name;
+        this.required = required;
+        this.type = type;
+	this.reqTime = reqTime;
+    }
+
+    /**
+     * @returns the name of the attribute
+     */
+
+    public String getName() {
+	return name;
+    }
+
+    /**
+     * @returns the type of the attribute
+     */
+
+    public String getTypeName() {
+	return type;
+    }
+
+    /**
+     * Can this attribute hold a request-time value?
+     */
+
+    public boolean canBeRequestTime() {
+	return reqTime;
+    }
+
+    /**
+     * Is this required or not?
+     */
+    public boolean isRequired() {
+        return required;
+    }
+
+    /**
+     * Convenience method that goes through an array of TagAttributeInfo
+     * objects and looks for "id".
+     */
+    public static TagAttributeInfo getIdAttribute(TagAttributeInfo a[]) {
+	for (int i=0; i<a.length; i++) {
+	    if (a[i].getName().equals(ID)) {
+		return a[i];
+	    }
+	}
+	return null;		// no such attribute
+    }
+
+    public String toString() {
+        StringBuffer b = new StringBuffer();
+        b.append("name = "+name+" ");
+        b.append("type = "+type+" ");
+	b.append("reqTime = "+reqTime+" ");
+        b.append("required = "+required+" ");
+        return b.toString();
+    }
+
+    /*
+     * fields
+     */
+
+    private String name;
+    private String type;
+    private boolean reqTime;
+    private boolean required;
+}

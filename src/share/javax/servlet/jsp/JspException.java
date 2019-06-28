@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,25 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp;
 
+/**
+ * A generic exception known to the JSP engine
+ */
 
+public class JspException extends Exception {
+    /**
+     * Construct a JspException
+     */
+    public JspException() {
+    }
 
+    /**
+     * An exception with a message
+     */
+    public JspException(String msg) {
+	super(msg);
+    }
 
-
+}

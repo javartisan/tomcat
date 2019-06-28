@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,26 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp;
 
+import javax.servlet.*;
+import javax.servlet.http.*;
+import java.io.IOException;
 
+/**
+ * This is the interface that a JSP processor-generated class for the
+ * HTTP protocol must satisfy.
+ */
 
+public interface HttpJspPage extends JspPage {
 
-
+    /**
+     * _jspService corresponds to the body of the JSP page.
+     * This method is defined automatically by the JSP processor
+     * and should NEVER BE DEFINED BY THE JSP AUTHOR
+     */
+    public void _jspService(HttpServletRequest request,
+				HttpServletResponse response)
+       throws ServletException, IOException;
+}

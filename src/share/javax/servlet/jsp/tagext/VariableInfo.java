@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,66 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp.tagext;
+
+/**
+ * Information on the scripting variables that are created/modified by
+ * a tag (at run-time); this information is provided by TagExtraInfo
+ * classes and it is used by the translation phase of JSP.
+ *
+ */
+
+public class VariableInfo {
+    /**
+     * Different types of scope for an scripting variable introduced
+     * by this action
+     *
+     * <pre>
+     * NESTED ==> variable is visible only within the start/end tags
+     * AT_BEGIN ==> variable is visible after start tag
+     * AT_END ==> variable is visible after end tag
+     * </pre>
+     */
+    public static final int NESTED = 0;
+    public static final int AT_BEGIN = 1;
+    public static final int AT_END = 2;
+
+
+    /**
+     * Constructor
+     * These objects can be created (at translation time) by the TagExtraInfo
+     * instances.
+     *
+     * @param id The name of the scripting variable
+     * @param className The name of the scripting variable
+     * @param declare If true, it is a new variable (in some languages this will
+     * require a declaration)
+     * @param scope Indication on the lexical scope of the variable
+     */
+
+    public VariableInfo(String varName,
+			String className,
+			boolean declare,
+			int scope) {
+	this.varName = varName;
+	this.className = className;
+	this.declare = declare;
+	this.scope = scope;
+    }
+
+    // Accessor methods
+    public String getVarName() { return varName; }
+    public String getClassName() { return className; }
+    public boolean getDeclare() { return declare; }
+    public int getScope() { return scope; }
 
 
 
-
+    // == private data
+    private String varName;
+    private String className;
+    private boolean declare;
+    private int scope;
+}
 

@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,64 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp;
 
+import javax.servlet.*;
 
+/**
+ * This is the interface that a JSP processor-generated class must
+ * satisfy.
+ * <p>
+ * The interface defines a protocol with 3 methods; only two of
+ * them: jspInit() and jspDestroy() are part of this interface as
+ * the signature of the third method: _jspService() depends on
+ * the specific protocol used and cannot be expressed in a generic
+ * way in Java.
+ * <p>
+ * A class implementing this interface is responsible for invoking
+ * the above methods at the apropriate time based on the
+ * corresponding Servlet-based method invocations.
+ * <p>
+ * The jspInit(0 and jspDestroy() methods can be defined by a JSP
+ * author, but the _jspService() method is defined authomatically
+ * by the JSP processor based on the contents of the JSP page.
+ */
 
+public interface JspPage extends Servlet {
 
+    /**
+     * Methods that can be DEFINED BY THE JSP AUTHOR
+     * either directly (via a declaration) or via an event handler
+     * (in JSP 1.1)
+     */
 
+    /**
+     * jsp_init() is invoked when the JspPage is initialized.
+     * At this point getServletConfig() will return the desired value.
+     */
+    public void jspInit();
+
+    /**
+     * jsp_destroy() is invoked when the JspPage is about to be destroyed.
+     */
+    public void jspDestroy();
+
+    /**
+     * service is the main service entry from the superclass.  It is 
+     * responsible from determine if the protocol is valid and to call
+     * into the appropriate _jspService(), after the appropriate casting.
+     */
+
+    /**
+     * _jspService corresponds to the body of the JSP page.
+     * This method is defined automatically by the JSP processor
+     * and should NEVER BE DEFINED BY THE JSP AUTHOR
+     *
+     * The specific signature depends on the protocol supported by the JSP page.
+     *
+     * public void _jspService(<ServletRequestSubtype> request,
+     *                             <ServletResponseSubtype> response)
+     *        throws ServletException, IOException;
+     */
+}

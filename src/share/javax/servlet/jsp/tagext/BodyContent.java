@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,96 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp.tagext;
 
+import java.io.Reader;
+import java.io.Writer;
+import java.io.IOException;
+import javax.servlet.jsp.*;
 
+/**
+ * A JspWriter subclass that can be used to process body evaluations
+ * so they can re-extracted later on.
+ */
 
+public abstract class BodyContent extends JspWriter {
+    
+    /**
+     * Protected constructor.
+     *
+     * Unbounded buffer,  no autoflushing.
+     */
 
+    protected BodyContent(JspWriter e) {
+	super(UNBOUNDED_BUFFER , false);
+	this.enclosingWriter = e;
+    }
 
+    /**
+     * Redefine flush().
+     * It is not valid to flush.
+     */
+
+    public void flush() throws IOException {
+	throw new IOException("Illegal to flush within a custom tag");
+    }
+
+    /**
+     * Clear the body.
+     */
+    
+    public void clearBody() {
+	try {
+	    this.clear();
+	} catch (IOException ex) {
+	    // TODO -- clean this one up.
+	    throw new Error("internal error!;");
+	}
+    }
+
+    /**
+     * Return the value of this BodyContent as a Reader.
+     * Note: this is after evaluation!!  There are no scriptlets,
+     * etc in this stream.
+     *
+     * @returns the value of this BodyContent as a Reader
+     */
+    public abstract Reader getReader();
+
+    /**
+     * Return the value of the BodyContent as a String.
+     * Note: this is after evaluation!!  There are no scriptlets,
+     * etc in this stream.
+     *
+     * @returns the value of the BodyContent as a String
+     */
+    public abstract String getString();
+	
+    /**
+     * Write the contents of this BodyContent into a Writer.
+     * Subclasses are likely to do interesting things with the
+     * implementation so some things are extra efficient.
+     *
+     * @param out The writer into which to place the contents of
+     * this body evaluation
+     */
+
+    public abstract void writeOut(Writer out) throws IOException;
+
+    /**
+     * Get the enclosing JspWriter
+     *
+     * @returns the enclosing JspWriter passed at construction time
+     */
+
+    public JspWriter getEnclosingWriter() {
+	return enclosingWriter;
+    }
+
+    /**
+     * private fields
+     */
+    
+    private JspWriter enclosingWriter;
+ }

@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,30 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp;
 
+/**
+ * <p>
+ * The JspEngineInfo is an abstract class that provides information on the
+ * current JSP engine
+ * </p>
+ */
 
+public abstract class JspEngineInfo {
+    
+    /**
+     * <p>
+     * Specification version numbers use a "Dewey Decimal"
+     * syntax that consists of positive decimal integers
+     * separated by periods ".", for example, "2.0" or "1.2.3.4.5.6.7".
+     * This allows an extensible number to be used to
+     * represent major, minor, micro, etc versions.
+     * The version number must begin with a number.
+     * </p>
+     *
+     * @return the specification version, nullis returned if it is not known
+     */
 
-
-
+    public abstract String getSpecificationVersion();
+}

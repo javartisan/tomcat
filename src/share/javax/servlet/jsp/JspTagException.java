@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -57,9 +51,28 @@
  * information on the Apache Software Foundation, please see
  * <http://www.apache.org/>.
  *
- */ 
+ */
+package javax.servlet.jsp;
 
+/**
+ * Exception to be used by a Tag Handler to indicate some unrecoverable
+ * error.
+ * This error is to be caught by the top level of the JSP page and will result
+ * in an error page.
+ */
 
+public class JspTagException extends JspException {
+    /**
+     * Constructor with a message.
+     */
+    public JspTagException(String msg) {
+	super(msg);
+    }
 
-
-
+    /**
+     * No message
+     */
+    public JspTagException() {
+	super();
+    }
+}

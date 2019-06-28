@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -58,8 +52,61 @@
  * <http://www.apache.org/>.
  *
  */ 
+ 
+package javax.servlet.jsp.tagext;
 
+/**
+ * Extra Tag Information for a Custom Tag;
+ * this class is mentioned in the Tag Library Descriptor file (TLD).
+ *
+ * This class must be used:
+ *  - if the tag defines any scripting variables
+ *  - if the tag wants to provide translation-time validation of the tag
+ *    attributes.
+ *
+ */
 
+public abstract class TagExtraInfo {
 
+    /**
+     * information on scripting variables defined by this tag
+     *
+     * @param data The translation-time TagData instance.
+     */
+    public VariableInfo[] getVariableInfo(TagData data) {
+	return new VariableInfo[0];
+    }
 
+    /**
+     * Translation-time validation of the attributes.  The argument is a
+     * translation-time, so request-time attributes are indicated as such.
+     *
+     * @param data The translation-time TagData instance.
+     */
+
+    public boolean isValid(TagData data) {
+	return true;
+    }
+
+    /**
+     * Set the TagInfo for this class
+     *
+     * @param tagInfo The TagInfo this instance is extending
+     */
+    public final void setTagInfo(TagInfo tagInfo) {
+	this.tagInfo = tagInfo;
+    }
+
+    /**
+     * Get the TagInfo for this class
+     *
+     * @returns the taginfo instnace this instance is extending
+     */
+    public final TagInfo getTagInfo() {
+	return tagInfo;
+    }
+    
+    // private data
+    private TagInfo tagInfo;
+}
 

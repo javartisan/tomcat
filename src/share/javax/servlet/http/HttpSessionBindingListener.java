@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -57,9 +51,70 @@
  * information on the Apache Software Foundation, please see
  * <http://www.apache.org/>.
  *
+ * ====================================================================
+ *
+ * This source code implements specifications defined by the Java
+ * Community Process. In order to remain compliant with the specification
+ * DO NOT add / change / or delete method signatures!
  */ 
 
 
+package javax.servlet.http;
+
+import java.util.EventListener;
 
 
+ 
+ 
+
+/**
+ * Causes an object to be notified when it is bound to
+ * or unbound from a session. The object is notified
+ * by an {@link HttpSessionBindingEvent} object.
+ *
+ *
+ * @author		Various
+ * @version		$Version$
+ *
+ * @see HttpSession
+ * @see HttpSessionBindingEvent
+ *
+ */
+
+public interface HttpSessionBindingListener extends EventListener {
+
+
+
+    /**
+     *
+     * Notifies the object that it is being bound to
+     * a session and identifies the session.
+     *
+     * @param event		the event that identifies the
+     *				session 
+     *
+     * @see #valueUnbound
+     *
+     */ 
+
+    public void valueBound(HttpSessionBindingEvent event);
+    
+    
+
+    /**
+     *
+     * Notifies the object that it is being unbound
+     * from a session and identifies the session.
+     *
+     * @param event		the event that identifies
+     *				the session 
+     *	
+     * @see #valueBound
+     *
+     */
+
+    public void valueUnbound(HttpSessionBindingEvent event);
+    
+    
+}
 

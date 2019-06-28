@@ -1,10 +1,4 @@
 /*
- * $Header: /home/cvspublic/jakarta-servletapi/LICENSE,v 1.1.1.1 2000/04/26 05:22:28 craigmcc Exp $
- * $Revision: 1.1.1.1 $
- * $Date: 2000/04/26 05:22:28 $
- *
- * ====================================================================
- * 
  * The Apache Software License, Version 1.1
  *
  * Copyright (c) 1999 The Apache Software Foundation.  All rights 
@@ -57,9 +51,37 @@
  * information on the Apache Software Foundation, please see
  * <http://www.apache.org/>.
  *
- */ 
+ * ====================================================================
+ *
+ * This source code implements specifications defined by the Java
+ * Community Process. In order to remain compliant with the specification
+ * DO NOT add / change / or delete method signatures!
+ */
 
+package javax.servlet;
 
+/**
+ * Ensures that servlets handle
+ * only one request at a time. This interface has no methods.
+ *
+ * <p>If a servlet implements this interface, you are <i>guaranteed</i>
+ * that no two threads will execute concurrently in the
+ * servlet's <code>service</code> method. The servlet container
+ * can make this guarantee by synchronizing access to a single
+ * instance of the servlet, or by maintaining a pool of servlet
+ * instances and dispatching each new request to a free servlet.
+ *
+ * <p>If a servlet implements this interface, the servlet will
+ * be thread safe. However, this interface does not prevent
+ * synchronization problems that result from servlets accessing shared
+ * resources such as static class variables or classes outside
+ * the scope of the servlet.
+ *
+ *
+ * @author	Various
+ * @version	$Version$
+ *
+ */
 
-
-
+public interface SingleThreadModel {
+}
