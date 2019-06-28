@@ -1,4 +1,3 @@
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,7 +13,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
+
 package org.apache.jasper.compiler;
 
 import java.io.File;
@@ -23,27 +23,29 @@ import java.io.FilePermission;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.security.CodeSource;
-import java.security.Policy;
 import java.security.PermissionCollection;
+import java.security.Policy;
 import java.security.cert.Certificate;
-import java.util.Iterator;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import javax.servlet.ServletContext;
 import javax.servlet.jsp.JspFactory;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.jasper.Constants;
 import org.apache.jasper.JspCompilationContext;
 import org.apache.jasper.Options;
-import org.apache.jasper.logging.Logger;
 import org.apache.jasper.runtime.JspFactoryImpl;
+import org.apache.jasper.security.SecurityClassLoad;
 import org.apache.jasper.servlet.JspServletWrapper;
 
 /**
  * Class for tracking JSP compile time file dependencies when the
- * &060;%@include file="..."&062; directive is used.
+ * &060;%@include file="..."%&062; directive is used.
  *
  * A background thread periodically checks the files a JSP page
  * is dependent upon.  If a dpendent file changes the JSP page
@@ -52,9 +54,17 @@ import org.apache.jasper.servlet.JspServletWrapper;
  * Only used if a web application context is a directory.
  *
  * @author Glenn L. Nielsen
- * @version $Revision: 466597 $
+ * @version $Revision: 791335 $
  */
 public final class JspRuntimeContext implements Runnable {
+
+    // Logger
+    private Log log = LogFactory.getLog(JspRuntimeContext.class);
+
+    /*
+     * Counts how many times the webapp's JSPs have been reloaded.
+     */
+    private int jspReloadCount;
 
     /**
      * Preload classes required at runtime by a JSP servlet so that
@@ -62,29 +72,7 @@ public final class JspRuntimeContext implements Runnable {
      */
     static {
         JspFactoryImpl factory = new JspFactoryImpl();
-        if( System.getSecurityManager() != null ) {
-            String basePackage = "org.apache.jasper.";
-            try {
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "runtime.JspFactoryImpl$PrivilegedGetPageContext");
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "runtime.JspFactoryImpl$PrivilegedReleasePageContext");
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "runtime.JspRuntimeLibrary");
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "runtime.JspRuntimeLibrary$PrivilegedIntrospectHelper");
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "runtime.ServletResponseWrapperInclude");
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "runtime.TagHandlerPool");
-                factory.getClass().getClassLoader().loadClass( basePackage +
-                    "servlet.JspServletWrapper");
-            } catch (ClassNotFoundException ex) {
-                System.out.println(
-                    "Jasper JspRuntimeContext preload of class failed: " +
-                    ex.getMessage());
-            }
-        }
+        SecurityClassLoad.securityClassLoad(factory.getClass().getClassLoader());
         JspFactory.setDefaultFactory(factory);
     }
 
@@ -95,7 +83,7 @@ public final class JspRuntimeContext implements Runnable {
      *
      * Loads in any previously generated dependencies from file.
      *
-     * @param context for web application
+     * @param context ServletContext for web application
      */
     public JspRuntimeContext(ServletContext context, Options options) {
 
@@ -109,27 +97,33 @@ public final class JspRuntimeContext implements Runnable {
             parentClassLoader =
                 (URLClassLoader)this.getClass().getClassLoader();
         }
-        if (parentClassLoader != null) {
-            Constants.message("jsp.message.parent_class_loader_is",
-                              new Object[] {
-                                  parentClassLoader.toString()
-                              }, Logger.DEBUG);
-        } else {
-            Constants.message("jsp.message.parent_class_loader_is",
-                              new Object[] {
-                                  "<none>"
-                              }, Logger.DEBUG);
+
+	if (log.isDebugEnabled()) {
+	    if (parentClassLoader != null) {
+		log.debug(Localizer.getMessage("jsp.message.parent_class_loader_is",
+					       parentClassLoader.toString()));
+	    } else {
+		log.debug(Localizer.getMessage("jsp.message.parent_class_loader_is",
+					       "<none>"));
+	    }
         }
 
-        initSecurity();
         initClassPath();
+
+	if (context instanceof org.apache.jasper.servlet.JspCServletContext) {
+	    return;
+	}
+
+        if (System.getSecurityManager() != null) {
+            initSecurity();
+        }
 
         // If this web application context is running from a
         // directory, start the background compilation thread
         String appBase = context.getRealPath("/");         
         if (!options.getDevelopment()
                 && appBase != null
-                && options.getReloading() ) {
+                && options.getCheckInterval() > 0) {
             if (appBase.endsWith(File.separator) ) {
                 appBase = appBase.substring(0,appBase.length()-1);
             }
@@ -175,12 +169,12 @@ public final class JspRuntimeContext implements Runnable {
      */
     private String threadName = "JspRuntimeContext";
 
-    // ------------------------------------------------------ Protected Methods
+    // ------------------------------------------------------ Public Methods
 
     /**
      * Add a new JspServletWrapper.
      *
-     * @param jspUri Uri of JSP
+     * @param jspUri JSP URI
      * @param jsw Servlet wrapper for JSP
      */
     public void addWrapper(String jspUri, JspServletWrapper jsw) {
@@ -205,6 +199,16 @@ public final class JspRuntimeContext implements Runnable {
      */
     public void removeWrapper(String jspUri) {
         jsps.remove(jspUri);
+    }
+
+    /**
+     * Returns the number of JSPs for which JspServletWrappers exist, i.e.,
+     * the number of JSPs that have been loaded into the webapp.
+     *
+     * @return The number of JSPs that have been loaded into the webapp
+     */
+    public int getJspCount() {
+        return jsps.size();
     }
 
     /**
@@ -239,8 +243,7 @@ public final class JspRuntimeContext implements Runnable {
     /**
      * Process a "destory" event for this web application context.
      */                                                        
-    public void destroy() {                                    
-
+    public void destroy() {
         threadStop();
 
         Iterator servlets = jsps.values().iterator();
@@ -248,6 +251,32 @@ public final class JspRuntimeContext implements Runnable {
             ((JspServletWrapper) servlets.next()).destroy();
         }
     }
+
+    /**
+     * Increments the JSP reload counter.
+     */
+    public synchronized void incrementJspReloadCount() {
+        jspReloadCount++;
+    }
+
+    /**
+     * Resets the JSP reload counter.
+     *
+     * @param count Value to which to reset the JSP reload counter
+     */
+    public synchronized void setJspReloadCount(int count) {
+        this.jspReloadCount = count;
+    }
+
+    /**
+     * Gets the current value of the JSP reload counter.
+     *
+     * @return The current value of the JSP reload counter
+     */
+    public int getJspReloadCount() {
+        return jspReloadCount;
+    }
+
 
     // -------------------------------------------------------- Private Methods
 
@@ -268,7 +297,8 @@ public final class JspRuntimeContext implements Runnable {
                 } catch (FileNotFoundException ex) {
                     ctxt.incrementRemoved();
                 } catch (Throwable t) {
-                    jsw.getServletContext().log("Background compile failed",t);
+                    jsw.getServletContext().log("Background compile failed",
+						t);
                 }
             }
         }
@@ -301,12 +331,18 @@ public final class JspRuntimeContext implements Runnable {
             }
         }    
 
+	cpath.append(options.getScratchDir() + sep);
+
         String cp = (String) context.getAttribute(Constants.SERVLET_CLASSPATH);
         if (cp == null || cp.equals("")) {
             cp = options.getClassPath();
         }
 
         classpath = cpath.toString() + cp;
+
+        if(log.isDebugEnabled()) {
+            log.debug("Compilation classpath initialized: " + getClassPath());
+        }
     }
 
     /**
@@ -332,7 +368,7 @@ public final class JspRuntimeContext implements Runnable {
                 }
                 File contextDir = new File(codeBase);
                 URL url = contextDir.getCanonicalFile().toURL();
-                codeSource = new CodeSource(url, (Certificate[]) null);
+                codeSource = new CodeSource(url,(Certificate[])null);
                 permissionCollection = policy.getPermissions(codeSource);
 
                 // Create a file read permission for web app context directory
@@ -348,16 +384,19 @@ public final class JspRuntimeContext implements Runnable {
                 docBase = docBase + "-";
                 permissionCollection.add(new FilePermission(docBase,"read"));
 
-                // Create a file read permission for web app tempdir (work)
-                // directory
+                // Spec says apps should have read/write for their temp
+                // directory. This is fine, as no security sensitive files, at
+                // least any that the app doesn't have full control of anyway,
+                // will be written here.
                 String workDir = options.getScratchDir().toString();
                 if (!workDir.endsWith(File.separator)){
                     permissionCollection.add
-                        (new FilePermission(workDir,"read"));
+                        (new FilePermission(workDir,"read,write"));
                     workDir = workDir + File.separator;
                 }
                 workDir = workDir + "-";
-                permissionCollection.add(new FilePermission(workDir,"read"));
+                permissionCollection.add(new FilePermission(
+                        workDir,"read,write,delete"));
 
                 // Allow the JSP to access org.apache.jasper.runtime.HttpJspBase
                 permissionCollection.add( new RuntimePermission(
@@ -480,7 +519,7 @@ public final class JspRuntimeContext implements Runnable {
             try {
                 checkCompile();
             } catch (Throwable t) {
-                t.printStackTrace();
+                log.error("Exception checking if recompile needed: ", t);
             }
         }
         

@@ -20,8 +20,10 @@ package org.apache.catalina.util;
 
 import java.text.MessageFormat;
 import java.util.Hashtable;
+import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
+import java.net.URLClassLoader;
 
 /**
  * An internationalization / localization helper class which reduces
@@ -53,7 +55,10 @@ public class StringManager {
      */
 
     private ResourceBundle bundle;
-
+    
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( StringManager.class );
+    
     /**
      * Creates a new StringManager for a given package. This is a
      * private method and all access to it is arbitrated by the
@@ -65,16 +70,43 @@ public class StringManager {
 
     private StringManager(String packageName) {
         String bundleName = packageName + ".LocalStrings";
-        bundle = ResourceBundle.getBundle(bundleName);
+        try {
+            bundle = ResourceBundle.getBundle(bundleName);
+            return;
+        } catch( MissingResourceException ex ) {
+            // Try from the current loader ( that's the case for trusted apps )
+            ClassLoader cl=Thread.currentThread().getContextClassLoader();
+            if( cl != null ) {
+                try {
+                    bundle=ResourceBundle.getBundle(bundleName, Locale.getDefault(), cl);
+                    return;
+                } catch(MissingResourceException ex2) {
+                }
+            }
+            if( cl==null )
+                cl=this.getClass().getClassLoader();
+
+            if (log.isDebugEnabled())
+                log.debug("Can't find resource " + bundleName +
+                    " " + cl);
+            if( cl instanceof URLClassLoader ) {
+                if (log.isDebugEnabled()) 
+                    log.debug( ((URLClassLoader)cl).getURLs());
+            }
+        }
     }
 
     /**
      * Get a string from the underlying resource bundle.
      *
-     * @param key
+     * @param key The resource name
      */
-
     public String getString(String key) {
+        return MessageFormat.format(getStringInternal(key), (Object [])null);
+    }
+
+
+    protected String getStringInternal(String key) {
         if (key == null) {
             String msg = "key is null";
 
@@ -83,6 +115,8 @@ public class StringManager {
 
         String str = null;
 
+        if( bundle==null )
+            return key;
         try {
             str = bundle.getString(key);
         } catch (MissingResourceException mre) {
@@ -96,13 +130,13 @@ public class StringManager {
      * Get a string from the underlying resource bundle and format
      * it with the given set of arguments.
      *
-     * @param key
-     * @param args
+     * @param key The resource name
+     * @param args Formatting directives
      */
 
     public String getString(String key, Object[] args) {
         String iString = null;
-        String value = getString(key);
+        String value = getStringInternal(key);
 
         // this check for the runtime exception is some pre 1.1.6
         // VM's don't do an automatic toString() on the passed in
@@ -135,8 +169,8 @@ public class StringManager {
      * with the given object argument. This argument can of course be
      * a String object.
      *
-     * @param key
-     * @param arg
+     * @param key The resource name
+     * @param arg Formatting directive
      */
 
     public String getString(String key, Object arg) {
@@ -149,9 +183,9 @@ public class StringManager {
      * with the given object arguments. These arguments can of course
      * be String objects.
      *
-     * @param key
-     * @param arg1
-     * @param arg2
+     * @param key The resource name
+     * @param arg1 Formatting directive
+     * @param arg2 Formatting directive
      */
 
     public String getString(String key, Object arg1, Object arg2) {
@@ -164,10 +198,10 @@ public class StringManager {
      * with the given object arguments. These arguments can of course
      * be String objects.
      *
-     * @param key
-     * @param arg1
-     * @param arg2
-     * @param arg3
+     * @param key The resource name
+     * @param arg1 Formatting directive
+     * @param arg2 Formatting directive
+     * @param arg3 Formatting directive
      */
 
     public String getString(String key, Object arg1, Object arg2,
@@ -181,11 +215,11 @@ public class StringManager {
      * with the given object arguments. These arguments can of course
      * be String objects.
      *
-     * @param key
-     * @param arg1
-     * @param arg2
-     * @param arg3
-     * @param arg4
+     * @param key The resource name
+     * @param arg1 Formatting directive
+     * @param arg2 Formatting directive
+     * @param arg3 Formatting directive
+     * @param arg4 Formatting directive
      */
 
     public String getString(String key, Object arg1, Object arg2,
@@ -204,11 +238,12 @@ public class StringManager {
      * a package already exists, it will be reused, else a new
      * StringManager will be created and returned.
      *
-     * @param packageName
+     * @param packageName The package name
      */
 
     public synchronized static StringManager getManager(String packageName) {
         StringManager mgr = (StringManager)managers.get(packageName);
+
         if (mgr == null) {
             mgr = new StringManager(packageName);
             managers.put(packageName, mgr);

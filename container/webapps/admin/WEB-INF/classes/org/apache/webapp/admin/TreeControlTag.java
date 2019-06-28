@@ -34,7 +34,7 @@ import javax.servlet.jsp.tagext.TagSupport;
  * This tag has the following user-settable attributes:</p>
  * <ul>
  * <li><strong>action</strong> - Hyperlink to which expand/contract actions
- *     should be sent, with a string "<code>${node}</code> marking where
+ *     should be sent, with a string "<code>{name}</code> marking where
  *     the node name of the affected node should be included.</li>
  * <li><strong>images</strong> - Name of the directory containing the images
  *     for our icons, relative to the page including this tag.  If not
@@ -60,7 +60,7 @@ import javax.servlet.jsp.tagext.TagSupport;
  * <strong>FIXME</strong> - Internationalize the exception messages!
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: TreeControlTag.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class TreeControlTag extends TagSupport {
@@ -89,7 +89,7 @@ public class TreeControlTag extends TagSupport {
 
     /**
      * The hyperlink to be used for submitting requests to expand and
-     * contract tree nodes.  The placeholder "<code>${name}</code>" will
+     * contract tree nodes.  The placeholder "<code>{name}</code>" will
      * be replaced by the <code>name</code> property of the current
      * tree node.
      */
@@ -349,13 +349,13 @@ public class TreeControlTag extends TagSupport {
         // in the node name, could remove this code if encode URL
         // and later request.getParameter() could deal with = and &
         // character in parameter values. 
-        String encodedNodeName = URLEncoder.encode(node.getName());
+        String encodedNodeName = URLEncoder.encode(node.getName(),TomcatTreeBuilder.URL_ENCODING);
 
-        String action = replace(getAction(), "${name}", encodedNodeName);
+        String action = replace(getAction(), "{name}", encodedNodeName);
 
         
         String updateTreeAction =
-            replace(getAction(), "tree=${name}", "select=" + encodedNodeName);
+            replace(getAction(), "tree={name}", "select=" + encodedNodeName);
         updateTreeAction =
             ((HttpServletResponse) pageContext.getResponse()).
             encodeURL(updateTreeAction);

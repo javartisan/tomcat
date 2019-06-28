@@ -23,8 +23,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -36,12 +34,13 @@ import javax.management.ObjectName;
 
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.Lists;
+import java.net.InetAddress;
 
 /**
  * The <code>Action</code> that sets up <em>Edit Connector</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditConnectorAction.java 992363 2010-09-03 16:40:16Z markt $
  */
 
 public class EditConnectorAction extends Action {
@@ -51,12 +50,6 @@ public class EditConnectorAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
 
     // --------------------------------------------------------- Public Methods
@@ -84,10 +77,8 @@ public class EditConnectorAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -104,7 +95,7 @@ public class EditConnectorAction extends Action {
             cname = new ObjectName(request.getParameter("select"));
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.connectorName.bad",
+                resources.getMessage(locale, "error.connectorName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -116,14 +107,14 @@ public class EditConnectorAction extends Action {
         session.setAttribute("connectorForm", connectorFm);
         connectorFm.setAdminAction("Edit");
         connectorFm.setObjectName(cname.toString());
-        sb = new StringBuffer("Connector (");
+        sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.connector"));
+        sb.append(" (");
         sb.append(cname.getKeyProperty("port"));
         sb.append(")");
         connectorFm.setNodeLabel(sb.toString());
-        connectorFm.setDebugLvlVals(Lists.getDebugLevels());               
         connectorFm.setBooleanVals(Lists.getBooleanValues());        
         connectorFm.setClientAuthVals(Lists.getClientAuthValues());
-        connectorFm.setThreadPriorityVals(Lists.getThreadPriorityValues());
         
         String attribute = null;
         try {
@@ -139,75 +130,85 @@ public class EditConnectorAction extends Action {
                 (String) mBServer.getAttribute(cname, attribute);
             int period = handlerClassName.lastIndexOf('.');
             String connType = handlerClassName.substring(period + 1);
-            String connectorType = "HTTPS";
-            if ("JkCoyoteHandler".equalsIgnoreCase(connType)) {
+            String connectorType = "HTTP";
+            if ("JkCoyoteHandler".equalsIgnoreCase(connType) ||
+                    "AjpAprProtocol".equalsIgnoreCase(connType)) {
                 connectorType = "AJP";
             } else if ("Http11Protocol".equalsIgnoreCase(connType) && 
-                      ("http".equalsIgnoreCase(scheme))) {
-                connectorType = "HTTP";
+                    "https".equalsIgnoreCase(scheme)) {
+                connectorType = "HTTPS-JSSE";
+            } else if ("Http11AprProtocol".equalsIgnoreCase(connType) && 
+                    "https".equalsIgnoreCase(scheme)) {
+                connectorType = "HTTPS-APR";
             }             
             connectorFm.setConnectorType(connectorType);            
             
             attribute = "acceptCount";
             connectorFm.setAcceptCountText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));          
+            attribute = "compression";
+            connectorFm.setCompression
+                ((String) mBServer.getAttribute(cname, attribute));          
+            attribute = "connectionLinger";
+            connectorFm.setConnLingerText
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));            
             attribute = "connectionTimeout";
             connectorFm.setConnTimeOutText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            attribute = "debug";
-            connectorFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));             
+            attribute = "connectionUploadTimeout";
+            connectorFm.setConnUploadTimeOutText
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));              
+            attribute = "disableUploadTimeout";
+            connectorFm.setDisableUploadTimeout
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));       
             attribute = "bufferSize";
             connectorFm.setBufferSizeText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));            
             attribute = "enableLookups";
             connectorFm.setEnableLookups
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());            
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));            
             attribute = "address";
-            connectorFm.setAddress
-                ((String) mBServer.getAttribute(cname, attribute));
+            Object addressObject = mBServer.getAttribute(cname, attribute);
+            String addressStr = "";
+            if (addressObject instanceof InetAddress){
+	        addressStr = ((InetAddress)addressObject).getHostAddress();
+            } else if (addressObject instanceof String) {
+                addressStr = (String) addressObject;
+            }
+            connectorFm.setAddress(addressStr);
+            attribute = "maxKeepAliveRequests";
+            connectorFm.setMaxKeepAliveText
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));       
+            attribute = "maxSpareThreads";
+            connectorFm.setMaxSpare
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));         
+            attribute = "maxThreads";
+            connectorFm.setMaxThreads
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));       
+            attribute = "minSpareThreads";
+            connectorFm.setMinSpare
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));        
+            attribute = "threadPriority";
+            connectorFm.setThreadPriority
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));
+            attribute = "secure";
+            connectorFm.setSecure
+                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());
+            attribute = "tcpNoDelay";
+            connectorFm.setTcpNoDelay
+                (String.valueOf(mBServer.getAttribute(cname, attribute)));
+            attribute = "xpoweredBy";
+            connectorFm.setXpoweredBy
+                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());
             attribute = "URIEncoding";
             connectorFm.setURIEncodingText
                 ((String) mBServer.getAttribute(cname, attribute));
             attribute = "useBodyEncodingForURI";
             connectorFm.setUseBodyEncodingForURIText
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());       
+                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());
             attribute = "allowTrace";
             connectorFm.setAllowTraceText
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());       
-            attribute = "compressableMimeType";
-            connectorFm.setCompressableMimeType
-                ((String) mBServer.getAttribute(cname, attribute));
-            attribute = "compression";
-            connectorFm.setCompression
-                ((String) mBServer.getAttribute(cname, attribute));
-            attribute = "connectionLinger";
-            connectorFm.setConnLingerText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            attribute = "disableUploadTimeout";
-            connectorFm.setDisableUploadTimeout
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());       
-            attribute = "maxHttpHeaderSize";
-            connectorFm.setMaxHttpHeaderSizeText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            attribute = "maxKeepAliveRequests";
-            connectorFm.setMaxKeepAliveReqsText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            attribute = "noCompressionUserAgents";
-            connectorFm.setNoCompressionUA
-                ((String) mBServer.getAttribute(cname, attribute));
-            attribute = "restrictedUserAgents";
-            connectorFm.setRestrictedUA
-                ((String) mBServer.getAttribute(cname, attribute));
-            attribute = "server";
-            connectorFm.setServer
-                ((String) mBServer.getAttribute(cname, attribute));
-            attribute = "strategy";
-            connectorFm.setStrategy
-                ((String) mBServer.getAttribute(cname, attribute));
-            attribute = "tcpNoDelay";
-            connectorFm.setTcpNoDelay
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());       
+                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());
           
             // Ports
             attribute = "port";
@@ -217,69 +218,92 @@ public class EditConnectorAction extends Action {
             connectorFm.setRedirectPortText
                 (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
             
-            // Processors
-            attribute = "minProcessors";
-            connectorFm.setMinProcessorsText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            attribute = "maxProcessors";
-            connectorFm.setMaxProcessorsText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            attribute = "maxSpareProcessors";
-            connectorFm.setMaxSpareProcessorsText
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-            
-            if ("AJP".equalsIgnoreCase(connectorType)) {
-                // Supported by AJP only
-                attribute = "tomcatAuthentication";
-                connectorFm.setTomcatAuthentication
-                    (((Boolean) mBServer.getAttribute(cname, attribute)).toString());       
-            } else {
-                // Supported by HTTP and HTTPS only
+            // Supported by HTTP and HTTPS only
+            if (!("AJP".equalsIgnoreCase(connectorType))) {
                 attribute = "proxyName";
                 connectorFm.setProxyName
                     ((String) mBServer.getAttribute(cname, attribute));
                 attribute = "proxyPort";
                 connectorFm.setProxyPortText
                     (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-                attribute = "socketBuffer";
-                connectorFm.setSocketBufferText
-                    (((Integer) mBServer.getAttribute(cname, attribute)).toString());            
-                attribute = "threadPriority";
-                connectorFm.setThreadPriorityText
-                    (((Integer) mBServer.getAttribute(cname, attribute)).toString());
             }
             
-            // Secure
-            attribute = "secure";
-            connectorFm.setSecure
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());            
-            
-            if ("HTTPS".equalsIgnoreCase(connectorType)) {
-                // Initialize rest of variables. 
-                // These are set only for SSL connectors.
+            if ("HTTPS-JSSE".equalsIgnoreCase(connectorType)) {
+                // These are set only for JSSE SSL connectors.
+                attribute = "algorithm";
+                connectorFm.setAlgorithm
+                    ((String) mBServer.getAttribute(cname, attribute));
                 attribute = "clientAuth";
                 connectorFm.setClientAuthentication
-                    ((String) mBServer.getAttribute(cname, attribute));
+                    (((String) mBServer.getAttribute(cname, attribute)));
+                attribute = "ciphers";
+                connectorFm.setCiphers
+                    ((String) mBServer.getAttribute(cname, attribute));   
                 attribute = "keystoreFile";
                 connectorFm.setKeyStoreFileName
                     ((String) mBServer.getAttribute(cname, attribute));
                 attribute = "keystorePass";
                 connectorFm.setKeyStorePassword
-                    ((String) mBServer.getAttribute(cname, attribute));            
-                attribute = "algorithm";
-                connectorFm.setAlgorithm
-                    ((String) mBServer.getAttribute(cname, attribute));            
-                attribute = "ciphers";
-                connectorFm.setCiphers
-                    ((String) mBServer.getAttribute(cname, attribute));            
+                    ((String) mBServer.getAttribute(cname, attribute));     
                 attribute = "keystoreType";
                 connectorFm.setKeyStoreType
-                    ((String) mBServer.getAttribute(cname, attribute));            
+                    ((String) mBServer.getAttribute(cname, attribute));   
+                attribute = "truststoreFile";
+                connectorFm.setTrustStoreFileName
+                    ((String) mBServer.getAttribute(cname, attribute));
+                attribute = "truststorePass";
+                connectorFm.setTrustStorePassword
+                    ((String) mBServer.getAttribute(cname, attribute));     
+                attribute = "truststoreType";
+                connectorFm.setTrustStoreType
+                    ((String) mBServer.getAttribute(cname, attribute));   
                 attribute = "sslProtocol";
                 connectorFm.setSslProtocol
-                    ((String) mBServer.getAttribute(cname, attribute));            
+                    ((String) mBServer.getAttribute(cname, attribute));          
             }     
                 
+            if ("HTTPS-APR".equalsIgnoreCase(connectorType)) {
+                // These are set only for APR SSL connectors.
+                attribute = "SSLEngine";
+                connectorFm.setSSLEngine
+                    ((String) mBServer.getAttribute(cname, attribute));
+                attribute = "SSLProtocol";
+                connectorFm.setSSLProtocol
+                    (((String) mBServer.getAttribute(cname, attribute)));
+                attribute = "SSLCipherSuite";
+                connectorFm.setSSLCipherSuite
+                    ((String) mBServer.getAttribute(cname, attribute));   
+                attribute = "SSLCertificateFile";
+                connectorFm.setSSLCertificateFile
+                    ((String) mBServer.getAttribute(cname, attribute));
+                attribute = "SSLCertificateKeyFile";
+                connectorFm.setSSLCertificateKeyFile
+                    ((String) mBServer.getAttribute(cname, attribute));     
+                attribute = "SSLPassword";
+                connectorFm.setSSLPassword
+                    ((String) mBServer.getAttribute(cname, attribute));   
+                attribute = "SSLVerifyClient";
+                connectorFm.setSSLVerifyClient
+                    ((String) mBServer.getAttribute(cname, attribute));
+                attribute = "SSLVerifyDepth";
+                connectorFm.setSSLVerifyDepthText
+                    (((Integer) mBServer.getAttribute(cname, attribute)).toString());     
+                attribute = "SSLCACertificateFile";
+                connectorFm.setSSLCACertificateFile
+                    ((String) mBServer.getAttribute(cname, attribute));   
+                attribute = "SSLCACertificatePath";
+                connectorFm.setSSLCACertificatePath
+                    ((String) mBServer.getAttribute(cname, attribute));          
+                attribute = "SSLCertificateChainFile";
+                connectorFm.setSSLCertificateChainFile
+                    ((String) mBServer.getAttribute(cname, attribute));          
+                attribute = "SSLCARevocationFile";
+                connectorFm.setSSLCARevocationFile
+                    ((String) mBServer.getAttribute(cname, attribute));          
+                attribute = "SSLCARevocationPath";
+                connectorFm.setSSLCARevocationPath
+                    ((String) mBServer.getAttribute(cname, attribute));          
+            }     
                         
         } catch (Throwable t) {
             getServlet().log

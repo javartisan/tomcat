@@ -18,6 +18,8 @@
 
 package org.apache.catalina.deploy;
 
+import java.io.Serializable;
+
 
 /**
  * Representation of a security constraint element for a web application,
@@ -31,10 +33,10 @@ package org.apache.catalina.deploy;
  * this class is synchronized.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SecurityConstraint.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class SecurityConstraint {
+public class SecurityConstraint implements Serializable {
 
 
     // ----------------------------------------------------------- Constructors

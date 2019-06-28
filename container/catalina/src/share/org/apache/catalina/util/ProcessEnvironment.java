@@ -18,8 +18,9 @@
 package org.apache.catalina.util;
 
 import java.io.File;
-import java.util.Hashtable;
 import java.util.Enumeration;
+import java.util.Hashtable;
+
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
 
@@ -29,10 +30,15 @@ import javax.servlet.http.HttpServletRequest;
  * Encapsulates the Process environment and rules to derive
  * that environment from the servlet container and request information.
  * @author   Martin Dengler [root@martindengler.com]
- * @version  $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version  $Id: ProcessEnvironment.java 939526 2010-04-30 00:39:28Z kkolinko $
  * @since    Tomcat 4.0
+ * @deprecated
  */
 public class ProcessEnvironment {
+    
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( ProcessEnvironment.class );
+    
     /** context of the enclosing servlet */
     private ServletContext context = null;
 
@@ -93,7 +99,9 @@ public class ProcessEnvironment {
             setupFromContext(context);
             setupFromRequest(req);
             this.valid = deriveProcessEnvironment(req);
-            log(this.getClass().getName() + "() ctor, debug level " + debug);
+            if (log.isDebugEnabled()) 
+                log.debug(this.getClass().getName() + "() ctor, debug level " + 
+                          debug);
     }
 
 
@@ -182,7 +190,7 @@ public class ProcessEnvironment {
 
 
     /**
-     * Gets this process's derived working directory
+     * Gets this process' derived working directory
      * @return  working directory
      */
     public File getWorkingDirectory() {
@@ -201,7 +209,7 @@ public class ProcessEnvironment {
 
     /**
      * Sets process' environment
-     * @param    env Process's environment
+     * @param    env process' environment
      * @return   Hashtable to which the process' environment was set
      */
     public Hashtable setEnvironment(Hashtable env) {
@@ -221,7 +229,7 @@ public class ProcessEnvironment {
 
     /**
      * Converts null strings to blank strings ("")
-     * @param    s String to be converted if necessary
+     * @param    s string to be converted if necessary
      * @return   a non-null string, either the original or the empty string
      *           ("") if the original was <code>null</code>
      */
@@ -232,8 +240,8 @@ public class ProcessEnvironment {
 
     /**
      * Converts null strings to another string
-     * @param    couldBeNull String to be converted if necessary
-     * @param    subForNulls String to return instead of a null string
+     * @param    couldBeNull string to be converted if necessary
+     * @param    subForNulls string to return instead of a null string
      * @return   a non-null string, either the original or the substitute
      *           string if the original was <code>null</code>
      */
@@ -244,8 +252,8 @@ public class ProcessEnvironment {
 
     /**
      * Converts blank strings to another string
-     * @param    couldBeBlank String to be converted if necessary
-     * @param    subForBlanks String to return instead of a blank string
+     * @param    couldBeBlank string to be converted if necessary
+     * @param    subForBlanks string to return instead of a blank string
      * @return   a non-null string, either the original or the substitute
      *           string if the original was <code>null</code> or empty ("")
      */
@@ -256,11 +264,6 @@ public class ProcessEnvironment {
     }
 
 
-    protected void log(String s) {
-        System.out.println(s);
-    }
-
-
     /**
      * Constructs the Process environment to be supplied to the invoked
      * process.  Defines an environment no environment variables.
@@ -268,7 +271,8 @@ public class ProcessEnvironment {
      * Should be overriden by subclasses to perform useful setup.
      * </p>
      *
-     * @param    req Request associated with the Process's invocation
+     * @param    req request associated with the
+     *           Process' invocation
      * @return   true if environment was set OK, false if there was a problem
      *           and no environment was set
      */

@@ -23,8 +23,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -42,7 +40,7 @@ import org.apache.webapp.admin.Lists;
  * Realm </em> transactions, based on the type of Realm.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditRealmAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class EditRealmAction extends Action {
@@ -53,15 +51,6 @@ public class EditRealmAction extends Action {
      */
     private MBeanServer mBServer = null;
 
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
-    private HttpSession session = null;
-    private Locale locale = null;
-    private HttpServletRequest request = null;
 
     // --------------------------------------------------------- Public Methods
 
@@ -87,12 +76,8 @@ public class EditRealmAction extends Action {
         throws IOException, ServletException {
 
         // Acquire the resources that we need
-        session = request.getSession();
-        this.request = request;
-        locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
 
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -108,7 +93,7 @@ public class EditRealmAction extends Action {
             rname = new ObjectName(request.getParameter("select"));
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.realmName.bad",
+                resources.getMessage(locale, "error.realmName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -140,25 +125,29 @@ public class EditRealmAction extends Action {
         // Forward to the appropriate realm display page
 
         if ("UserDatabaseRealm".equalsIgnoreCase(realmType)) {
-               setUpUserDatabaseRealm(rname, response);
+               setUpUserDatabaseRealm(rname, request, response);
         } else if ("MemoryRealm".equalsIgnoreCase(realmType)) {
-               setUpMemoryRealm(rname, response);
+               setUpMemoryRealm(rname, request, response);
         } else if ("JDBCRealm".equalsIgnoreCase(realmType)) {
-               setUpJDBCRealm(rname, response);
+               setUpJDBCRealm(rname, request, response);
         } else if ("JNDIRealm".equalsIgnoreCase(realmType)) {
-               setUpJNDIRealm(rname, response);
+               setUpJNDIRealm(rname, request, response);
         } else if ("DataSourceRealm".equalsIgnoreCase(realmType)) {
-               setUpDataSourceRealm(rname, response);
+                setUpDataSourceRealm(rname, request, response);
         }
 
         return (mapping.findForward(realmType));
 
     }
 
-    private void setUpUserDatabaseRealm(ObjectName rname,
+    private void setUpUserDatabaseRealm(ObjectName rname, 
+                                        HttpServletRequest request,
                                         HttpServletResponse response)
     throws IOException {
         // Fill in the form values for display and editing
+        MessageResources resources = getResources(request);
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
         UserDatabaseRealmForm realmFm = new UserDatabaseRealmForm();
         session.setAttribute("userDatabaseRealmForm", realmFm);
         realmFm.setAdminAction("Edit");
@@ -173,19 +162,15 @@ public class EditRealmAction extends Action {
         if (context!=null) {
             sb.append("Context (" + context + ") > ");
         }
-        sb.append("Realm");
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.realm"));
         realmFm.setNodeLabel(sb.toString());
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
-        realmFm.setAllowDeletion(allowDeletion(rname));
+        realmFm.setAllowDeletion(allowDeletion(rname,request));
 
         String attribute = null;
         try {
 
             // Copy scalar properties
-            attribute = "debug";
-            realmFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(rname, attribute)).toString());
             attribute = "resourceName";
             realmFm.setResource
                 ((String) mBServer.getAttribute(rname, attribute));
@@ -201,30 +186,31 @@ public class EditRealmAction extends Action {
         }
     }
 
-    private void setUpMemoryRealm(ObjectName rname,
+    private void setUpMemoryRealm(ObjectName rname, HttpServletRequest request,
                                         HttpServletResponse response)
     throws IOException {
         // Fill in the form values for display and editing
+        MessageResources resources = getResources(request);
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
         MemoryRealmForm realmFm = new MemoryRealmForm();
         session.setAttribute("memoryRealmForm", realmFm);
         realmFm.setAdminAction("Edit");
         realmFm.setObjectName(rname.toString());
         String realmType = "MemoryRealm";
-        StringBuffer sb = new StringBuffer("Realm (");
+        StringBuffer sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.realm"));
+        sb.append(" (");
         sb.append(realmType);
         sb.append(")");
         realmFm.setNodeLabel(sb.toString());
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
-        realmFm.setAllowDeletion(allowDeletion(rname));
+        realmFm.setAllowDeletion(allowDeletion(rname,request));
 
         String attribute = null;
         try {
 
             // Copy scalar properties
-            attribute = "debug";
-            realmFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(rname, attribute)).toString());
             attribute = "pathname";
             realmFm.setPathName
                 ((String) mBServer.getAttribute(rname, attribute));
@@ -240,30 +226,31 @@ public class EditRealmAction extends Action {
         }
     }
 
-    private void setUpJDBCRealm(ObjectName rname,
+    private void setUpJDBCRealm(ObjectName rname, HttpServletRequest request,
                                         HttpServletResponse response)
     throws IOException {
         // Fill in the form values for display and editing
+        MessageResources resources = getResources(request);
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
         JDBCRealmForm realmFm = new JDBCRealmForm();
         session.setAttribute("jdbcRealmForm", realmFm);
         realmFm.setAdminAction("Edit");
         realmFm.setObjectName(rname.toString());
         String realmType = "JDBCRealm";
-        StringBuffer sb = new StringBuffer("Realm (");
+        StringBuffer sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.realm"));
+        sb.append(" (");
         sb.append(realmType);
         sb.append(")");
         realmFm.setNodeLabel(sb.toString());
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
-        realmFm.setAllowDeletion(allowDeletion(rname));
+        realmFm.setAllowDeletion(allowDeletion(rname,request));
 
         String attribute = null;
         try {
 
             // Copy scalar properties
-            attribute = "debug";
-            realmFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(rname, attribute)).toString());
             attribute = "digest";
             realmFm.setDigest
                 ((String) mBServer.getAttribute(rname, attribute));
@@ -306,31 +293,32 @@ public class EditRealmAction extends Action {
         }
     }
 
-    private void setUpJNDIRealm(ObjectName rname,
+    private void setUpJNDIRealm(ObjectName rname, HttpServletRequest request,
                                         HttpServletResponse response)
     throws IOException {
         // Fill in the form values for display and editing
+        MessageResources resources = getResources(request);
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
         JNDIRealmForm realmFm = new JNDIRealmForm();
         session.setAttribute("jndiRealmForm", realmFm);
         realmFm.setAdminAction("Edit");
         realmFm.setObjectName(rname.toString());
         String realmType = "JNDIRealm";
-        StringBuffer sb = new StringBuffer("Realm (");
+        StringBuffer sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.realm"));
+        sb.append(" (");
         sb.append(realmType);
         sb.append(")");
         realmFm.setNodeLabel(sb.toString());
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
         realmFm.setSearchVals(Lists.getBooleanValues());
-        realmFm.setAllowDeletion(allowDeletion(rname));
+        realmFm.setAllowDeletion(allowDeletion(rname,request));
 
         String attribute = null;
         try {
 
             // Copy scalar properties
-            attribute = "debug";
-            realmFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(rname, attribute)).toString());
             attribute = "digest";
             realmFm.setDigest
                 ((String) mBServer.getAttribute(rname, attribute));
@@ -354,9 +342,6 @@ public class EditRealmAction extends Action {
                 ((String) mBServer.getAttribute(rname, attribute));
             attribute = "contextFactory";
             realmFm.setContextFactory
-                ((String) mBServer.getAttribute(rname, attribute));
-            attribute = "userBase";
-            realmFm.setUserBase
                 ((String) mBServer.getAttribute(rname, attribute));
             attribute = "userPassword";
             realmFm.setUserPassword
@@ -388,27 +373,28 @@ public class EditRealmAction extends Action {
         }
     }
 
-    private void setUpDataSourceRealm(ObjectName rname,
+    private void setUpDataSourceRealm(ObjectName rname, HttpServletRequest request,
                                         HttpServletResponse response)
     throws IOException {
         // Fill in the form values for display and editing
+        MessageResources resources = getResources(request);
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
         DataSourceRealmForm realmFm = new DataSourceRealmForm();
         session.setAttribute("dataSourceRealmForm", realmFm);
         realmFm.setAdminAction("Edit");
         realmFm.setObjectName(rname.toString());
         String realmType = "DataSourceRealm";
         StringBuffer sb = new StringBuffer();
-        sb.append(resources.getMessage(locale,
-                "server.service.treeBuilder.realm"));
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.realm"));
         sb.append(" (");
         sb.append(realmType);
         sb.append(")");
         realmFm.setNodeLabel(sb.toString());
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
-        realmFm.setAllowDeletion(allowDeletion(rname));
+        realmFm.setAllowDeletion(allowDeletion(rname,request));
         realmFm.setBooleanVals(Lists.getBooleanValues());
-        
+
         String attribute = null;
         try {
 
@@ -416,9 +402,6 @@ public class EditRealmAction extends Action {
             attribute = "dataSourceName";
             realmFm.setDataSourceName
                 ((String) mBServer.getAttribute(rname, attribute));
-            attribute = "debug";
-            realmFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(rname, attribute)).toString());
             attribute = "digest";
             realmFm.setDigest
                 ((String) mBServer.getAttribute(rname, attribute));
@@ -459,17 +442,15 @@ public class EditRealmAction extends Action {
      * return "true" if deletion is allowed.
      */
 
-    private String allowDeletion(ObjectName rname) {
+    private String allowDeletion(ObjectName rname, HttpServletRequest request) {
 
      boolean retVal = true;
      try{
         // admin app's values
-        String adminService = Lists.getAdminAppService(
-                              mBServer, rname.getDomain(),request);
         String adminHost = request.getServerName();
         String adminContext = request.getContextPath();
 
-        String thisService = rname.getKeyProperty("service");
+        //String thisService = rname.getKeyProperty("service");
         String thisHost = rname.getKeyProperty("host");
         String thisContext = rname.getKeyProperty("path");
 
@@ -480,8 +461,10 @@ public class EditRealmAction extends Action {
             // realm is under host
             retVal = !(thisHost.equalsIgnoreCase(adminHost));
         } else {
+            // XXX FIXME
             // realm is under service
-            retVal = !(thisService.equalsIgnoreCase(adminService));
+            return "false";
+            //retVal = !(thisService.equalsIgnoreCase(adminService));
         }
 
      } catch (Exception e) {

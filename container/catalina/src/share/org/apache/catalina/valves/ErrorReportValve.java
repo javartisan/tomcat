@@ -20,37 +20,37 @@ package org.apache.catalina.valves;
 
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.io.Writer;
+import java.sql.SQLException;
+
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletResponse;
+
 import org.apache.catalina.Globals;
-import org.apache.catalina.HttpResponse;
-import org.apache.catalina.Logger;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.RequestUtil;
 import org.apache.catalina.util.ServerInfo;
 import org.apache.catalina.util.StringManager;
-
+import org.apache.tomcat.util.IntrospectionUtils;
+import org.apache.tomcat.util.compat.JdkCompat;
 
 /**
  * <p>Implementation of a Valve that outputs HTML error pages.</p>
  *
  * <p>This Valve should be attached at the Host level, although it will work
  * if attached to a Context.</p>
- * 
+ *
  * <p>HTML code from the Cocoon 2 project.</p>
  *
  * @author Remy Maucherat
  * @author Craig R. McClanahan
  * @author <a href="mailto:nicolaken@supereva.it">Nicola Ken Barozzi</a> Aisa
  * @author <a href="mailto:stefano@apache.org">Stefano Mazzocchi</a>
- * @version $Revision: 784470 $ $Date: 2009-06-13 21:54:56 +0100 (Sat, 13 Jun 2009) $
+ * @author Yoav Shapira
+ * @version $Id: ErrorReportValve.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public class ErrorReportValve
@@ -58,12 +58,6 @@ public class ErrorReportValve
 
 
     // ----------------------------------------------------- Instance Variables
-
-
-    /**
-     * The debugging detail level for this component.
-     */
-    private int debug = 0;
 
 
     /**
@@ -79,6 +73,16 @@ public class ErrorReportValve
     protected static StringManager sm =
         StringManager.getManager(Constants.Package);
 
+    private static Class jspExceptionClazz;
+    
+    static {
+        try {
+            jspExceptionClazz = Class.forName("javax.servlet.jsp.JspException");
+        } catch (ClassNotFoundException e) {
+            // Expected if jsp-api not on classpath, eg when embedding
+            jspExceptionClazz = null;
+        }
+    }
 
     // ------------------------------------------------------------- Properties
 
@@ -97,26 +101,23 @@ public class ErrorReportValve
 
 
     /**
-     * Invoke the next Valve in the sequence. When the invoke returns, check 
+     * Invoke the next Valve in the sequence. When the invoke returns, check
      * the response state, and output an error report is necessary.
      *
      * @param request The servlet request to be processed
      * @param response The servlet response to be created
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if a servlet error occurs
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException {
 
         // Perform the request
-        context.invokeNext(request, response);
+        getNext().invoke(request, response);
 
         ServletRequest sreq = (ServletRequest) request;
-        Throwable throwable = 
+        Throwable throwable =
             (Throwable) sreq.getAttribute(Globals.EXCEPTION_ATTR);
 
         ServletResponse sresp = (ServletResponse) response;
@@ -136,10 +137,8 @@ public class ErrorReportValve
                 ;
             }
 
-            ServletResponse sresponse = (ServletResponse) response;
-            if (sresponse instanceof HttpServletResponse)
-                ((HttpServletResponse) sresponse).sendError
-                    (HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.sendError
+                (HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 
         }
 
@@ -148,21 +147,8 @@ public class ErrorReportValve
         try {
             report(request, response, throwable);
         } catch (Throwable tt) {
-            tt.printStackTrace();
+            ;
         }
-
-    }
-
-
-    /**
-     * Return a String rendering of this object.
-     */
-    public String toString() {
-
-        StringBuffer sb = new StringBuffer("ErrorReportValve[");
-        sb.append(container.getName());
-        sb.append("]");
-        return (sb.toString());
 
     }
 
@@ -172,10 +158,10 @@ public class ErrorReportValve
 
     /**
      * Prints out an error report.
-     * 
+     *
      * @param request The request being processed
      * @param response The response being generated
-     * @exception exception The exception that occurred (which possibly wraps
+     * @param throwable The exception that occurred (which possibly wraps
      *  a root cause exception
      */
     protected void report(Request request, Response response,
@@ -183,30 +169,12 @@ public class ErrorReportValve
         throws IOException {
 
         // Do nothing on non-HTTP responses
-        if (!(response instanceof HttpResponse))
-            return;
-        HttpResponse hresponse = (HttpResponse) response;
-        if (!(response instanceof HttpServletResponse))
-            return;
-        HttpServletResponse hres = (HttpServletResponse) response;
-        int statusCode = hresponse.getStatus();
-        String message = RequestUtil.filter(hresponse.getMessage());
-        if (message == null)
-            message = "";
+        int statusCode = response.getStatus();
 
         // Do nothing on a 1xx, 2xx and 3xx status
-        if (statusCode < 400)
+        // Do nothing if anything has been written already
+        if ((statusCode < 400) || (response.getContentCount() > 0))
             return;
-
-        // FIXME: Reset part of the request
-/*
-        try {
-            if (hresponse.isError())
-                hresponse.reset(statusCode, message);
-        } catch (IllegalStateException e) {
-            ;
-        }
-*/
 
         Throwable rootCause = null;
 
@@ -216,6 +184,10 @@ public class ErrorReportValve
                 rootCause = ((ServletException) throwable).getRootCause();
 
         }
+
+        String message = RequestUtil.filter(response.getMessage());
+        if (message == null)
+            message = "";
 
         // Do nothing if there is no report for the specified status code
         String report = null;
@@ -233,13 +205,9 @@ public class ErrorReportValve
         sb.append(ServerInfo.getServerInfo()).append(" - ");
         sb.append(sm.getString("errorReportValve.errorReport"));
         sb.append("</title>");
-        sb.append("<STYLE><!--");
-        sb.append("H1{font-family : sans-serif,Arial,Tahoma;color : white;background-color : #0086b2;} ");
-        sb.append("H3{font-family : sans-serif,Arial,Tahoma;color : white;background-color : #0086b2;} ");
-        sb.append("BODY{font-family : sans-serif,Arial,Tahoma;color : black;background-color : white;} ");
-        sb.append("B{color : white;background-color : #0086b2;} ");
-        sb.append("HR{color : #0086b2;} ");
-        sb.append("--></STYLE> ");
+        sb.append("<style><!--");
+        sb.append(org.apache.catalina.util.TomcatCSS.TOMCAT_CSS);
+        sb.append("--></style> ");
         sb.append("</head><body>");
         sb.append("<h1>");
         sb.append(sm.getString("errorReportValve.statusHeader",
@@ -263,22 +231,60 @@ public class ErrorReportValve
         sb.append("</u></p>");
 
         if (throwable != null) {
-            StringWriter stackTrace = new StringWriter();
-            throwable.printStackTrace(new PrintWriter(stackTrace));
+
+            String stackTrace = JdkCompat.getJdkCompat()
+                .getPartialServletStackTrace(throwable);
             sb.append("<p><b>");
             sb.append(sm.getString("errorReportValve.exception"));
             sb.append("</b> <pre>");
-            sb.append(RequestUtil.filter(stackTrace.toString()));
+            sb.append(RequestUtil.filter(stackTrace));
             sb.append("</pre></p>");
-            if (rootCause != null) {
-                stackTrace = new StringWriter();
-                rootCause.printStackTrace(new PrintWriter(stackTrace));
+
+            Throwable nestedRootCause = null;
+            while (rootCause != null) {
+                stackTrace = JdkCompat.getJdkCompat()
+                    .getPartialServletStackTrace(rootCause);
                 sb.append("<p><b>");
                 sb.append(sm.getString("errorReportValve.rootCause"));
                 sb.append("</b> <pre>");
-                sb.append(RequestUtil.filter(stackTrace.toString()));
+                sb.append(RequestUtil.filter(stackTrace));
                 sb.append("</pre></p>");
+                // In case root cause is somehow heavily nested
+                try {
+                    if (rootCause instanceof ServletException) {
+                        nestedRootCause =
+                            ((ServletException) rootCause).getRootCause();
+                    } else if (jspExceptionClazz!=null &&
+                            jspExceptionClazz.isAssignableFrom(
+                                    rootCause.getClass())) {
+                        nestedRootCause = (Throwable)IntrospectionUtils.
+                                getProperty(rootCause, "rootCause"); 
+                    } else if (rootCause instanceof SQLException) {
+                        nestedRootCause = ((SQLException) rootCause).
+                                getNextException();
+                    }
+                    if (nestedRootCause == null) {
+                        nestedRootCause = rootCause.getCause();
+                    }
+
+                    if (rootCause == nestedRootCause)
+                        rootCause = null;
+                    else {
+                        rootCause = nestedRootCause;
+                        nestedRootCause = null;
+                    }
+                } catch (ClassCastException e) {
+                    rootCause = null;
+                }
             }
+
+            sb.append("<p><b>");
+            sb.append(sm.getString("errorReportValve.note"));
+            sb.append("</b> <u>");
+            sb.append(sm.getString("errorReportValve.rootCauseInLogs",
+                                   ServerInfo.getServerInfo()));
+            sb.append("</u></p>");
+
         }
 
         sb.append("<HR size=\"1\" noshade=\"noshade\">");
@@ -286,65 +292,25 @@ public class ErrorReportValve
         sb.append("</body></html>");
 
         try {
-
+            try {
+                response.setContentType("text/html");
+                response.setCharacterEncoding("utf-8");
+            } catch (Throwable t) {
+                if (container.getLogger().isDebugEnabled())
+                    container.getLogger().debug("status.setContentType", t);
+            }
             Writer writer = response.getReporter();
-
             if (writer != null) {
-                try {
-                    hres.setContentType("text/html; charset=utf-8");
-                } catch (Throwable t) {
-                    if (debug >= 1)
-                        log("status.setContentType", t);
-                }
-
                 // If writer is null, it's an indication that the response has
                 // been hard committed already, which should never happen
                 writer.write(sb.toString());
-                writer.flush();
-
             }
-
         } catch (IOException e) {
             ;
         } catch (IllegalStateException e) {
             ;
         }
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     */
-    protected void log(String message) {
-
-        Logger logger = container.getLogger();
-        if (logger != null)
-            logger.log(this.toString() + ": " + message);
-        else
-            System.out.println(this.toString() + ": " + message);
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
-     */
-    protected void log(String message, Throwable throwable) {
-
-        Logger logger = container.getLogger();
-        if (logger != null)
-            logger.log(this.toString() + ": " + message, throwable);
-        else {
-            System.out.println(this.toString() + ": " + message);
-            throwable.printStackTrace(System.out);
-        }
-
+        
     }
 
 

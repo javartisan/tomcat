@@ -34,7 +34,7 @@ import org.apache.tomcat.util.http.BaseRequest;
 
 /**
  * @author Kevin Seguin
- * @version $Revision: 466585 $ $Date: 2006-10-21 23:16:34 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Ajp13Processor.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 final class Ajp13Processor

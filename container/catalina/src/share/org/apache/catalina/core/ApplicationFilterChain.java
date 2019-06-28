@@ -20,9 +20,9 @@ package org.apache.catalina.core;
 
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.security.Principal;
 import java.security.PrivilegedActionException;
+
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
 import javax.servlet.Servlet;
@@ -31,10 +31,12 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import org.apache.catalina.Globals;
 import org.apache.catalina.InstanceEvent;
+import org.apache.catalina.security.SecurityUtil;
 import org.apache.catalina.util.InstanceSupport;
 import org.apache.catalina.util.StringManager;
-
 
 /**
  * Implementation of <code>javax.servlet.FilterChain</code> used to manage
@@ -44,10 +46,29 @@ import org.apache.catalina.util.StringManager;
  * method itself.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 503965 $ $Date: 2007-02-06 02:51:30 +0000 (Tue, 06 Feb 2007) $
+ * @version $Id: ApplicationFilterChain.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 final class ApplicationFilterChain implements FilterChain {
+
+    // Used to enforce requirements of SRV.8.2 / SRV.14.2.5.1
+    private final static ThreadLocal lastServicedRequest;
+    private final static ThreadLocal lastServicedResponse;
+
+    static {
+        if (Globals.STRICT_SERVLET_COMPLIANCE) {
+            lastServicedRequest = new ThreadLocal();
+            lastServicedResponse = new ThreadLocal();
+        } else {
+            lastServicedRequest = null;
+            lastServicedResponse = null;
+        }
+    }
+    
+    // -------------------------------------------------------------- Constants
+
+
+    public static final int INCREMENT = 10;
 
 
     // ----------------------------------------------------------- Constructors
@@ -67,17 +88,23 @@ final class ApplicationFilterChain implements FilterChain {
 
 
     /**
-     * The set of filters that will be executed on this chain.
+     * Filters.
      */
-    private ArrayList filters = new ArrayList();
+    private ApplicationFilterConfig[] filters = 
+        new ApplicationFilterConfig[0];
 
 
     /**
-     * The iterator that is used to maintain the current position in the filter chain.
-     * This iterator is called the first time that <code>doFilter()</code>
-     * is called.
+     * The int which is used to maintain the current position 
+     * in the filter chain.
      */
-    private Iterator iterator = null;
+    private int pos = 0;
+
+
+    /**
+     * The int which gives the current number of filters in the chain.
+     */
+    private int n = 0;
 
 
     /**
@@ -99,6 +126,22 @@ final class ApplicationFilterChain implements FilterChain {
      */
     private InstanceSupport support = null;
 
+    
+    /**
+     * Static class array used when the SecurityManager is turned on and 
+     * <code>doFilter</code is invoked.
+     */
+    private static Class[] classType = new Class[]{ServletRequest.class, 
+                                                   ServletResponse.class,
+                                                   FilterChain.class};
+                                                   
+    /**
+     * Static class array used when the SecurityManager is turned on and 
+     * <code>service</code is invoked.
+     */                                                 
+    private static Class[] classTypeUsedInService = new Class[]{
+                                                         ServletRequest.class,
+                                                         ServletResponse.class};
 
     // ---------------------------------------------------- FilterChain Methods
 
@@ -122,9 +165,9 @@ final class ApplicationFilterChain implements FilterChain {
             final ServletResponse res = response;
             try {
                 java.security.AccessController.doPrivileged(
-                    new java.security.PrivilegedExceptionAction()
-                    {
-                        public Object run() throws ServletException, IOException {
+                    new java.security.PrivilegedExceptionAction() {
+                        public Object run() 
+                            throws ServletException, IOException {
                             internalDoFilter(req,res);
                             return null;
                         }
@@ -146,23 +189,32 @@ final class ApplicationFilterChain implements FilterChain {
         }
     }
 
-    private void internalDoFilter(ServletRequest request, ServletResponse response)
+    private void internalDoFilter(ServletRequest request, 
+                                  ServletResponse response)
         throws IOException, ServletException {
 
-        // Construct an iterator the first time this method is called
-        if (this.iterator == null)
-            this.iterator = filters.iterator();
-
         // Call the next filter if there is one
-        if (this.iterator.hasNext()) {
-            ApplicationFilterConfig filterConfig =
-              (ApplicationFilterConfig) iterator.next();
+        if (pos < n) {
+            ApplicationFilterConfig filterConfig = filters[pos++];
             Filter filter = null;
             try {
                 filter = filterConfig.getFilter();
                 support.fireInstanceEvent(InstanceEvent.BEFORE_FILTER_EVENT,
                                           filter, request, response);
-                filter.doFilter(request, response, this);
+                
+                if( System.getSecurityManager() != null ) {
+                    final ServletRequest req = request;
+                    final ServletResponse res = response;
+
+                    Object[] args = new Object[]{req, res, this};
+                    SecurityUtil.doAsPrivilege
+                        ("doFilter", filter, classType, args);
+                    
+                    args = null;
+                } else {  
+                    filter.doFilter(request, response, this);
+                }
+
                 support.fireInstanceEvent(InstanceEvent.AFTER_FILTER_EVENT,
                                           filter, request, response);
             } catch (IOException e) {
@@ -192,12 +244,31 @@ final class ApplicationFilterChain implements FilterChain {
 
         // We fell off the end of the chain -- call the servlet instance
         try {
+            if (Globals.STRICT_SERVLET_COMPLIANCE) {
+                lastServicedRequest.set(request);
+                lastServicedResponse.set(response);
+            }
             support.fireInstanceEvent(InstanceEvent.BEFORE_SERVICE_EVENT,
                                       servlet, request, response);
             if ((request instanceof HttpServletRequest) &&
                 (response instanceof HttpServletResponse)) {
-                servlet.service((HttpServletRequest) request,
-                                (HttpServletResponse) response);
+                    
+                if( System.getSecurityManager() != null ) {
+                    final ServletRequest req = request;
+                    final ServletResponse res = response;
+                    Principal principal = 
+                        ((HttpServletRequest) req).getUserPrincipal();
+                    Object[] args = new Object[]{req, res};
+                    SecurityUtil.doAsPrivilege("service",
+                                               servlet,
+                                               classTypeUsedInService, 
+                                               args,
+                                               principal);   
+                    args = null;
+                } else {  
+                    servlet.service((HttpServletRequest) request,
+                                    (HttpServletResponse) response);
+                }
             } else {
                 servlet.service(request, response);
             }
@@ -220,6 +291,11 @@ final class ApplicationFilterChain implements FilterChain {
                                       servlet, request, response, e);
             throw new ServletException
               (sm.getString("filterChain.servlet"), e);
+        } finally {
+            if (Globals.STRICT_SERVLET_COMPLIANCE) {
+                lastServicedRequest.set(null);
+                lastServicedResponse.set(null);
+            }
         }
 
     }
@@ -236,7 +312,13 @@ final class ApplicationFilterChain implements FilterChain {
      */
     void addFilter(ApplicationFilterConfig filterConfig) {
 
-        this.filters.add(filterConfig);
+        if (n == filters.length) {
+            ApplicationFilterConfig[] newFilters =
+                new ApplicationFilterConfig[n + INCREMENT];
+            System.arraycopy(filters, 0, newFilters, 0, n);
+            filters = newFilters;
+        }
+        filters[n++] = filterConfig;
 
     }
 
@@ -246,9 +328,10 @@ final class ApplicationFilterChain implements FilterChain {
      */
     void release() {
 
-        this.filters.clear();
-        this.iterator = null;
-        this.servlet = null;
+        n = 0;
+        pos = 0;
+        servlet = null;
+        support = null;
 
     }
 
@@ -256,7 +339,7 @@ final class ApplicationFilterChain implements FilterChain {
     /**
      * Set the servlet that will be executed at the end of this chain.
      *
-     * @param wrapper The Wrapper for the servlet to be executed
+     * @param servlet The Wrapper for the servlet to be executed
      */
     void setServlet(Servlet servlet) {
 
@@ -277,5 +360,26 @@ final class ApplicationFilterChain implements FilterChain {
 
     }
 
+    
+    /**
+     * The last request passed to a servlet for servicing from the current
+     * thread.
+     * 
+     * @return The last request to be serviced. 
+     */
+    public static ServletRequest getLastServicedRequest() {
+        return (ServletRequest) lastServicedRequest.get();
+    }
+
+    
+    /**
+     * The last response passed to a servlet for servicing from the current
+     * thread.
+     * 
+     * @return The last response to be serviced. 
+     */
+    public static ServletResponse getLastServicedResponse() {
+        return (ServletResponse) lastServicedResponse.get();
+    }
 
 }

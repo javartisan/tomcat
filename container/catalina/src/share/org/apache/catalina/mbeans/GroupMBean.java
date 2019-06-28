@@ -20,25 +20,27 @@ package org.apache.catalina.mbeans;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-import javax.management.MalformedObjectNameException;
+
 import javax.management.MBeanException;
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.management.RuntimeOperationsException;
+
 import org.apache.catalina.Group;
 import org.apache.catalina.Role;
 import org.apache.catalina.User;
 import org.apache.commons.modeler.BaseModelMBean;
 import org.apache.commons.modeler.ManagedBean;
 import org.apache.commons.modeler.Registry;
-
+import org.apache.tomcat.util.compat.JdkCompat;
 
 /**
  * <p>A <strong>ModelMBean</strong> implementation for the
  * <code>org.apache.catalina.Group</code> component.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: GroupMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class GroupMBean extends BaseModelMBean {
@@ -62,6 +64,15 @@ public class GroupMBean extends BaseModelMBean {
         super();
 
     }
+
+
+    // ----------------------------------------------------- Class Variables
+
+
+    /**
+     * JDK compatibility support
+     */
+    private static final JdkCompat jdkCompat = JdkCompat.getJdkCompat();
 
 
     // ----------------------------------------------------- Instance Variables
@@ -105,8 +116,10 @@ public class GroupMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), role);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for role " + role);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -130,8 +143,10 @@ public class GroupMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), user);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for user " + user);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));

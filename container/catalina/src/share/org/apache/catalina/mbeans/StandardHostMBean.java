@@ -21,11 +21,12 @@ package org.apache.catalina.mbeans;
 import javax.management.MBeanException;
 import javax.management.MBeanServer;
 import javax.management.RuntimeOperationsException;
+
 import org.apache.catalina.Valve;
 import org.apache.catalina.core.StandardHost;
 import org.apache.commons.modeler.BaseModelMBean;
-import org.apache.commons.modeler.Registry;
 import org.apache.commons.modeler.ManagedBean;
+import org.apache.commons.modeler.Registry;
 
 
 /**
@@ -33,7 +34,7 @@ import org.apache.commons.modeler.ManagedBean;
  * <code>org.apache.catalina.core.StandardHost</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardHostMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class StandardHostMBean extends BaseModelMBean {

@@ -18,6 +18,7 @@
 
 package org.apache.naming;
 
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Enumeration;
 import javax.naming.Context;
@@ -29,6 +30,7 @@ import javax.naming.Referenceable;
 import javax.naming.Reference;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
+import javax.naming.NameAlreadyBoundException;
 import javax.naming.NameNotFoundException;
 import javax.naming.NotContextException;
 import javax.naming.InitialContext;
@@ -39,9 +41,8 @@ import javax.naming.spi.NamingManager;
  * Catalina JNDI Context implementation.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NamingContext.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
-
 public class NamingContext implements Context {
 
 
@@ -54,6 +55,10 @@ public class NamingContext implements Context {
     protected static final NameParser nameParser = new NameParserImpl();
 
 
+    private static org.apache.commons.logging.Log log =
+        org.apache.commons.logging.LogFactory.getLog(NamingContext.class);
+
+
     // ----------------------------------------------------------- Constructors
 
 
@@ -62,7 +67,7 @@ public class NamingContext implements Context {
      */
     public NamingContext(Hashtable env, String name) 
         throws NamingException {
-        this.bindings = new Hashtable();
+        this.bindings = new HashMap();
         this.env = new Hashtable();
         // FIXME ? Could be put in the environment ?
         this.name = name;
@@ -80,7 +85,7 @@ public class NamingContext implements Context {
     /**
      * Builds a naming context using the given environment.
      */
-    public NamingContext(Hashtable env, String name, Hashtable bindings) 
+    public NamingContext(Hashtable env, String name, HashMap bindings) 
         throws NamingException {
         this(env, name);
         this.bindings = bindings;
@@ -105,7 +110,7 @@ public class NamingContext implements Context {
     /**
      * Bindings in this Context.
      */
-    protected Hashtable bindings;
+    protected HashMap bindings;
 
 
     /**
@@ -331,7 +336,7 @@ public class NamingContext implements Context {
         while ((!name.isEmpty()) && (name.get(0).length() == 0))
             name = name.getSuffix(1);
         if (name.isEmpty()) {
-            return new NamingContextEnumeration(bindings.elements());
+            return new NamingContextEnumeration(bindings.values().iterator());
         }
         
         NamingEntry entry = (NamingEntry) bindings.get(name.get(0));
@@ -383,8 +388,7 @@ public class NamingContext implements Context {
         while ((!name.isEmpty()) && (name.get(0).length() == 0))
             name = name.getSuffix(1);
         if (name.isEmpty()) {
-            return new NamingContextBindingsEnumeration(bindings.elements(),
-                    this);
+            return new NamingContextBindingsEnumeration(bindings.values().iterator(), this);
         }
         
         NamingEntry entry = (NamingEntry) bindings.get(name.get(0));
@@ -462,7 +466,7 @@ public class NamingContext implements Context {
         
         if (name.size() > 1) {
             if (entry.type == NamingEntry.CONTEXT) {
-                ((Context) entry.value).unbind(name.getSuffix(1));
+                ((Context) entry.value).destroySubcontext(name.getSuffix(1));
             } else {
                 throw new NamingException
                     (sm.getString("namingContext.contextExpected"));
@@ -796,6 +800,8 @@ public class NamingContext implements Context {
                 } catch (NamingException e) {
                     throw e;
                 } catch (Exception e) {
+                    log.warn(sm.getString
+                             ("namingContext.failResolvingReference"), e);
                     throw new NamingException(e.getMessage());
                 }
             } else {
@@ -849,7 +855,7 @@ public class NamingContext implements Context {
             }
         } else {
             if ((!rebind) && (entry != null)) {
-                throw new NamingException
+                throw new NameAlreadyBoundException
                     (sm.getString("namingContext.alreadyBound", name.get(0)));
             } else {
                 // Getting the type of the object and wrapping it within a new

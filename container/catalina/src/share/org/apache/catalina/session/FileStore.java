@@ -29,13 +29,15 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+
 import javax.servlet.ServletContext;
+
+import org.apache.catalina.Container;
 import org.apache.catalina.Context;
 import org.apache.catalina.Globals;
 import org.apache.catalina.Loader;
 import org.apache.catalina.Session;
 import org.apache.catalina.Store;
-import org.apache.catalina.Container;
 import org.apache.catalina.util.CustomObjectInputStream;
 
 
@@ -45,7 +47,7 @@ import org.apache.catalina.util.CustomObjectInputStream;
  * saved are still subject to being expired based on inactivity.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: FileStore.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public final class FileStore
@@ -208,7 +210,13 @@ public final class FileStore
         if (file == null) {
             return (new String[0]);
         }
+
         String files[] = file.list();
+        
+        // Bugzilla 32130
+        if((files == null) || (files.length < 1)) {
+            return (new String[0]);
+        }
 
         // Build and return the list of session identifiers
         ArrayList list = new ArrayList();
@@ -245,8 +253,8 @@ public final class FileStore
         if (! file.exists()) {
             return (null);
         }
-        if (debug >= 1) {
-            log(sm.getString(getStoreName()+".loading",
+        if (manager.getContainer().getLogger().isDebugEnabled()) {
+            manager.getContainer().getLogger().debug(sm.getString(getStoreName()+".loading",
                              id, file.getAbsolutePath()));
         }
 
@@ -267,8 +275,8 @@ public final class FileStore
             else
                 ois = new ObjectInputStream(bis);
         } catch (FileNotFoundException e) {
-            if (debug >= 1)
-                log("No persisted data file found");
+            if (manager.getContainer().getLogger().isDebugEnabled())
+                manager.getContainer().getLogger().debug("No persisted data file found");
             return (null);
         } catch (IOException e) {
             if (ois != null) {
@@ -316,8 +324,8 @@ public final class FileStore
         if (file == null) {
             return;
         }
-        if (debug >= 1) {
-            log(sm.getString(getStoreName()+".removing",
+        if (manager.getContainer().getLogger().isDebugEnabled()) {
+            manager.getContainer().getLogger().debug(sm.getString(getStoreName()+".removing",
                              id, file.getAbsolutePath()));
         }
         file.delete();
@@ -336,14 +344,13 @@ public final class FileStore
     public void save(Session session) throws IOException {
 
         // Open an output stream to the specified pathname, if any
-        System.out.println("save: " + session.getId());
-        File file = file(session.getId());
+        File file = file(session.getIdInternal());
         if (file == null) {
             return;
         }
-        if (debug >= 1) {
-            log(sm.getString(getStoreName()+".saving",
-                             session.getId(), file.getAbsolutePath()));
+        if (manager.getContainer().getLogger().isDebugEnabled()) {
+            manager.getContainer().getLogger().debug(sm.getString(getStoreName()+".saving",
+                             session.getIdInternal(), file.getAbsolutePath()));
         }
         FileOutputStream fos = null;
         ObjectOutputStream oos = null;

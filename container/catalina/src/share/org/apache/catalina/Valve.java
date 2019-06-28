@@ -22,6 +22,9 @@ package org.apache.catalina;
 import java.io.IOException;
 import javax.servlet.ServletException;
 
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+
 
 /**
  * <p>A <b>Valve</b> is a request processing component associated with a
@@ -36,7 +39,7 @@ import javax.servlet.ServletException;
  * @author Craig R. McClanahan
  * @author Gunnar Rjnning
  * @author Peter Donald
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Valve.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Valve {
@@ -51,7 +54,29 @@ public interface Valve {
     public String getInfo();
 
 
+    /**
+     * Return the next Valve in the pipeline containing this Valve, if any.
+     */
+    public Valve getNext();
+
+
+    /**
+     * Set the next Valve in the pipeline containing this Valve.
+     *
+     * @param valve The new next valve, or <code>null</code> if none
+     */
+    public void setNext(Valve valve);
+
+
     //---------------------------------------------------------- Public Methods
+
+
+    /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess();
 
 
     /**
@@ -69,7 +94,7 @@ public interface Valve {
      *     and pass them on.
      * <li>If the corresponding Response was not generated (and control was not
      *     returned, call the next Valve in the pipeline (if there is one) by
-     *     executing <code>context.invokeNext()</code>.
+     *     executing <code>getNext().invoke()</code>.
      * <li>Examine, but not modify, the properties of the resulting Response
      *     (which was created by a subsequently invoked Valve or Container).
      * </ul>
@@ -87,24 +112,21 @@ public interface Valve {
      *     unless it is completely generating the response, or wrapping the
      *     request before passing it on.
      * <li>Modify the HTTP headers included with the Response after the
-     *     <code>invokeNext()</code> method has returned.
+     *     <code>getNext().invoke()</code> method has returned.
      * <li>Perform any actions on the output stream associated with the
-     *     specified Response after the <code>invokeNext()</code> method has
+     *     specified Response after the <code>getNext().invoke()</code> method has
      *     returned.
      * </ul>
      *
      * @param request The servlet request to be processed
      * @param response The servlet response to be created
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs, or is thrown
      *  by a subsequently invoked Valve, Filter, or Servlet
      * @exception ServletException if a servlet error occurs, or is thrown
      *  by a subsequently invoked Valve, Filter, or Servlet
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException;
 
 

@@ -21,18 +21,20 @@ package org.apache.catalina.valves;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
 import javax.servlet.ServletException;
-import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.regexp.RE;
-import org.apache.regexp.REProgram;
-import org.apache.regexp.RESyntaxException;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.Lifecycle;
+import org.apache.catalina.LifecycleException;
+import org.apache.catalina.LifecycleListener;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+import org.apache.catalina.util.LifecycleSupport;
 import org.apache.catalina.util.StringManager;
-
+import org.apache.tomcat.util.compat.JdkCompat;
 
 /**
  * Implementation of a Valve that performs filtering based on comparing the
@@ -65,40 +67,20 @@ import org.apache.catalina.util.StringManager;
  * of the filtering you wish to perform.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RequestFilterValve.java 1221276 2011-12-20 14:25:24Z jim $
  */
 
 public abstract class RequestFilterValve
-    extends ValveBase {
+    extends ValveBase implements Lifecycle {
 
 
-    // ----------------------------------------------------- Instance Variables
-
-
-    /**
-     * The comma-delimited set of <code>allow</code> expressions.
-     */
-    protected String allow = null;
+    // ----------------------------------------------------- Class Variables
 
 
     /**
-     * The set of <code>allow</code> pre-compiled regular expressions we will
-     * evaluate.
+     * JDK compatibility support
      */
-    protected REProgram allows[] = new REProgram[0];
-
-
-    /**
-     * The set of <code>deny</code> pre-compiled regular expressions we will
-     * evaluate.
-     */
-    protected REProgram denies[] = new REProgram[0];
-
-
-    /**
-     * The comma-delimited set of <code>deny</code> expressions.
-     */
-    protected String deny = null;
+    private static final JdkCompat jdkCompat = JdkCompat.getJdkCompat();
 
 
     /**
@@ -114,6 +96,58 @@ public abstract class RequestFilterValve
     protected static StringManager sm =
         StringManager.getManager(Constants.Package);
 
+
+    // ----------------------------------------------------- Instance Variables
+
+
+    /**
+     * The comma-delimited set of <code>allow</code> expressions.
+     */
+    protected volatile String allow = null;
+
+    /**
+     * Helper variable to catch configuration errors.
+     * It is <code>true</code> by default, but becomes <code>false</code>
+     * if there was an attempt to assign an invalid value to the
+     * <code>allow</code> pattern.
+     */
+    protected volatile boolean allowValid = true;
+
+
+    /**
+     * The set of <code>allow</code> regular expressions we will evaluate.
+     */
+    protected volatile Pattern allows[] = new Pattern[0];
+
+
+    /**
+     * The set of <code>deny</code> regular expressions we will evaluate.
+     */
+    protected volatile Pattern denies[] = new Pattern[0];
+
+
+    /**
+     * The comma-delimited set of <code>deny</code> expressions.
+     */
+    protected volatile String deny = null;
+
+    /**
+     * Helper variable to catch configuration errors.
+     * It is <code>true</code> by default, but becomes <code>false</code>
+     * if there was an attempt to assign an invalid value to the
+     * <code>deny</code> pattern.
+     */
+    protected volatile boolean denyValid = true;
+
+    /**
+     * The lifecycle event support for this component.
+     */
+    protected LifecycleSupport lifecycle = new LifecycleSupport(this);
+
+    /**
+     * Has this component been started yet?
+     */
+    protected boolean started = false;
 
     // ------------------------------------------------------------- Properties
 
@@ -136,10 +170,14 @@ public abstract class RequestFilterValve
      * @param allow The new set of allow expressions
      */
     public void setAllow(String allow) {
-
-        this.allow = allow;
-        allows = precalculate(allow);
-
+        boolean success = false;
+        try {
+            this.allow = allow;
+            allows = precalculate(allow);
+            success = true;
+        } finally {
+            allowValid = success;
+        }
     }
 
 
@@ -161,10 +199,34 @@ public abstract class RequestFilterValve
      * @param deny The new set of deny expressions
      */
     public void setDeny(String deny) {
+        boolean success = false;
+        try {
+            this.deny = deny;
+            denies = precalculate(deny);
+            success = true;
+        } finally {
+            denyValid = success;
+        }
+    }
 
-        this.deny = deny;
-        denies = precalculate(deny);
 
+    /**
+     * Returns <code>false</code> if the last change to the
+     * <code>allow</code> pattern did not apply successfully. E.g.
+     * if the pattern is syntactically invalid.
+     */
+    public final boolean isAllowValid() {
+        return allowValid;
+    }
+
+
+    /**
+     * Returns <code>false</code> if the last change to the
+     * <code>deny</code> pattern did not apply successfully. E.g.
+     * if the pattern is syntactically invalid.
+     */
+    public final boolean isDenyValid() {
+        return denyValid;
     }
 
 
@@ -189,14 +251,11 @@ public abstract class RequestFilterValve
      *
      * @param request The servlet request to be processed
      * @param response The servlet response to be created
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if a servlet error occurs
      */
-    public abstract void invoke(Request request, Response response,
-                                ValveContext context)
+    public abstract void invoke(Request request, Response response)
         throws IOException, ServletException;
 
 
@@ -204,41 +263,43 @@ public abstract class RequestFilterValve
 
 
     /**
-     * Return an array of pre-compiled regular expression objects initialized
-     * from the specified argument, which must be <code>null</code> or a
-     * comma-delimited list of regular expression patterns.
+     * Return an array of regular expression objects initialized from the
+     * specified argument, which must be <code>null</code> or a comma-delimited
+     * list of regular expression patterns.
      *
      * @param list The comma-separated list of patterns
      *
      * @exception IllegalArgumentException if one of the patterns has
      *  invalid syntax
      */
-    protected REProgram[] precalculate(String list) {
+    protected Pattern[] precalculate(String list) {
 
         if (list == null)
-            return (new REProgram[0]);
+            return (new Pattern[0]);
         list = list.trim();
         if (list.length() < 1)
-            return (new REProgram[0]);
+            return (new Pattern[0]);
         list += ",";
 
-        ArrayList reProgramList = new ArrayList();
+        ArrayList reList = new ArrayList();
         while (list.length() > 0) {
             int comma = list.indexOf(',');
             if (comma < 0)
                 break;
             String pattern = list.substring(0, comma).trim();
             try {
-                reProgramList.add(new RE(pattern).getProgram());
-            } catch (RESyntaxException e) {
-                throw new IllegalArgumentException
+                reList.add(Pattern.compile(pattern));
+            } catch (PatternSyntaxException e) {
+                IllegalArgumentException iae = new IllegalArgumentException
                     (sm.getString("requestFilterValve.syntax", pattern));
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
             list = list.substring(comma + 1);
         }
 
-        REProgram reProgramArray[] = new REProgram[reProgramList.size()];
-        return ((REProgram[]) reProgramList.toArray(reProgramArray));
+        Pattern reArray[] = new Pattern[reList.size()];
+        return ((Pattern[]) reList.toArray(reArray));
 
     }
 
@@ -250,70 +311,133 @@ public abstract class RequestFilterValve
      * @param property The request property on which to filter
      * @param request The servlet request to be processed
      * @param response The servlet response to be processed
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if a servlet error occurs
      */
     protected void process(String property,
-                           Request request, Response response,
-                           ValveContext context)
+                           Request request, Response response)
         throws IOException, ServletException {
 
-        // Default to deny request if property is null
-        if (property == null) {
-            ServletResponse sres = response.getResponse();
-            if (sres instanceof HttpServletResponse) {
-                HttpServletResponse hres = (HttpServletResponse) sres;
-                hres.sendError(HttpServletResponse.SC_FORBIDDEN);
-            }
-            Exception e = new IllegalArgumentException();
-            getContainer().getLogger().log(e,"Request Denied, no property to filter on");
+        if (isAllowed(property)) {
+            getNext().invoke(request, response);
             return;
         }
 
-        
-        // Create local RE since RE is not thread safe
-        RE re = new RE();
-        
+        // Deny this request
+        response.sendError(HttpServletResponse.SC_FORBIDDEN);
+
+    }
+
+
+    /**
+     * Perform the test implemented by this Valve, matching against the
+     * specified request property value. This method is public so that it can be
+     * called through JMX, e.g. to test whether certain IP address is allowed or
+     * denied by the valve configuration.
+     *
+     * @param property
+     *            The request property value on which to filter
+     */
+    public boolean isAllowed(String property) {
+        // Use local copies for thread safety
+        Pattern[] denies = this.denies;
+        Pattern[] allows = this.allows;
+
         // Check the deny patterns, if any
         for (int i = 0; i < denies.length; i++) {
-            re.setProgram(denies[i]);
-            if (re.match(property)) {
-                ServletResponse sres = response.getResponse();
-                if (sres instanceof HttpServletResponse) {
-                    HttpServletResponse hres = (HttpServletResponse) sres;
-                    hres.sendError(HttpServletResponse.SC_FORBIDDEN);
-                    return;
-                }
+            if (denies[i].matcher(property).matches()) {
+                return false;
             }
         }
 
         // Check the allow patterns, if any
         for (int i = 0; i < allows.length; i++) {
-            re.setProgram(allows[i]);
-            if (re.match(property)) {
-                context.invokeNext(request, response);
-                return;
+            if (allows[i].matcher(property).matches()) {
+                return true;
             }
         }
 
         // Allow if denies specified but not allows
         if ((denies.length > 0) && (allows.length == 0)) {
-            context.invokeNext(request, response);
-            return;
+            return true;
         }
 
         // Deny this request
-        ServletResponse sres = response.getResponse();
-        if (sres instanceof HttpServletResponse) {
-            HttpServletResponse hres = (HttpServletResponse) sres;
-            hres.sendError(HttpServletResponse.SC_FORBIDDEN);
-            return;
-        }
-
+        return false;
     }
 
+
+    // ------------------------------------------------------ Lifecycle Methods
+
+
+    /**
+     * Add a lifecycle event listener to this component.
+     *
+     * @param listener The listener to add
+     */
+    public void addLifecycleListener(LifecycleListener listener) {
+        lifecycle.addLifecycleListener(listener);
+    }
+
+
+    /**
+     * Get the lifecycle listeners associated with this lifecycle. If this
+     * Lifecycle has no listeners registered, a zero-length array is returned.
+     */
+    public LifecycleListener[] findLifecycleListeners() {
+        return lifecycle.findLifecycleListeners();
+    }
+
+
+    /**
+     * Remove a lifecycle event listener from this component.
+     *
+     * @param listener The listener to add
+     */
+    public void removeLifecycleListener(LifecycleListener listener) {
+        lifecycle.removeLifecycleListener(listener);
+    }
+
+
+    /**
+     * Prepare for the beginning of active use of the public methods of this
+     * component.  This method should be called after <code>configure()</code>,
+     * and before any of the public methods of the component are utilized.
+     *
+     * @exception LifecycleException if this component detects a fatal error
+     *  that prevents this component from being used
+     */
+    public void start() throws LifecycleException {
+
+        // Validate and update our current component state
+        if (started) {
+            throw new LifecycleException(
+                    sm.getString("requestFilterValve.alreadyStarted"));
+        }
+        if (!allowValid || !denyValid) {
+            throw new LifecycleException(
+                    sm.getString("requestFilterValve.configInvalid"));
+        }
+        lifecycle.fireLifecycleEvent(START_EVENT, null);
+        started = true;
+    }
+
+    /**
+     * Gracefully terminate the active use of the public methods of this
+     * component.  This method should be the last one called on a given
+     * instance of this component.
+     *
+     * @exception LifecycleException if this component detects a fatal error
+     *  that needs to be reported
+     */
+    public void stop() throws LifecycleException {
+        // Validate and update our current component state
+        if (!started) {
+            return;
+        }
+        lifecycle.fireLifecycleEvent(STOP_EVENT, null);
+        started = false;
+    }
 
 }

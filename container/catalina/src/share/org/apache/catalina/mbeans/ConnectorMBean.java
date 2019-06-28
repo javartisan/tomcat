@@ -25,15 +25,16 @@ import javax.management.ReflectionException;
 import javax.management.RuntimeOperationsException;
 import javax.management.modelmbean.InvalidTargetObjectTypeException;
 
+import org.apache.catalina.connector.Connector;
 import org.apache.tomcat.util.IntrospectionUtils;
 
 
 /**
  * <p>A <strong>ModelMBean</strong> implementation for the
- * <code>org.apache.coyote.tomcat4.CoyoteConnector</code> component.</p>
+ * <code>org.apache.coyote.tomcat5.CoyoteConnector</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ConnectorMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class ConnectorMBean extends ClassNameMBean {
@@ -62,10 +63,6 @@ public class ConnectorMBean extends ClassNameMBean {
     // ------------------------------------------------------------- Attributes
 
 
-
-    // ------------------------------------------------------------- Operations
-
-    
     /**
      * Obtain and return the value of a specific attribute of this MBean.
      *
@@ -88,7 +85,7 @@ public class ConnectorMBean extends ClassNameMBean {
 
         Object result = null;
         try {
-            Object connector = getManagedResource();
+            Connector connector = (Connector) getManagedResource();
             result = IntrospectionUtils.getProperty(connector, name);
         } catch (InstanceNotFoundException e) {
             throw new MBeanException(e);
@@ -114,9 +111,9 @@ public class ConnectorMBean extends ClassNameMBean {
      * @exception ReflectionException if a Java reflection exception
      *  occurs when invoking the getter
      */
-    public void setAttribute(Attribute attribute)
-           throws AttributeNotFoundException, MBeanException,
-           ReflectionException {
+     public void setAttribute(Attribute attribute)
+            throws AttributeNotFoundException, MBeanException,
+            ReflectionException {
 
         // Validate the input parameters
         if (attribute == null)
@@ -129,8 +126,13 @@ public class ConnectorMBean extends ClassNameMBean {
                     "Attribute name is null"), "Attribute name is null");
 
         try {
-            Object connector = getManagedResource();
-            IntrospectionUtils.setProperty(connector, name, String.valueOf(value));
+            Connector connector = (Connector) getManagedResource();
+            if (value == null) {
+                IntrospectionUtils.setProperty(connector, name, null);
+            } else {
+                IntrospectionUtils.setProperty(connector, name,
+                        String.valueOf(value)); 
+            }
         } catch (InstanceNotFoundException e) {
             throw new MBeanException(e);
         } catch (InvalidTargetObjectTypeException e) {
@@ -138,5 +140,6 @@ public class ConnectorMBean extends ClassNameMBean {
         }
   
     }
+
 
 }

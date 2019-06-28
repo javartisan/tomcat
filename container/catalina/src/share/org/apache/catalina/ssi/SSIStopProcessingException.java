@@ -14,15 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.catalina.ssi;
 
+
 /**
- * Exception used to tell SSIProcessor that it should stop processing SSI commands.
- * This is used to mimick the Apache behavior in #set with invalid attributes.
- *
+ * Exception used to tell SSIProcessor that it should stop processing SSI
+ * commands. This is used to mimick the Apache behavior in #set with invalid
+ * attributes.
+ * 
  * @author Paul Speed
  * @author Dan Sandberg
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SSIStopProcessingException.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 public class SSIStopProcessingException extends Exception {
 }

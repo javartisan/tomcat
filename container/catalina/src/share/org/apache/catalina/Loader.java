@@ -50,13 +50,21 @@ import java.beans.PropertyChangeListener;
  * </ul>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Loader.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Loader {
 
 
     // ------------------------------------------------------------- Properties
+
+
+    /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess();
 
 
     /**
@@ -78,20 +86,6 @@ public interface Loader {
      */
     public void setContainer(Container container);
 
-
-    /**
-     * Return the DefaultContext with which this Manager is associated.
-     */
-    public DefaultContext getDefaultContext();
-
-
-    /**
-     * Set the DefaultContext with which this Manager is associated.
-     *
-     * @param defaultContext The newly associated DefaultContext
-     */
-    public void setDefaultContext(DefaultContext defaultContext);
-    
 
     /**
      * Return the "follow standard delegation model" flag used to configure

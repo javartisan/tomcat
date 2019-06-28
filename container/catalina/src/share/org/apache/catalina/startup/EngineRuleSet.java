@@ -19,8 +19,8 @@
 package org.apache.catalina.startup;
 
 
-import org.apache.commons.digester.Digester;
-import org.apache.commons.digester.RuleSetBase;
+import org.apache.tomcat.util.digester.Digester;
+import org.apache.tomcat.util.digester.RuleSetBase;
 
 
 /**
@@ -31,7 +31,7 @@ import org.apache.commons.digester.RuleSetBase;
  * <code>ContextRuleSet</code>, respectively.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EngineRuleSet.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class EngineRuleSet extends RuleSetBase {
@@ -96,12 +96,21 @@ public class EngineRuleSet extends RuleSetBase {
         digester.addSetProperties(prefix + "Engine");
         digester.addRule(prefix + "Engine",
                          new LifecycleListenerRule
-                         (digester,
-                          "org.apache.catalina.startup.EngineConfig",
+                         ("org.apache.catalina.startup.EngineConfig",
                           "engineConfigClass"));
         digester.addSetNext(prefix + "Engine",
                             "setContainer",
                             "org.apache.catalina.Container");
+
+        //Cluster configuration start
+        digester.addObjectCreate(prefix + "Engine/Cluster",
+                                 null, // MUST be specified in the element
+                                 "className");
+        digester.addSetProperties(prefix + "Engine/Cluster");
+        digester.addSetNext(prefix + "Engine/Cluster",
+                            "setCluster",
+                            "org.apache.catalina.Cluster");
+        //Cluster configuration end
 
         digester.addObjectCreate(prefix + "Engine/Listener",
                                  null, // MUST be specified in the element

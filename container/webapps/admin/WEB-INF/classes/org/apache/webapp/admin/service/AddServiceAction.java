@@ -18,35 +18,28 @@
 package org.apache.webapp.admin.service;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.ArrayList;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.LabelValueBean;
-import org.apache.webapp.admin.Lists;
 
 /**
  * The <code>Action</code> that sets up <em>Add Service</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AddServiceAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class AddServiceAction extends Action {
         
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-    
-
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -72,9 +65,10 @@ public class AddServiceAction extends Action {
 
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
+        
+        String serverName = request.getParameter("select");
         
         // Fill in the form values for display and editing
         ServiceForm serviceFm = new ServiceForm();
@@ -84,13 +78,12 @@ public class AddServiceAction extends Action {
         serviceFm.setEngineObjectName("");
         serviceFm.setServiceName("");
         serviceFm.setEngineName("");
-        serviceFm.setDebugLvl("0");
         serviceFm.setDefaultHost("localhost");        
         serviceFm.setAdminServiceName("");
-        serviceFm.setDebugLvlVals(Lists.getDebugLevels());
+        serviceFm.setServerObjectName(serverName);
         ArrayList hosts = new ArrayList();
         hosts.add(new LabelValueBean
-                  (resources.getMessage("list.none"), ""));
+                  (resources.getMessage(locale, "list.none"), ""));
         serviceFm.setHostNameVals(hosts);
         
         // Forward to the service display page

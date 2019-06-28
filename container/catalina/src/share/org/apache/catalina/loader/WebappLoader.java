@@ -23,38 +23,44 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.FileOutputStream;
 import java.io.FilePermission;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLStreamHandlerFactory;
+import java.util.ArrayList;
 import java.util.jar.JarFile;
-import javax.servlet.ServletContext;
-import javax.naming.NamingException;
+
+import javax.management.MBeanRegistration;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 import javax.naming.Binding;
 import javax.naming.NameClassPair;
 import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
 import javax.naming.directory.DirContext;
-import org.apache.naming.resources.Resource;
-import org.apache.naming.resources.DirContextURLStreamHandler;
-import org.apache.naming.resources.DirContextURLStreamHandlerFactory;
+import javax.servlet.ServletContext;
+
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
-import org.apache.catalina.DefaultContext;
 import org.apache.catalina.Globals;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
 import org.apache.catalina.Loader;
-import org.apache.catalina.Logger;
 import org.apache.catalina.core.StandardContext;
 import org.apache.catalina.util.LifecycleSupport;
 import org.apache.catalina.util.StringManager;
+import org.apache.commons.modeler.Registry;
+import org.apache.naming.resources.DirContextURLStreamHandler;
+import org.apache.naming.resources.DirContextURLStreamHandlerFactory;
+import org.apache.naming.resources.Resource;
 
 
 /**
@@ -72,12 +78,11 @@ import org.apache.catalina.util.StringManager;
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: WebappLoader.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class WebappLoader
-    implements Lifecycle, Loader, PropertyChangeListener, Runnable {
-
+    implements Lifecycle, Loader, PropertyChangeListener, MBeanRegistration  {
 
     // ----------------------------------------------------------- Constructors
 
@@ -100,11 +105,8 @@ public class WebappLoader
      * @param parent The parent class loader
      */
     public WebappLoader(ClassLoader parent) {
-
-
         super();
         this.parentClassLoader = parent;
-
     }
 
 
@@ -112,10 +114,9 @@ public class WebappLoader
 
 
     /**
-     * The number of seconds between checks for modified classes, if
-     * automatic reloading is enabled.
+     * First load of the class.
      */
-    private int checkInterval = 15;
+    private static boolean first = true;
 
 
     /**
@@ -129,18 +130,6 @@ public class WebappLoader
      */
     private Container container = null;
 
-
-    /**
-     * The debugging detail level for this component.
-     */
-    private int debug = 0;
-
-
-    /**
-     * The DefaultContext with which this Loader is associated.
-     */
-    protected DefaultContext defaultContext = null;
-    
 
     /**
      * The "follow standard delegation model" flag that will be used to
@@ -160,6 +149,12 @@ public class WebappLoader
      * The lifecycle event support for this component.
      */
     protected LifecycleSupport lifecycle = new LifecycleSupport(this);
+
+
+    /**
+     * If not specified, should the system class loader be used as the parent.
+     */
+    private boolean useSystemClassLoaderAsParent = true;
 
 
     /**
@@ -209,50 +204,18 @@ public class WebappLoader
 
 
     /**
-     * The background thread.
+     * Classpath set in the loader.
      */
-    private Thread thread = null;
+    private String classpath = null;
 
 
     /**
-     * The background thread completion semaphore.
+     * Repositories that are set in the loader, for JMX.
      */
-    private boolean threadDone = false;
-
-
-    /**
-     * Name to register for the background thread.
-     */
-    private String threadName = "WebappLoader";
+    private ArrayList loaderRepositories = null;
 
 
     // ------------------------------------------------------------- Properties
-
-
-    /**
-     * Return the check interval for this Loader.
-     */
-    public int getCheckInterval() {
-
-        return (this.checkInterval);
-
-    }
-
-
-    /**
-     * Set the check interval for this Loader.
-     *
-     * @param checkInterval The new check interval
-     */
-    public void setCheckInterval(int checkInterval) {
-
-        int oldCheckInterval = this.checkInterval;
-        this.checkInterval = checkInterval;
-        support.firePropertyChange("checkInterval",
-                                   new Integer(oldCheckInterval),
-                                   new Integer(this.checkInterval));
-
-    }
 
 
     /**
@@ -296,55 +259,6 @@ public class WebappLoader
             setReloadable( ((Context) this.container).getReloadable() );
             ((Context) this.container).addPropertyChangeListener(this);
         }
-
-    }
-
-
-    /**
-     * Return the DefaultContext with which this Loader is associated.
-     */
-    public DefaultContext getDefaultContext() {
-
-        return (this.defaultContext);
-
-    }
-
-
-    /**
-     * Set the DefaultContext with which this Loader is associated.
-     *
-     * @param defaultContext The newly associated DefaultContext
-     */
-    public void setDefaultContext(DefaultContext defaultContext) {
-
-        DefaultContext oldDefaultContext = this.defaultContext;
-        this.defaultContext = defaultContext;
-        support.firePropertyChange("defaultContext", oldDefaultContext, this.defaultContext);
-
-    }
-
-
-    /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-
-        return (this.debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-
-        int oldDebug = this.debug;
-        this.debug = debug;
-        support.firePropertyChange("debug", new Integer(oldDebug),
-                                   new Integer(this.debug));
 
     }
 
@@ -411,6 +325,29 @@ public class WebappLoader
 
 
     /**
+     * Return the useSystemClassLoaderAsParent flag for this Loader.
+     */
+    public boolean getUseSystemClassLoaderAsParent() {
+        
+        return (this.useSystemClassLoaderAsParent);
+        
+    }
+    
+    /**
+     * Set the useSystemClassLoaderAsParent flag for this Loader.
+     * 
+     * @param useSystemClassLoaderAsParent The useSystemClassLoaderAsParent
+     *                                     flag.
+     */
+    public void setUseSystemClassLoaderAsParent(
+            boolean useSystemClassLoaderAsParent) {
+        
+        this.useSystemClassLoaderAsParent = useSystemClassLoaderAsParent;
+        
+    }
+    
+    
+    /**
      * Return the reloadable flag for this Loader.
      */
     public boolean getReloadable() {
@@ -433,14 +370,6 @@ public class WebappLoader
         support.firePropertyChange("reloadable",
                                    new Boolean(oldReloadable),
                                    new Boolean(this.reloadable));
-
-        // Start or stop our background thread if required
-        if (!started)
-            return;
-        if (!oldReloadable && this.reloadable)
-            threadStart();
-        else if (oldReloadable && !this.reloadable)
-            threadStop();
 
     }
 
@@ -467,8 +396,8 @@ public class WebappLoader
      */
     public void addRepository(String repository) {
 
-        if (debug >= 1)
-            log(sm.getString("webappLoader.addRepository", repository));
+        if (log.isDebugEnabled())
+            log.debug(sm.getString("webappLoader.addRepository", repository));
 
         for (int i = 0; i < repositories.length; i++) {
             if (repository.equals(repositories[i]))
@@ -482,6 +411,7 @@ public class WebappLoader
 
         if (started && (classLoader != null)) {
             classLoader.addRepository(repository);
+            if( loaderRepositories != null ) loaderRepositories.add(repository);
             setClassPath();
         }
 
@@ -489,13 +419,81 @@ public class WebappLoader
 
 
     /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess() {
+        if (reloadable && modified()) {
+            try {
+                Thread.currentThread().setContextClassLoader
+                    (WebappLoader.class.getClassLoader());
+                if (container instanceof StandardContext) {
+                    ((StandardContext) container).reload();
+                }
+            } finally {
+                if (container.getLoader() != null) {
+                    Thread.currentThread().setContextClassLoader
+                        (container.getLoader().getClassLoader());
+                }
+            }
+        } else {
+            closeJARs(false);
+        }
+    }
+
+
+    /**
      * Return the set of repositories defined for this class loader.
      * If none are defined, a zero-length array is returned.
+     * For security reason, returns a clone of the Array (since 
+     * String are immutable).
      */
     public String[] findRepositories() {
 
-        return (repositories);
+        return ((String[])repositories.clone());
 
+    }
+
+    public String[] getRepositories() {
+        return ((String[])repositories.clone());
+    }
+
+    /** Extra repositories for this loader
+     */
+    public String getRepositoriesString() {
+        StringBuffer sb=new StringBuffer();
+        for( int i=0; i<repositories.length ; i++ ) {
+            sb.append( repositories[i]).append(":");
+        }
+        return sb.toString();
+    }
+
+    public String[] getLoaderRepositories() {
+        if( loaderRepositories==null ) return  null;
+        String res[]=new String[ loaderRepositories.size()];
+        loaderRepositories.toArray(res);
+        return res;
+    }
+
+    public String getLoaderRepositoriesString() {
+        String repositories[]=getLoaderRepositories();
+        StringBuffer sb=new StringBuffer();
+        for( int i=0; i<repositories.length ; i++ ) {
+            sb.append( repositories[i]).append(":");
+        }
+        return sb.toString();
+    }
+
+
+    /** 
+     * Classpath, as set in org.apache.catalina.jsp_classpath context
+     * property
+     *
+     * @return The classpath
+     */
+    public String getClasspath() {
+        return classpath;
     }
 
 
@@ -507,6 +505,16 @@ public class WebappLoader
 
         return (classLoader.modified());
 
+    }
+
+
+    /**
+     * Used to periodically signal to the classloader to release JAR resources.
+     */
+    public void closeJARs(boolean force) {
+        if (classLoader !=null){
+            classLoader.closeJARs(force);
+        }
     }
 
 
@@ -573,6 +581,48 @@ public class WebappLoader
 
     }
 
+    private boolean initialized=false;
+
+
+    public void init() {
+        initialized=true;
+
+        if( oname==null ) {
+            // not registered yet - standalone or API
+            if( container instanceof StandardContext) {
+                // Register ourself. The container must be a webapp
+                try {
+                    StandardContext ctx=(StandardContext)container;
+                    String path = ctx.getPath();
+                    if (path.equals("")) {
+                        path = "/";
+                    }   
+                    oname=new ObjectName(ctx.getEngineName() + ":type=Loader,path=" +
+                                path + ",host=" + ctx.getParent().getName());
+                    Registry.getRegistry(null, null).registerComponent(this, oname, null);
+                    controller=oname;
+                } catch (Exception e) {
+                    log.error("Error registering loader", e );
+                }
+            }
+        }
+
+        if( container == null ) {
+            // JMX created the loader
+            // TODO
+
+        }
+    }
+
+    public void destroy() {
+        if( controller==oname ) {
+            // Self-registration, undo it
+            Registry.getRegistry(null, null).unregisterComponent(oname);
+            oname = null;
+        }
+        initialized = false;
+
+    }
 
     /**
      * Start this component, initializing our associated class loader.
@@ -580,26 +630,35 @@ public class WebappLoader
      * @exception LifecycleException if a lifecycle error occurs
      */
     public void start() throws LifecycleException {
-
         // Validate and update our current component state
+        if( ! initialized ) init();
         if (started)
             throw new LifecycleException
                 (sm.getString("webappLoader.alreadyStarted"));
-        if (debug >= 1)
-            log(sm.getString("webappLoader.starting"));
+        if (log.isDebugEnabled())
+            log.debug(sm.getString("webappLoader.starting"));
         lifecycle.fireLifecycleEvent(START_EVENT, null);
         started = true;
 
-        if (container.getResources() == null)
+        if (container.getResources() == null) {
+            log.info("No resources for " + container);
             return;
-
+        }
         // Register a stream handler factory for the JNDI protocol
         URLStreamHandlerFactory streamHandlerFactory =
             new DirContextURLStreamHandlerFactory();
-        try {
-            URL.setURLStreamHandlerFactory(streamHandlerFactory);
-        } catch (Throwable t) {
-            // Ignore the error here.
+        if (first) {
+            first = false;
+            try {
+                URL.setURLStreamHandlerFactory(streamHandlerFactory);
+            } catch (Exception e) {
+                // Log and continue anyway, this is not critical
+                log.error("Error registering jndi stream handler", e);
+            } catch (Throwable t) {
+                // This is likely a dual registration
+                log.info("Dual registration of jndi stream handler: " 
+                         + t.getMessage());
+            }
         }
 
         // Construct a class loader based on our current repositories list
@@ -607,7 +666,6 @@ public class WebappLoader
 
             classLoader = createClassLoader();
             classLoader.setResources(container.getResources());
-            classLoader.setDebug(this.debug);
             classLoader.setDelegate(this.delegate);
             if (container instanceof StandardContext)
                 classLoader.setAntiJARLocking(((StandardContext) container).getAntiJARLocking());
@@ -629,21 +687,20 @@ public class WebappLoader
             DirContextURLStreamHandler.bind
                 ((ClassLoader) classLoader, this.container.getResources());
 
+            StandardContext ctx=(StandardContext)container;
+            String path = ctx.getPath();
+            if (path.equals("")) {
+                path = "/";
+            }   
+            ObjectName cloname = new ObjectName
+                (ctx.getEngineName() + ":type=WebappClassLoader,path="
+                 + path + ",host=" + ctx.getParent().getName());
+            Registry.getRegistry(null, null)
+                .registerComponent(classLoader, cloname, null);
+
         } catch (Throwable t) {
+            log.error( "LifecycleException ", t );
             throw new LifecycleException("start: ", t);
-        }
-
-        // Validate that all required packages are actually available
-        validatePackages();
-
-        // Start our background thread if we are reloadable
-        if (reloadable) {
-            log(sm.getString("webappLoader.reloading"));
-            try {
-                threadStart();
-            } catch (IllegalStateException e) {
-                throw new LifecycleException(e);
-            }
         }
 
     }
@@ -660,14 +717,10 @@ public class WebappLoader
         if (!started)
             throw new LifecycleException
                 (sm.getString("webappLoader.notStarted"));
-        if (debug >= 1)
-            log(sm.getString("webappLoader.stopping"));
+        if (log.isDebugEnabled())
+            log.debug(sm.getString("webappLoader.stopping"));
         lifecycle.fireLifecycleEvent(STOP_EVENT, null);
         started = false;
-
-        // Stop our background thread if we are reloadable
-        if (reloadable)
-            threadStop();
 
         // Remove context attributes as appropriate
         if (container instanceof Context) {
@@ -680,7 +733,24 @@ public class WebappLoader
         if (classLoader instanceof Lifecycle)
             ((Lifecycle) classLoader).stop();
         DirContextURLStreamHandler.unbind((ClassLoader) classLoader);
+
+        try {
+            StandardContext ctx=(StandardContext)container;
+            String path = ctx.getPath();
+            if (path.equals("")) {
+                path = "/";
+            }
+            ObjectName cloname = new ObjectName
+                (ctx.getEngineName() + ":type=WebappClassLoader,path="
+                 + path + ",host=" + ctx.getParent().getName());
+            Registry.getRegistry(null, null).unregisterComponent(cloname);
+        } catch (Throwable t) {
+            log.error( "LifecycleException ", t );
+        }
+
         classLoader = null;
+
+        destroy();
 
     }
 
@@ -698,7 +768,6 @@ public class WebappLoader
         // Validate the source of this event
         if (!(event.getSource() instanceof Context))
             return;
-        Context context = (Context) event.getSource();
 
         // Process a relevant property change
         if (event.getPropertyName().equals("reloadable")) {
@@ -706,7 +775,7 @@ public class WebappLoader
                 setReloadable
                     ( ((Boolean) event.getNewValue()).booleanValue() );
             } catch (NumberFormatException e) {
-                log(sm.getString("webappLoader.reloadable",
+                log.error(sm.getString("webappLoader.reloadable",
                                  event.getNewValue().toString()));
             }
         }
@@ -727,79 +796,18 @@ public class WebappLoader
         WebappClassLoader classLoader = null;
 
         if (parentClassLoader == null) {
-            // Will cause a ClassCast is the class does not extend WCL, but
-            // this is on purpose (the exception will be caught and rethrown)
-            classLoader = (WebappClassLoader) clazz.newInstance();
-        } else {
-            Class[] argTypes = { ClassLoader.class };
-            Object[] args = { parentClassLoader };
-            Constructor constr = clazz.getConstructor(argTypes);
-            classLoader = (WebappClassLoader) constr.newInstance(args);
+            if (useSystemClassLoaderAsParent) {
+                parentClassLoader = ClassLoader.getSystemClassLoader();
+            } else {
+                parentClassLoader = container.getParentClassLoader();
+            }
         }
+        Class[] argTypes = { ClassLoader.class };
+        Object[] args = { parentClassLoader };
+        Constructor constr = clazz.getConstructor(argTypes);
+        classLoader = (WebappClassLoader) constr.newInstance(args);
 
         return classLoader;
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any)
-     *
-     * @param message Message to be logged
-     */
-    private void log(String message) {
-
-        Logger logger = null;
-        if (container != null)
-            logger = container.getLogger();
-        if (logger != null)
-            logger.log("WebappLoader[" + container.getName() + "]: "
-                       + message);
-        else {
-            String containerName = null;
-            if (container != null)
-                containerName = container.getName();
-            System.out.println("WebappLoader[" + containerName
-                               + "]: " + message);
-        }
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any)
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
-     */
-    private void log(String message, Throwable throwable) {
-
-        Logger logger = null;
-        if (container != null)
-            logger = container.getLogger();
-        if (logger != null) {
-            logger.log("WebappLoader[" + container.getName() + "] "
-                       + message, throwable);
-        } else {
-            String containerName = null;
-            if (container != null)
-                containerName = container.getName();
-            System.out.println("WebappLoader[" + containerName
-                               + "]: " + message);
-            System.out.println("" + throwable);
-            throwable.printStackTrace(System.out);
-        }
-
-    }
-
-
-    /**
-     * Notify our Context that a reload is appropriate.
-     */
-    private void notifyContext() {
-
-        WebappContextNotifier notifier = new WebappContextNotifier();
-        (new Thread(notifier)).start();
 
     }
 
@@ -908,13 +916,16 @@ public class WebappLoader
         if (servletContext == null)
             return;
 
+        loaderRepositories=new ArrayList();
         // Loading the work directory
         File workDir =
             (File) servletContext.getAttribute(Globals.WORK_DIR_ATTR);
-        if (workDir == null)
-            return;
+        if (workDir == null) {
+            log.info("No work dir for " + servletContext);
+        }
 
-        log(sm.getString("webappLoader.deploy", workDir.getAbsolutePath()));
+        if( log.isDebugEnabled()) 
+            log.debug(sm.getString("webappLoader.deploy", workDir.getAbsolutePath()));
 
         classLoader.setWorkDir(workDir);
 
@@ -954,12 +965,14 @@ public class WebappLoader
 
             }
 
-            log(sm.getString("webappLoader.classDeploy", classesPath,
+            if(log.isDebugEnabled())
+                log.debug(sm.getString("webappLoader.classDeploy", classesPath,
                              classRepository.getAbsolutePath()));
 
 
             // Adding the repository to the class loader
             classLoader.addRepository(classesPath + "/", classRepository);
+            loaderRepositories.add(classesPath + "/" );
 
         }
 
@@ -1010,7 +1023,8 @@ public class WebappLoader
                     // impossible to update it or remove it at runtime)
                     File destFile = new File(destDir, binding.getName());
 
-                    log(sm.getString("webappLoader.jarDeploy", filename,
+                    if( log.isDebugEnabled())
+                    log.debug(sm.getString("webappLoader.jarDeploy", filename,
                                      destFile.getAbsolutePath()));
 
                     Resource jarResource = (Resource) binding.getObject();
@@ -1020,8 +1034,16 @@ public class WebappLoader
                             continue;
                     }
 
-                    JarFile jarFile = new JarFile(destFile);
-                    classLoader.addJar(filename, jarFile, destFile);
+                    try {
+                        JarFile jarFile = new JarFile(destFile);
+                        classLoader.addJar(filename, jarFile, destFile);
+                    } catch (Exception ex) {
+                        // Catch the exception if there is an empty jar file
+                        // Should ignore and continute loading other jar files 
+                        // in the dir
+                    }
+                    
+                    loaderRepositories.add( filename );
 
                 }
             } catch (NamingException e) {
@@ -1050,15 +1072,37 @@ public class WebappLoader
         if (servletContext == null)
             return;
 
+        if (container instanceof StandardContext) {
+            String baseClasspath = 
+                ((StandardContext) container).getCompilerClasspath();
+            if (baseClasspath != null) {
+                servletContext.setAttribute(Globals.CLASS_PATH_ATTR,
+                                            baseClasspath);
+                return;
+            }
+        }
+
         StringBuffer classpath = new StringBuffer();
 
         // Assemble the class path information from our class loader chain
         ClassLoader loader = getClassLoader();
         int layers = 0;
         int n = 0;
-        while ((layers < 3) && (loader != null)) {
-            if (!(loader instanceof URLClassLoader))
+        while (loader != null) {
+            if (!(loader instanceof URLClassLoader)) {
+                String cp=getClasspath( loader );
+                if( cp==null ) {
+                    log.info( "Unknown loader " + loader + " " + loader.getClass());
+                    break;
+                } else {
+                    if (n > 0) 
+                        classpath.append(File.pathSeparator);
+                    classpath.append(cp);
+                    n++;
+                }
                 break;
+                //continue;
+            }
             URL repositories[] =
                 ((URLClassLoader) loader).getURLs();
             for (int i = 0; i < repositories.length; i++) {
@@ -1083,12 +1127,33 @@ public class WebappLoader
             layers++;
         }
 
+        this.classpath=classpath.toString();
+
         // Store the assembled class path as a servlet context attribute
         servletContext.setAttribute(Globals.CLASS_PATH_ATTR,
                                     classpath.toString());
 
     }
 
+    // try to extract the classpath from a loader that is not URLClassLoader
+    private String getClasspath( ClassLoader loader ) {
+        try {
+            Method m=loader.getClass().getMethod("getClasspath", new Class[] {});
+            if( log.isTraceEnabled())
+                log.trace("getClasspath " + m );
+            if( m==null ) return null;
+            Object o=m.invoke( loader, new Object[] {} );
+            if( log.isDebugEnabled() )
+                log.debug("gotClasspath " + o);
+            if( o instanceof String )
+                return (String)o;
+            return null;
+        } catch( Exception ex ) {
+            if (log.isDebugEnabled())
+                log.debug("getClasspath ", ex);
+        }
+        return null;
+    }
 
     /**
      * Copy directory.
@@ -1155,180 +1220,34 @@ public class WebappLoader
     }
 
 
-    /**
-     * Sleep for the duration specified by the <code>checkInterval</code>
-     * property.
-     */
-    private void threadSleep() {
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( WebappLoader.class );
 
-        try {
-            Thread.sleep(checkInterval * 1000L);
-        } catch (InterruptedException e) {
-            ;
-        }
+    private ObjectName oname;
+    private ObjectName controller;
 
+    public ObjectName preRegister(MBeanServer server,
+                                  ObjectName name) throws Exception {
+        oname=name;
+
+        return name;
     }
 
-
-    /**
-     * Start the background thread that will periodically check for
-     * session timeouts.
-     *
-     * @exception IllegalStateException if we should not be starting
-     *  a background thread now
-     */
-    private void threadStart() {
-
-        // Has the background thread already been started?
-        if (thread != null)
-            return;
-
-        // Validate our current state
-        if (!reloadable)
-            throw new IllegalStateException
-                (sm.getString("webappLoader.notReloadable"));
-        if (!(container instanceof Context))
-            throw new IllegalStateException
-                (sm.getString("webappLoader.notContext"));
-
-        // Start the background thread
-        if (debug >= 1)
-            log(" Starting background thread");
-        threadDone = false;
-        threadName = "WebappLoader[" + container.getName() + "]";
-        thread = new Thread(this, threadName);
-        thread.setDaemon(true);
-        thread.start();
-
+    public void postRegister(Boolean registrationDone) {
     }
 
-
-    /**
-     * Stop the background thread that is periodically checking for
-     * modified classes.
-     */
-    private void threadStop() {
-
-        if (thread == null)
-            return;
-
-        if (debug >= 1)
-            log(" Stopping background thread");
-        threadDone = true;
-        thread.interrupt();
-        try {
-            thread.join();
-        } catch (InterruptedException e) {
-            ;
-        }
-
-        thread = null;
-
+    public void preDeregister() throws Exception {
     }
 
-
-    /**
-     * Validate that the required optional packages for this application
-     * are actually present.
-     *
-     * @exception LifecycleException if a required package is not available
-     */
-    private void validatePackages() throws LifecycleException {
-
-        ClassLoader classLoader = getClassLoader();
-        if (classLoader instanceof WebappClassLoader) {
-
-            Extension available[] =
-                ((WebappClassLoader) classLoader).findAvailable();
-            Extension required[] =
-                ((WebappClassLoader) classLoader).findRequired();
-            if (debug >= 1)
-                log("Optional Packages:  available=" +
-                    available.length + ", required=" +
-                    required.length);
-
-            for (int i = 0; i < required.length; i++) {
-                if (debug >= 1)
-                    log("Checking for required package " + required[i]);
-                boolean found = false;
-                for (int j = 0; j < available.length; j++) {
-                    if (available[j].isCompatibleWith(required[i])) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                    throw new LifecycleException
-                        ("Missing optional package " + required[i]);
-            }
-
-        }
-
+    public void postDeregister() {
     }
 
-
-    // ------------------------------------------------------ Background Thread
-
-
-    /**
-     * The background thread that checks for session timeouts and shutdown.
-     */
-    public void run() {
-
-        if (debug >= 1)
-            log("BACKGROUND THREAD Starting");
-
-        // Loop until the termination semaphore is set
-        while (!threadDone) {
-
-            // Wait for our check interval
-            threadSleep();
-
-            if (!started)
-                break;
-
-            try {
-                // Perform our modification check
-                if (!classLoader.modified())
-                    continue;
-            } catch (Exception e) {
-                log(sm.getString("webappLoader.failModifiedCheck"), e);
-                continue;
-            }
-
-            // Handle a need for reloading
-            notifyContext();
-            break;
-
-        }
-
-        if (debug >= 1)
-            log("BACKGROUND THREAD Stopping");
-
+    public ObjectName getController() {
+        return controller;
     }
 
-
-    // -------------------------------------- WebappContextNotifier Inner Class
-
-
-    /**
-     * Private thread class to notify our associated Context that we have
-     * recognized the need for a reload.
-     */
-    protected class WebappContextNotifier implements Runnable {
-
-
-        /**
-         * Perform the requested notification.
-         */
-        public void run() {
-
-            ((Context) container).reload();
-
-        }
-
-
+    public void setController(ObjectName controller) {
+        this.controller = controller;
     }
-
 
 }

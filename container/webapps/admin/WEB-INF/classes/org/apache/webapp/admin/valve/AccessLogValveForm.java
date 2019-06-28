@@ -18,16 +18,17 @@
 package org.apache.webapp.admin.valve;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+
 import java.util.List;
 
 /**
  * Form bean for the accesslog valve page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AccessLogValveForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class AccessLogValveForm extends ValveForm {
@@ -71,7 +72,7 @@ public final class AccessLogValveForm extends ValveForm {
     /**
      * The text for the rotatable.
      */
-    private String rotatable = "true";      
+    private String rotatable = "true";    
        
     /**
      * Set of boolean values.
@@ -222,8 +223,8 @@ public final class AccessLogValveForm extends ValveForm {
         
         this.resolveHosts = resolveHosts;
         
-    }
-  
+    }  
+    
     /**
      * Return the rotatable.
      */
@@ -241,7 +242,7 @@ public final class AccessLogValveForm extends ValveForm {
         this.rotatable = rotatable;
         
     }
-        
+    
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -308,34 +309,28 @@ public final class AccessLogValveForm extends ValveForm {
         
         ActionErrors errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        
-        // front end validation when save is clicked.        
-         if (submit != null) {
-            
-             // if not specified, default is access_log.
-             // to specify no prefix, specify a 0 length string...
-            if ((prefix == null) || (prefix.length() == 0)){
-                prefix = "access_log.";
-            }
-            
-            // default is a 0 length string
-            if ((suffix == null) || (suffix.length() < 1)) {
-                suffix = "";
-            }
-                                    
-            // If no directory attribute is specified, the default
-            // value is "logs".
-            if ((directory == null) || (directory.length() < 1)) {
-                directory = "logs";
-            }
-
-            if ((pattern == null) || (pattern.length() < 1)) {
-                errors.add("pattern",
-                new ActionMessage("error.pattern.required"));
-            }         
+        // if not specified, default is access_log.
+        // to specify no prefix, specify a 0 length string...
+        if ((prefix == null) || (prefix.length() == 0)){
+            prefix = "access_log.";
         }
-                 
+            
+        // default is a 0 length string
+        if ((suffix == null) || (suffix.length() < 1)) {
+            suffix = "";
+        }
+                                    
+        // If no directory attribute is specified, the default
+        // value is "logs".
+        if ((directory == null) || (directory.length() < 1)) {
+            directory = "logs";
+        }
+
+        if ((pattern == null) || (pattern.length() < 1)) {
+            errors.add("pattern",
+            new ActionMessage("error.pattern.required"));
+        }         
+
         return errors;
     }
 }

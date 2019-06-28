@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,27 +24,23 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetAddress;
-import java.text.SimpleDateFormat;
 import java.text.DecimalFormat;
-import java.util.Calendar;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
+
 import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import org.apache.catalina.HttpResponse;
+
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.LifecycleSupport;
 import org.apache.catalina.util.StringManager;
+import org.apache.coyote.RequestInfo;
 
 
 /**
@@ -79,6 +75,7 @@ import org.apache.catalina.util.StringManager;
  * <li><b>%v</b> - Local server name
  * <li><b>%D</b> - Time taken to process the request, in millis
  * <li><b>%T</b> - Time taken to process the request, in seconds
+ * <li><b>%I</b> - current request thread name (can compare later with stacktraces)
  * </ul>
  * <p>In addition, the caller can specify one of the following aliases for
  * commonly utilized patterns:</p>
@@ -94,6 +91,7 @@ import org.apache.catalina.util.StringManager;
  * It is modeled after the apache syntax:
  * <ul>
  * <li><code>%{xxx}i</code> for incoming headers
+ * <li><code>%{xxx}o</code> for outgoing headers
  * <li><code>%{xxx}c</code> for a specific cookie
  * <li><code>%{xxx}r</code> xxx is an attribute in the ServletRequest
  * <li><code>%{xxx}s</code> xxx is an attribute in the HttpSession
@@ -109,10 +107,11 @@ import org.apache.catalina.util.StringManager;
  *
  * @author Craig R. McClanahan
  * @author Jason Brittain
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Peter Rossbach
+ * @version $Id: AccessLogValve.java 959051 2010-06-29 17:53:17Z kkolinko $
  */
 
-public final class AccessLogValve
+public class AccessLogValve
     extends ValveBase
     implements Lifecycle {
 
@@ -120,11 +119,13 @@ public final class AccessLogValve
     // ----------------------------------------------------------- Constructors
 
 
+    private static final char MARK_EMPTY = '-';
+
     /**
      * Construct a new instance of this class with default property values.
      */
     public AccessLogValve() {
-
+        
         super();
         setPattern("common");
 
@@ -152,7 +153,7 @@ public final class AccessLogValve
      * The descriptive information about this implementation.
      */
     protected static final String info =
-        "org.apache.catalina.valves.AccessLogValve/1.0";
+        "org.apache.catalina.valves.AccessLogValve/1.1";
 
 
     /**
@@ -231,70 +232,108 @@ public final class AccessLogValve
      * A date formatter to format a Date into a date in the format
      * "yyyy-MM-dd".
      */
-    private SimpleDateFormat dateFormatter = null;
+    private SimpleDateFormat fileDateFormatter = null;
 
-
-    /**
-     * A date formatter to format Dates into a day string in the format
-     * "dd".
-     */
-    private SimpleDateFormat dayFormatter = null;
-
-
-    /**
-     * A date formatter to format a Date into a month string in the format
-     * "MM".
-     */
-    private SimpleDateFormat monthFormatter = null;
-
-
-    /**
-     * Time taken formatter for 3 decimal places.
-     */
-     private DecimalFormat timeTakenFormatter = null;
-
-
-    /**
-     * A date formatter to format a Date into a year string in the format
-     * "yyyy".
-     */
-    private SimpleDateFormat yearFormatter = null;
-
-
-    /**
-     * A date formatter to format a Date into a time in the format
-     * "kk:mm:ss" (kk is a 24-hour representation of the hour).
-     */
-    private SimpleDateFormat timeFormatter = null;
 
     /**
      * The system timezone.
      */
-    private TimeZone timezone = null;
+    private static final TimeZone timezone;
+
     
     /**
      * The time zone offset relative to GMT in text form when daylight saving
      * is not in operation.
      */
-    private String timeZoneNoDST = null;
+    private static final String timeZoneNoDST;
+
 
     /**
      * The time zone offset relative to GMT in text form when daylight saving
      * is in operation.
      */
-    private String timeZoneDST = null;
+    private static final String timeZoneDST;
+
+    static {
+        timezone = TimeZone.getDefault();
+        timeZoneNoDST = calculateTimeZoneOffset(timezone.getRawOffset());
+        int offset = timezone.getDSTSavings();
+        timeZoneDST = calculateTimeZoneOffset(timezone.getRawOffset()+offset);
+    }
 
     /**
      * The system time when we last updated the Date that this valve
      * uses for log lines.
      */
-    private Date currentDate = null;
+    private static class AccessDateStruct {
+        private Date currentDate = new Date();
+        private String currentDateString = null;
+        private SimpleDateFormat dayFormatter = new SimpleDateFormat("dd");
+        private SimpleDateFormat monthFormatter = new SimpleDateFormat("MM");
+        private SimpleDateFormat yearFormatter = new SimpleDateFormat("yyyy");
+        private SimpleDateFormat timeFormatter = new SimpleDateFormat("HH:mm:ss");
+        private DecimalFormat timeTakenFormatter;
 
+        public AccessDateStruct() {
+            dayFormatter.setTimeZone(timezone);
+            monthFormatter.setTimeZone(timezone);
+            yearFormatter.setTimeZone(timezone);
+            timeFormatter.setTimeZone(timezone);
+        }
+        public Date getDate() {
+            // Only update the Date once per second, max.
+            long systime = System.currentTimeMillis();
+            if ((systime - currentDate.getTime()) > 1000) {
+                currentDate.setTime(systime);
+                currentDateString = null;
+            }
+            return currentDate;
+        }
+
+        /**
+         * Format current date and time in Common Log Format format. That is:
+         * "[dd/MMM/yyyy:HH:mm:ss Z]"
+         */
+        public String getCurrentDateString() {
+            if (currentDateString == null) {
+                StringBuffer current = new StringBuffer(32);
+                current.append('[');
+                current.append(dayFormatter.format(currentDate));
+                current.append('/');
+                current.append(lookup(monthFormatter.format(currentDate)));
+                current.append('/');
+                current.append(yearFormatter.format(currentDate));
+                current.append(':');
+                current.append(timeFormatter.format(currentDate));
+                current.append(' ');
+                current.append(getTimeZone(currentDate));
+                current.append(']');
+                currentDateString = current.toString();
+            }
+            return currentDateString;
+        }
+
+        /**
+         * Format the time taken value for 3 decimal places.
+         */
+        public String formatTimeTaken(long time) {
+            if (timeTakenFormatter == null) {
+                timeTakenFormatter = new DecimalFormat("0.000");
+            }
+            return timeTakenFormatter.format(time/1000d);
+        }
+    }
+
+    private static ThreadLocal currentDateStruct = new ThreadLocal() {
+        protected Object initialValue() {
+            return new AccessDateStruct();
+        }
+    };
 
     /**
      * When formatting log lines, we often use strings like this one (" ").
      */
-    private String space = " ";
+    private static final char space = ' ';
 
 
     /**
@@ -306,7 +345,7 @@ public final class AccessLogValve
     /**
      * Instant when the log daily rotation was last checked.
      */
-    private long rotationLastChecked = 0L;
+    private volatile long rotationLastChecked = 0L;
 
 
     /**
@@ -529,20 +568,17 @@ public final class AccessLogValve
      *
      * @param request Request being processed
      * @param response Response being processed
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error has occurred
      * @exception ServletException if a servlet error has occurred
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException {
 
         // Pass this request on to the next valve in our pipeline
         long t1=System.currentTimeMillis();
 
-        context.invokeNext(request, response);
+        getNext().invoke(request, response);
 
         long t2=System.currentTimeMillis();
         long time=t2-t1;
@@ -553,27 +589,22 @@ public final class AccessLogValve
         }
 
 
-        Date date = getDate();
-        StringBuffer result = new StringBuffer();
+        AccessDateStruct struct = (AccessDateStruct) currentDateStruct.get();
+        Date date = struct.getDate();
+        StringBuffer result = new StringBuffer(128);
 
         // Check to see if we should log using the "common" access log pattern
         if (common || combined) {
-            String value = null;
-
-            ServletRequest req = request.getRequest();
-            HttpServletRequest hreq = null;
-            if (req instanceof HttpServletRequest)
-                hreq = (HttpServletRequest) req;
+            String value;
 
             if (isResolveHosts())
-                result.append(req.getRemoteHost());
+                result.append(request.getRemoteHost());
             else
-                result.append(req.getRemoteAddr());
+                result.append(request.getRemoteAddr());
 
             result.append(" - ");
 
-            if (hreq != null)
-                value = hreq.getRemoteUser();
+            value = request.getRemoteUser();
             if (value == null)
                 result.append("- ");
             else {
@@ -581,59 +612,48 @@ public final class AccessLogValve
                 result.append(space);
             }
 
-            result.append("[");
-            result.append(dayFormatter.format(date));           // Day
-            result.append('/');
-            result.append(lookup(monthFormatter.format(date))); // Month
-            result.append('/');
-            result.append(yearFormatter.format(date));          // Year
-            result.append(':');
-            result.append(timeFormatter.format(date));          // Time
-            result.append(space);
-            result.append(getTimeZone(date));                   // Time Zone
-            result.append("] \"");
+            result.append(struct.getCurrentDateString());
 
-            result.append(hreq.getMethod());
+            result.append(" \"");
+            result.append(request.getMethod());
             result.append(space);
-            result.append(hreq.getRequestURI());
-            if (hreq.getQueryString() != null) {
+            result.append(request.getRequestURI());
+            if (request.getQueryString() != null) {
                 result.append('?');
-                result.append(hreq.getQueryString());
+                result.append(request.getQueryString());
             }
             result.append(space);
-            result.append(hreq.getProtocol());
+            result.append(request.getProtocol());
             result.append("\" ");
 
-            result.append(((HttpResponse) response).getStatus());
+            result.append(response.getStatus());
 
             result.append(space);
 
-            int length = response.getContentCount();
-
+            long length = response.getContentCountLong() ;
             if (length <= 0)
-                value = "-";
+                result.append(MARK_EMPTY);
             else
-                value = "" + length;
-            result.append(value);
+                result.append(length);
 
             if (combined) {
                 result.append(space);
-                result.append("\"");
-                String referer = hreq.getHeader("referer");
+                result.append('\"');
+                String referer = request.getHeader("referer");
                 if(referer != null)
                     result.append(referer);
                 else
-                    result.append("-");
-                result.append("\"");
+                    result.append(MARK_EMPTY);
+                result.append('\"');
 
                 result.append(space);
-                result.append("\"");
-                String ua = hreq.getHeader("user-agent");
+                result.append('\"');
+                String ua = request.getHeader("user-agent");
                 if(ua != null)
                     result.append(ua);
                 else
-                    result.append("-");
-                result.append("\"");
+                    result.append(MARK_EMPTY);
+                result.append('\"');
             }
 
         } else {
@@ -646,26 +666,23 @@ public final class AccessLogValve
                      * do not enounter a closing } - then I ignore the {
                      */
                     if ('{' == ch){
-                        StringBuffer name = new StringBuffer();
                         int j = i + 1;
                         for(;j < pattern.length() && '}' != pattern.charAt(j); j++) {
-                            name.append(pattern.charAt(j));
+                            // loop through characters that are part of the name
                         }
                         if (j+1 < pattern.length()) {
                             /* the +1 was to account for } which we increment now */
                             j++;
-                            result.append(replace(name.toString(),
-                                                pattern.charAt(j),
-                                                request,
-                                                response));
+                            replace(result, pattern.substring(i + 1, j - 1),
+                                    pattern.charAt(j), request, response);
                             i=j; /*Since we walked more than one character*/
                         } else {
                             //D'oh - end of string - pretend we never did this
                             //and do processing the "old way"
-                            result.append(replace(ch, date, request, response, time));
+                            replace(result, ch, struct, request, response, time);
                         }
                     } else {
-                        result.append(replace(ch, date, request, response,time ));
+                        replace(result, ch, struct, request, response,time );
                     }
                     replace = false;
                 } else if (ch == '%') {
@@ -712,17 +729,15 @@ public final class AccessLogValve
             // Only do a logfile switch check once a second, max.
             long systime = System.currentTimeMillis();
             if ((systime - rotationLastChecked) > 1000) {
-
-                // We need a new currentDate
-                currentDate = new Date(systime);
-                rotationLastChecked = systime;
-
-                // Check for a change of date
-                String tsDate = dateFormatter.format(currentDate);
-
-                // If the date has changed, switch log files
-                if (!dateStamp.equals(tsDate)) {
-                    synchronized (this) {
+                synchronized(this) {
+                    if ((systime - rotationLastChecked) > 1000) {
+                        rotationLastChecked = systime;
+        
+                        // Check for a change of date
+                        String tsDate =
+                            fileDateFormatter.format(new Date(systime));
+        
+                        // If the date has changed, switch log files
                         if (!dateStamp.equals(tsDate)) {
                             close();
                             dateStamp = tsDate;
@@ -730,13 +745,14 @@ public final class AccessLogValve
                         }
                     }
                 }
-
             }
         }
 
         // Log this message
-        if (writer != null) {
-            writer.println(message);
+        synchronized(this) {
+            if (writer != null) {
+                writer.println(message);
+            }
         }
 
     }
@@ -748,7 +764,7 @@ public final class AccessLogValve
      *
      * @param month Month number ("01" .. "12").
      */
-    private String lookup(String month) {
+    private static String lookup(String month) {
 
         int index;
         try {
@@ -792,30 +808,23 @@ public final class AccessLogValve
 
 
     /**
-     * Return the replacement text for the specified pattern character.
+     * Print the replacement text for the specified pattern character.
      *
+     * @param result StringBuffer that accumulates the log message text
      * @param pattern Pattern character identifying the desired text
-     * @param date the current Date so that this method doesn't need to
-     *        create one
+     * @param struct the object containing current Date so that this method
+     *        doesn't need to create one
      * @param request Request being processed
      * @param response Response being processed
      */
-    private String replace(char pattern, Date date, Request request,
-                           Response response, long time) {
+    private void replace(StringBuffer result, char pattern,
+            AccessDateStruct struct, Request request, Response response,
+            long time) {
 
-        String value = null;
-
-        ServletRequest req = request.getRequest();
-        HttpServletRequest hreq = null;
-        if (req instanceof HttpServletRequest)
-            hreq = (HttpServletRequest) req;
-        ServletResponse res = response.getResponse();
-        HttpServletResponse hres = null;
-        if (res instanceof HttpServletResponse)
-            hres = (HttpServletResponse) res;
+        String value;
 
         if (pattern == 'a') {
-            value = req.getRemoteAddr();
+            value = request.getRemoteAddr();
         } else if (pattern == 'A') {
             try {
                 value = InetAddress.getLocalHost().getHostAddress();
@@ -823,136 +832,154 @@ public final class AccessLogValve
                 value = "127.0.0.1";
             }
         } else if (pattern == 'b') {
-            int length = response.getContentCount();
+            long length = response.getContentCountLong() ;
             if (length <= 0)
-                value = "-";
+                result.append(MARK_EMPTY);
             else
-                value = "" + length;
+                result.append(length);
+            return;
         } else if (pattern == 'B') {
-            value = "" + response.getContentLength();
+            result.append(response.getContentCountLong());
+            return;
         } else if (pattern == 'h') {
-            value = req.getRemoteHost();
+            value = request.getRemoteHost();
         } else if (pattern == 'H') {
-            value = req.getProtocol();
+            value = request.getProtocol();
         } else if (pattern == 'l') {
-            value = "-";
+            result.append(MARK_EMPTY);
+            return;
         } else if (pattern == 'm') {
-            if (hreq != null)
-                value = hreq.getMethod();
+            if (request != null)
+                value = request.getMethod();
             else
                 value = "";
         } else if (pattern == 'p') {
-            value = "" + req.getServerPort();
+            result.append(request.getServerPort());
+            return;
         } else if (pattern == 'D') {
-                    value = "" + time;
+            result.append(time);
+            return;
         } else if (pattern == 'q') {
             String query = null;
-            if (hreq != null)
-                query = hreq.getQueryString();
+            if (request != null)
+                query = request.getQueryString();
             if (query != null)
-                value = "?" + query;
-            else
-                value = "";
+                result.append('?').append(query);
+            return;
         } else if (pattern == 'r') {
-            StringBuffer sb = new StringBuffer();
-            if (hreq != null) {
-                sb.append(hreq.getMethod());
-                sb.append(space);
-                sb.append(hreq.getRequestURI());
-                if (hreq.getQueryString() != null) {
-                    sb.append('?');
-                    sb.append(hreq.getQueryString());
+            if (request != null) {
+                result.append(request.getMethod());
+                result.append(space);
+                result.append(request.getRequestURI());
+                if (request.getQueryString() != null) {
+                    result.append('?');
+                    result.append(request.getQueryString());
                 }
-                sb.append(space);
-                sb.append(hreq.getProtocol());
+                result.append(space);
+                result.append(request.getProtocol());
             } else {
-                sb.append("- - ");
-                sb.append(req.getProtocol());
+                result.append("- - -");
             }
-            value = sb.toString();
+            return;
         } else if (pattern == 'S') {
-            if (hreq != null)
-                if (hreq.getSession(false) != null)
-                    value = hreq.getSession(false).getId();
-                else value = "-";
-            else
-                value = "-";
+            if (request != null) {
+                if (request.getSession(false) != null) {
+                    result.append(request.getSessionInternal(false)
+                            .getIdInternal());
+                    return;
+                }
+            }
+            result.append(MARK_EMPTY);
+            return;
         } else if (pattern == 's') {
-            if (hres != null)
-                value = "" + ((HttpResponse) response).getStatus();
+            if (response != null)
+                result.append(response.getStatus());
             else
-                value = "-";
+                result.append(MARK_EMPTY);
+            return;
         } else if (pattern == 't') {
-            StringBuffer temp = new StringBuffer("[");
-            temp.append(dayFormatter.format(date));             // Day
-            temp.append('/');
-            temp.append(lookup(monthFormatter.format(date)));   // Month
-            temp.append('/');
-            temp.append(yearFormatter.format(date));            // Year
-            temp.append(':');
-            temp.append(timeFormatter.format(date));            // Time
-            temp.append(' ');
-            temp.append(getTimeZone(date));                     // Timezone
-            temp.append(']');
-            value = temp.toString();
+            result.append(struct.getCurrentDateString());
+            return;
         } else if (pattern == 'T') {
-            value = timeTakenFormatter.format(time/1000d);
+            result.append(struct.formatTimeTaken(time));
+            return;
         } else if (pattern == 'u') {
-            if (hreq != null)
-                value = hreq.getRemoteUser();
-            if (value == null)
-                value = "-";
+            if (request != null) {
+                value = request.getRemoteUser();
+                if (value != null) {
+                    result.append(value);
+                    return;
+                }
+            }
+            result.append(MARK_EMPTY);
+            return;
         } else if (pattern == 'U') {
-            if (hreq != null)
-                value = hreq.getRequestURI();
-            else
-                value = "-";
+            if (request != null)
+                value = request.getRequestURI();
+            else {
+                result.append(MARK_EMPTY);
+                return;
+            }
         } else if (pattern == 'v') {
-            value = req.getServerName();
+            value = request.getServerName();
+        } else if (pattern == 'I' ) {
+            RequestInfo info = request.getCoyoteRequest().getRequestProcessor();
+            if(info != null) {
+                value = info.getWorkerThreadName();
+            } else {
+                result.append(MARK_EMPTY);
+                return;
+            }
         } else {
-            value = "???" + pattern + "???";
+            result.append("???").append(pattern).append("???");
+            return;
         }
 
-        if (value == null)
-            return ("");
-        else
-            return (value);
-
+        if (value != null)
+            result.append(value);
     }
 
 
     /**
-     * Return the replacement text for the specified "header/parameter".
+     * Print the replacement text for the specified "header/parameter".
      *
+     * @param result StringBuffer that accumulates the log message text
      * @param header The header/parameter to get
      * @param type Where to get it from i=input,c=cookie,r=ServletRequest,s=Session
      * @param request Request being processed
      * @param response Response being processed
      */
-    private String replace(String header, char type, Request request,
-                           Response response) {
+    private void replace(StringBuffer result, String header, char type,
+            Request request, Response response) {
 
-        Object value = null;
-
-        ServletRequest req = request.getRequest();
-        HttpServletRequest hreq = null;
-        if (req instanceof HttpServletRequest)
-            hreq = (HttpServletRequest) req;
+        Object value;
 
         switch (type) {
             case 'i':
-                if (null != hreq)
-                    value = hreq.getHeader(header);
+                if (null != request)
+                    value = request.getHeader(header);
                 else
-                    value= "??";
+                    value = "??";
                 break;
-/*
-            // Someone please make me work
             case 'o':
+                if (null != response) {
+                    String[] values = response.getHeaderValues(header);
+                    if(values.length > 0) {
+                        for (int i = 0; i < values.length; i++) {
+                            String string = values[i];
+                            result.append(string);
+                            if(i+1<values.length)
+                                result.append(',');
+                        }
+                        return;
+                    }
+                    value = null;
+                } else
+                    value = "??";
                 break;
-*/
             case 'c':
-                 Cookie[] c = hreq.getCookies();
+                value = null;
+                 Cookie[] c = request.getCookies();
                  for (int i=0; c != null && i < c.length; i++){
                      if (header.equals(c[i].getName())){
                          value = c[i].getValue();
@@ -961,14 +988,15 @@ public final class AccessLogValve
                  }
                 break;
             case 'r':
-                if (null != hreq)
-                    value = hreq.getAttribute(header);
+                if (null != request)
+                    value = request.getAttribute(header);
                 else
                     value= "??";
                 break;
             case 's':
-                if (null != hreq) {
-                    HttpSession sess = hreq.getSession(false);
+                value = null;
+                if (null != request) {
+                    HttpSession sess = request.getSession(false);
                     if (null != sess)
                         value = sess.getAttribute(header);
                 }
@@ -980,64 +1008,42 @@ public final class AccessLogValve
         /* try catch in case toString() barfs */
         try {
             if (value!=null)
-                if (value instanceof String)
-                    return (String)value;
-                else
-                    return value.toString();
+                result.append(value.toString());
             else
-               return "-";
+                result.append(MARK_EMPTY);
         } catch(Throwable e) {
-            return "-";
+            result.append(MARK_EMPTY);
         }
     }
 
 
-    /**
-     * This method returns a Date object that is accurate to within one
-     * second.  If a thread calls this method to get a Date and it's been
-     * less than 1 second since a new Date was created, this method
-     * simply gives out the same Date again so that the system doesn't
-     * spend time creating Date objects unnecessarily.
-     */
-    private Date getDate() {
-
-        // Only create a new Date once per second, max.
-        long systime = System.currentTimeMillis();
-        if ((systime - currentDate.getTime()) > 1000) {
-            currentDate = new Date(systime);
-        }
-
-        return currentDate;
-
-    }
-
-    private String getTimeZone(Date date) {
+    private static String getTimeZone(Date date) {
         if (timezone.inDaylightTime(date)) {
             return timeZoneDST;
         } else {
             return timeZoneNoDST;
         }
     }
-    
-    
-    private String calculateTimeZoneOffset(long offset) {
+
+
+    private static String calculateTimeZoneOffset(long offset) {
         StringBuffer tz = new StringBuffer();
         if ((offset<0))  {
-            tz.append("-");
+            tz.append('-');
             offset = -offset;
         } else {
-            tz.append("+");
+            tz.append('+');
         }
 
         long hourOffset = offset/(1000*60*60);
         long minuteOffset = (offset/(1000*60)) % 60;
 
         if (hourOffset<10)
-            tz.append("0");
+            tz.append('0');
         tz.append(hourOffset);
 
         if (minuteOffset<10)
-            tz.append("0");
+            tz.append('0');
         tz.append(minuteOffset);
 
         return tz.toString();
@@ -1099,28 +1105,14 @@ public final class AccessLogValve
         lifecycle.fireLifecycleEvent(START_EVENT, null);
         started = true;
 
-        // Initialize the timeZone, Date formatters, and currentDate
-        timezone = TimeZone.getDefault();
-        timeZoneNoDST = calculateTimeZoneOffset(timezone.getRawOffset());
-        Calendar calendar = Calendar.getInstance(timezone);
-        int offset = calendar.get(Calendar.DST_OFFSET);
-        timeZoneDST = calculateTimeZoneOffset(timezone.getRawOffset()+offset);
-
+        // Initialize formatters, and dateStamp
         if (fileDateFormat==null || fileDateFormat.length()==0)
             fileDateFormat = "yyyy-MM-dd";
-        dateFormatter = new SimpleDateFormat(fileDateFormat);
-        dateFormatter.setTimeZone(timezone);
-        dayFormatter = new SimpleDateFormat("dd");
-        dayFormatter.setTimeZone(timezone);
-        monthFormatter = new SimpleDateFormat("MM");
-        monthFormatter.setTimeZone(timezone);
-        yearFormatter = new SimpleDateFormat("yyyy");
-        yearFormatter.setTimeZone(timezone);
-        timeFormatter = new SimpleDateFormat("HH:mm:ss");
-        timeFormatter.setTimeZone(timezone);
-        currentDate = new Date();
-        dateStamp = dateFormatter.format(currentDate);
-        timeTakenFormatter = new DecimalFormat("0.000");
+        synchronized (this) {
+            fileDateFormatter = new SimpleDateFormat(fileDateFormat);
+            fileDateFormatter.setTimeZone(timezone);
+            dateStamp = fileDateFormatter.format(new Date());
+        }
 
         open();
 
@@ -1147,6 +1139,4 @@ public final class AccessLogValve
         close();
 
     }
-
-
 }

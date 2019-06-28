@@ -26,9 +26,6 @@ import java.util.ArrayList;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -46,7 +43,7 @@ import org.apache.webapp.admin.TomcatTreeBuilder;
  * The <code>Action</code> that sets up <em>Delete Hosts</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteHostAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteHostAction extends Action {
@@ -56,12 +53,6 @@ public class DeleteHostAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
 
     // --------------------------------------------------------- Public Methods
@@ -89,11 +80,8 @@ public class DeleteHostAction extends Action {
         
 
         // Acquire the resources that we need
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -102,51 +90,46 @@ public class DeleteHostAction extends Action {
             throw new ServletException
             ("Cannot acquire MBeanServer reference", t);
         }
-
-        String adminHost = null;
-        // Get the host name the admin app runs on
-        // this host cannot be deleted from the admin tool
-        try {
-            adminHost = Lists.getAdminAppHost(
-                                  mBServer, "Catalina" ,request);
-        } catch (Exception e) {
-            String message =
-                resources.getMessage("error.hostName.bad",
-                                        adminHost);
-            getServlet().log(message);
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
-            return (null);
-        }
-        request.setAttribute("adminAppHost", adminHost);
-         
-        String serviceName = request.getParameter("serviceName");
+        
         // Set up a form bean containing the currently selected
         // objects to be deleted
         HostsForm hostsForm = new HostsForm();
         String select = request.getParameter("select");
+        String domain = null;
         if (select != null) {
             String hosts[] = new String[1];
             hosts[0] = select;
             hostsForm.setHosts(hosts);
                         
-            // get the service Name this selected host belongs to
             try {
-                serviceName = (new ObjectName(select)).getKeyProperty("service");
+                domain = (new ObjectName(select)).getDomain();
             } catch (Exception e) {
                 throw new ServletException
                 ("Error extracting service name from the host to be deleted", e);
             }        
         }
+        String adminHost = null;
+        // Get the host name the admin app runs on
+        // this host cannot be deleted from the admin tool
+        try {
+            adminHost = Lists.getAdminAppHost(
+                                  mBServer, domain ,request);
+        } catch (Exception e) {
+            String message =
+                resources.getMessage(locale, "error.hostName.bad",
+                                        adminHost);
+            getServlet().log(message);
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
+            return (null);
+        }
+        request.setAttribute("adminAppHost", adminHost);       
         request.setAttribute("hostsForm", hostsForm);
         
         // Accumulate a list of all available hosts
         ArrayList list = new ArrayList();
         try {
-            String pattern = TomcatTreeBuilder.HOST_TYPE +
-                TomcatTreeBuilder.WILDCARD; 
-            // get all available hosts only for this service
-            if (serviceName!= null) 
-                pattern = pattern.concat(",service=" + serviceName);            
+            String pattern = domain + TomcatTreeBuilder.HOST_TYPE +
+                TomcatTreeBuilder.WILDCARD;         
             Iterator items =
                 mBServer.queryNames(new ObjectName(pattern), null).iterator();
             while (items.hasNext()) {

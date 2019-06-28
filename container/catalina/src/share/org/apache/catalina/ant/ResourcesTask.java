@@ -19,6 +19,9 @@
 package org.apache.catalina.ant;
 
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+
 import org.apache.tools.ant.BuildException;
 
 
@@ -27,7 +30,7 @@ import org.apache.tools.ant.BuildException;
  * the Tomcat manager application.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourcesTask.java 1081341 2011-03-14 11:56:53Z markt $
  * @since 4.1
  */
 public class ResourcesTask extends AbstractCatalinaTask {
@@ -63,7 +66,13 @@ public class ResourcesTask extends AbstractCatalinaTask {
 
         super.execute();
         if (type != null) {
-            execute("/resources?type=" + type);
+            try {
+                execute("/resources?type=" +
+                        URLEncoder.encode(type, getCharset()));
+            } catch (UnsupportedEncodingException e) {
+                throw new BuildException
+                    ("Invalid 'charset' attribute: " + getCharset());
+            }
         } else {
             execute("/resources");
         }

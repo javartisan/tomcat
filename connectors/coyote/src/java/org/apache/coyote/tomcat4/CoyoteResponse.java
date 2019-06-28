@@ -55,7 +55,7 @@ import org.apache.tomcat.util.net.URL;
  *
  * @author Remy Maucherat
  * @author Craig R. McClanahan
- * @version $Revision: 784606 $ $Date: 2009-06-14 20:23:34 +0100 (Sun, 14 Jun 2009) $
+ * @version $Id: CoyoteResponse.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public class CoyoteResponse

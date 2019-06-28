@@ -24,12 +24,11 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
-import org.apache.struts.util.MessageResources;
+import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.LabelValueBean;
 import org.apache.webapp.admin.Lists;
 
@@ -37,16 +36,11 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Add Valve</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AddValveAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class AddValveAction extends Action {
         
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
     // the list for types of valves
     private ArrayList types = null;
 
@@ -75,9 +69,6 @@ public class AddValveAction extends Action {
 
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
         
         // Fill in the form values for display and editing
         
@@ -96,12 +87,14 @@ public class AddValveAction extends Action {
         types = new ArrayList();    
         // the first element in the select list should be the type selected
         types.add(new LabelValueBean(type,
-                "AddValve.do?parent=" + URLEncoder.encode(parent) 
+                "AddValve.do?parent=" + 
+                URLEncoder.encode(parent,TomcatTreeBuilder.URL_ENCODING) 
                 + "&type=" + type));        
         for (int i=0; i< valveTypes.length; i++) {
             if (!type.equalsIgnoreCase(valveTypes[i])) {
                 types.add(new LabelValueBean(valveTypes[i],
-                "AddValve.do?parent=" + URLEncoder.encode(parent) 
+                "AddValve.do?parent=" + 
+                URLEncoder.encode(parent,TomcatTreeBuilder.URL_ENCODING) 
                 + "&type=" + valveTypes[i]));        
             }
         }
@@ -133,14 +126,12 @@ public class AddValveAction extends Action {
         String valveType = "AccessLogValve";
         valveFm.setNodeLabel("Valve (" + valveType + ")");
         valveFm.setValveType(valveType);
-        valveFm.setDebugLvl("0");
         valveFm.setPattern("");
         valveFm.setDirectory("logs");
         valveFm.setPrefix("access_log.");
         valveFm.setSuffix("");
         valveFm.setResolveHosts("false");
         valveFm.setRotatable("true");
-        valveFm.setDebugLvlVals(Lists.getDebugLevels());
         valveFm.setBooleanVals(Lists.getBooleanValues());
         valveFm.setValveTypeVals(types);        
     }
@@ -198,8 +189,6 @@ public class AddValveAction extends Action {
         String valveType = "SingleSignOn";
         valveFm.setNodeLabel("Valve (" + valveType + ")");
         valveFm.setValveType(valveType);
-        valveFm.setDebugLvl("0");
-        valveFm.setDebugLvlVals(Lists.getDebugLevels());    
         valveFm.setValveTypeVals(types);        
     }
 

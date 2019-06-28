@@ -17,13 +17,14 @@
 
 package org.apache.catalina.mbeans;
 
-import java.net.URLDecoder;
 import java.util.ArrayList;
-import javax.management.MalformedObjectNameException;
+
 import javax.management.MBeanException;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.management.RuntimeOperationsException;
-import org.apache.catalina.core.StandardDefaultContext;
+
+import org.apache.catalina.Context;
 import org.apache.catalina.deploy.ContextEnvironment;
 import org.apache.catalina.deploy.ContextResource;
 import org.apache.catalina.deploy.ContextResourceLink;
@@ -31,13 +32,14 @@ import org.apache.catalina.deploy.NamingResources;
 import org.apache.commons.modeler.BaseModelMBean;
 import org.apache.commons.modeler.ManagedBean;
 import org.apache.commons.modeler.Registry;
+import org.apache.tomcat.util.compat.JdkCompat;
 
 /**
  * <p>A <strong>ModelMBean</strong> implementation for the
  * <code>org.apache.catalina.core.StandardDefaultContext</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DefaultContextMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class DefaultContextMBean extends BaseModelMBean {
@@ -63,6 +65,15 @@ public class DefaultContextMBean extends BaseModelMBean {
     }
     
 
+    // ----------------------------------------------------- Class Variables
+
+
+    /**
+     * JDK compatibility support
+     */
+    private static final JdkCompat jdkCompat = JdkCompat.getJdkCompat();
+
+
     // ----------------------------------------------------- Instance Variables
     
     
@@ -86,7 +97,7 @@ public class DefaultContextMBean extends BaseModelMBean {
      */
     private NamingResources getNamingResources() {
         
-        return ((StandardDefaultContext)this.resource).getNamingResources();
+        return ((Context)this.resource).getNamingResources();
     
     }
     
@@ -104,8 +115,10 @@ public class DefaultContextMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), envs[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for environment " + envs[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -127,8 +140,10 @@ public class DefaultContextMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), resources[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for resource " + resources[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -150,8 +165,10 @@ public class DefaultContextMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), links[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for resource " + links[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -284,7 +301,7 @@ public class DefaultContextMBean extends BaseModelMBean {
      */
     public void removeResource(String resourceName) {
 
-        resourceName = URLDecoder.decode(resourceName);
+        resourceName = ObjectName.unquote(resourceName);
         NamingResources nresources = getNamingResources();
         if (nresources == null) {
             return;
@@ -305,7 +322,7 @@ public class DefaultContextMBean extends BaseModelMBean {
      */
     public void removeResourceLink(String resourceLinkName) {
 
-        resourceLinkName = URLDecoder.decode(resourceLinkName);
+        resourceLinkName = ObjectName.unquote(resourceLinkName);
         NamingResources nresources = getNamingResources();
         if (nresources == null) {
             return;

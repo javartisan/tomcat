@@ -26,8 +26,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -40,7 +38,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * <em>Edit Valve</em> transactions for Remote Addr valve.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveRemoteAddrValveAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveRemoteAddrValveAction extends Action {
@@ -52,11 +50,6 @@ public final class SaveRemoteAddrValveAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
     // --------------------------------------------------------- Public Methods
     
@@ -84,10 +77,8 @@ public final class SaveRemoteAddrValveAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {

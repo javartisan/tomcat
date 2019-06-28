@@ -45,7 +45,7 @@ import org.apache.naming.resources.ResourceAttributes;
  * content is directly returned.
  * 
  * @author <a href="mailto:remm@apache.org">Remy Maucherat</a>
- * @version $Revision: 466595 $
+ * @version $Revision: 1090770 $
  */
 public class DirContextURLConnection 
     extends URLConnection {
@@ -262,7 +262,8 @@ public class DirContextURLConnection
         if (object != null)
             return object;
         
-        throw new FileNotFoundException();
+        throw new FileNotFoundException(
+                getURL() == null ? "null" : getURL().toString());
         
     }
     
@@ -295,7 +296,8 @@ public class DirContextURLConnection
             connect();
         
         if (resource == null) {
-            throw new FileNotFoundException();
+            throw new FileNotFoundException(
+                    getURL() == null ? "null" : getURL().toString());
         } else {
             // Reopen resource
             try {
@@ -333,23 +335,23 @@ public class DirContextURLConnection
         }
         
         if ((resource == null) && (collection == null)) {
-            throw new FileNotFoundException();
+            throw new FileNotFoundException(
+                    getURL() == null ? "null" : getURL().toString());
         }
         
         Vector result = new Vector();
         
         if (collection != null) {
             try {
-                NamingEnumeration enumeration =
-                    context.list(getURL().getFile());
+                NamingEnumeration enumeration = context.list(getURL().getFile());
                 while (enumeration.hasMoreElements()) {
-                    NameClassPair ncp =
-                        (NameClassPair) enumeration.nextElement();
+                    NameClassPair ncp = (NameClassPair) enumeration.nextElement();
                     result.addElement(ncp.getName());
                 }
             } catch (NamingException e) {
                 // Unexpected exception
-                throw new FileNotFoundException();
+                throw new FileNotFoundException(
+                        getURL() == null ? "null" : getURL().toString());
             }
         }
         

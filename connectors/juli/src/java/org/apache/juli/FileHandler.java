@@ -18,9 +18,13 @@
 
 package org.apache.juli;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.sql.Timestamp;
 import java.util.logging.ErrorManager;
 import java.util.logging.Filter;
@@ -33,10 +37,34 @@ import java.util.logging.SimpleFormatter;
 
 /**
  * Implementation of <b>Handler</b> that appends log messages to a file
- * named {prefix}.{date}.{suffix} in a configured directory, with an
- * optional preceding timestamp.
+ * named {prefix}{date}{suffix} in a configured directory.
  *
- * @version $Revision: 479159 $ $Date: 2006-11-25 18:26:58 +0000 (Sat, 25 Nov 2006) $
+ * <p>The following configuration properties are available:</p>
+ *
+ * <ul>
+ *   <li><code>directory</code> - The directory where to create the log file.
+ *    If the path is not absolute, it is relative to the current working
+ *    directory of the application. The Apache Tomcat configuration files usually
+ *    specify an absolute path for this property,
+ *    <code>${catalina.base}/logs</code> 
+ *    Default value: <code>logs</code></li>
+ *   <li><code>prefix</code> - The leading part of the log file name.
+ *    Default value: <code>juli.</code></li>
+ *   <li><code>suffix</code> - The trailing part of the log file name.
+ *    Default value: <code>.log</code></li>
+ *   <li><code>encoding</code> - Character set used by the log file. Default value:
+ *    empty string, which means to use the system default character set.</li>
+ *   <li><code>level</code> - The level threshold for this Handler. See the
+ *    <code>java.util.logging.Level</code> class for the possible levels.
+ *    Default value: <code>ALL</code></li>
+ *   <li><code>filter</code> - The <code>java.util.logging.Filter</code>
+ *    implementation class name for this Handler. Default value: unset</li>
+ *   <li><code>formatter</code> - The <code>java.util.logging.Formatter</code>
+ *    implementation class name for this Handler. Default value:
+ *    <code>java.util.logging.SimpleFormatter</code></li>
+ * </ul>
+ *
+ * @version $Id: FileHandler.java 1156993 2011-08-12 07:56:48Z markt $
  */
 
 public class FileHandler
@@ -201,6 +229,16 @@ public class FileHandler
         if (suffix == null)
             suffix = getProperty(className + ".suffix", ".log");
 
+        // Get encoding for the logging file
+        String encoding = getProperty(className + ".encoding", null);
+        if (encoding != null && encoding.length() > 0) {
+            try {
+                setEncoding(encoding);
+            } catch (UnsupportedEncodingException ex) {
+                // Ignore
+            }
+        }
+
         // Get logging level for the handler
         setLevel(Level.parse(getProperty(className + ".level", "" + Level.ALL)));
 
@@ -220,7 +258,8 @@ public class FileHandler
             try {
                 setFormatter((Formatter) cl.loadClass(formatterName).newInstance());
             } catch (Exception e) {
-                // Ignore
+                // Ignore and fallback to defaults
+                setFormatter(new SimpleFormatter());
             }
         } else {
             setFormatter(new SimpleFormatter());
@@ -256,7 +295,12 @@ public class FileHandler
         try {
             String pathname = dir.getAbsolutePath() + File.separator +
                 prefix + date + suffix;
-            writer = new PrintWriter(new FileWriter(pathname, true), true);
+            String encoding = getEncoding();
+            OutputStream os = new BufferedOutputStream(new FileOutputStream(
+                    pathname, true));
+            writer = new PrintWriter(
+                    (encoding != null) ? new OutputStreamWriter(os, encoding)
+                            : new OutputStreamWriter(os), true);
             writer.write(getFormatter().getHead(this));
         } catch (Exception e) {
             reportError(null, e, ErrorManager.OPEN_FAILURE);

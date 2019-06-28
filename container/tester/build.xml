@@ -1,43 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
-   Licensed to the Apache Software Foundation (ASF) under one or more
-   contributor license agreements.  See the NOTICE file distributed with
-   this work for additional information regarding copyright ownership.
-   The ASF licenses this file to You under the Apache License, Version 2.0
-   (the "License"); you may not use this file except in compliance with
-   the License.  You may obtain a copy of the License at
-  
-       http://www.apache.org/licenses/LICENSE-2.0
-  
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
--->
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
 
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <project name="Tester" default="build-main" basedir=".">
 
 
   <!-- ===================== Initialize Property Values =================== -->
 
   <property file="build.properties"/>
+  <property file="../build.properties"/>
   <property file="${user.home}/build.properties"/>
 
-  <property name="build.compiler"  value="classic"/>
-  <property name="servletapi.home" value="../../servletapi/dist"/>
+  <property name="build.compiler"  value="modern"/>
+  <property name="api.home" value="../../jakarta-servletapi-5/dist"/>
   <property name="tester.build"    value="${basedir}/build"/>
   <property name="tester.deploy"   value="${basedir}/../build"/>
   <property name="tester.dist"     value="${basedir}/dist"/>
 
   <!-- ================== Derived Property Values ========================= -->
   <property name="ant.jar"         value="${ant.home}/lib/ant.jar"/>
-  <property name="servlet.jar"     value="${servletapi.home}/lib/servlet.jar"/>
+  <property name="servlet-api.jar" value="${api.home}/jsr154/dist/lib/servlet-api.jar"/>
 
   <!-- =================== BUILD: Create Directories ====================== -->
   <target name="build-prepare">
     <mkdir dir="${tester.build}"/>
     <mkdir dir="${tester.build}/bin"/>
     <mkdir dir="${tester.build}/classes"/>
+    <mkdir dir="${tester.build}/conf"/>
     <mkdir dir="${tester.build}/lib"/>
   </target>
 
@@ -50,9 +52,14 @@
     <copy todir="${tester.build}/bin">
       <fileset dir="src/bin" />
     </copy>
-    <fixcrlf srcdir="${tester.build}/bin" includes="*.sh"  eol="lf"/>
-    <fixcrlf srcdir="${tester.build}/bin" includes="*.bat" eol="crlf"/>
+    <fixcrlf srcdir="${tester.build}/bin" includes="*.sh"  eol="lf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <fixcrlf srcdir="${tester.build}/bin" includes="*.bat" eol="crlf"
+        encoding="ISO-8859-1" fixlast="false" />
     <chmod perm="+x" file="${tester.build}/bin/tester.sh"/>
+    <copy todir="${tester.build}/conf">
+      <fileset dir="src/conf" />
+    </copy>
 
     <!-- Compiled Classes -->
     <mkdir  dir="${tester.build}/classes"/>
@@ -72,9 +79,11 @@
 
     <!-- Compile tester components and tools -->
     <javac srcdir="src/tester" destdir="${tester.build}/classes"
-     classpath="${ant.jar}:${servlet.jar}:${xerces.jar}"
-     deprecation="off" debug="on" optimize="off"
-     excludes="**/CVS/**"/>
+     classpath="${ant.jar}:${servlet-api.jar}:${xercesImpl.jar}"
+     deprecation="${compile.deprecation}"
+     debug="${compile.debug}" optimize="off"
+     excludes="**/CVS/**"
+     encoding="ISO-8859-1"/>
 
     <!-- Copy static resource files -->
     <copy todir="${tester.build}/classes">
@@ -103,7 +112,8 @@
         tofile="${tester.build}/web/WEB-INF/classes/org/apache/tester/Unpacked05.txt"/>
 
     <!-- Install Xerces -->
-    <copy  todir="${tester.build}/web/WEB-INF/lib" file="${xerces.jar}"/>
+    <copy  todir="${tester.build}/web/WEB-INF/lib" file="${xercesImpl.jar}"/>
+    <copy  todir="${tester.build}/web/WEB-INF/lib" file="${xml-apis.jar}"/>
 
     <!-- Create and install tester library -->
     <mkdir   dir="${tester.build}/web/WEB-INF/lib"/>
@@ -129,7 +139,7 @@
      version="true"
      windowtitle="Tester Internal API Documentation"
      doctitle="Tester Tools and Tests API"
-     bottom="Copyright &#169; 2000 Apache Software Foundation.  All Rights Reserved."
+     bottom="Copyright &amp;#169; 2000-2012 Apache Software Foundation.  All Rights Reserved."
     />
   </target>
 
@@ -148,6 +158,7 @@
   <target name="deploy-prepare">
     <mkdir dir="${tester.deploy}"/>
     <mkdir dir="${tester.deploy}/bin"/>
+    <mkdir dir="${tester.deploy}/conf"/>
   </target>
 
 
@@ -158,9 +169,14 @@
     <copy todir="${tester.deploy}/bin">
       <fileset dir="${tester.build}/bin" />
     </copy>
-    <fixcrlf srcdir="${tester.deploy}/bin" includes="*.sh"  eol="lf"/>
-    <fixcrlf srcdir="${tester.deploy}/bin" includes="*.bat" eol="crlf"/>
+    <fixcrlf srcdir="${tester.deploy}/bin" includes="*.sh"  eol="lf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <fixcrlf srcdir="${tester.deploy}/bin" includes="*.bat" eol="crlf"
+        encoding="ISO-8859-1" fixlast="false" />
     <chmod perm="+x" file="${tester.deploy}/bin/tester.sh"/>
+    <copy todir="${tester.deploy}/conf" overwrite="true">
+      <fileset dir="${tester.build}/conf" />
+    </copy>
 
     <!-- Unpacked Shared Classes -->
     <mkdir   dir="${tester.deploy}/shared/classes"/>
@@ -208,8 +224,10 @@
     <copy todir="${tester.dist}/bin">
       <fileset dir="${tester.build}/bin" />
     </copy>
-    <fixcrlf srcdir="${tester.dist}/bin" includes="*.sh"  eol="lf"/>
-    <fixcrlf srcdir="${tester.dist}/bin" includes="*.bat" eol="crlf"/>
+    <fixcrlf srcdir="${tester.dist}/bin" includes="*.sh"  eol="lf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <fixcrlf srcdir="${tester.dist}/bin" includes="*.bat" eol="crlf"
+        encoding="ISO-8859-1" fixlast="false" />
     <chmod perm="+x" file="${tester.dist}/bin/tester.sh"/>
 
     <mkdir   dir="${tester.dist}/webapps"/>

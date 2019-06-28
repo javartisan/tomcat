@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -16,6 +17,7 @@
 package org.apache.jasper.compiler;
 
 import org.apache.jasper.JasperException;
+import org.apache.jasper.Options;
 
 /**
  */
@@ -26,26 +28,37 @@ public class TextOptimizer {
      */
     static class TextCatVisitor extends Node.Visitor {
 
+        private Options options;
         private int textNodeCount = 0;
         private Node.TemplateText firstTextNode = null;
         private StringBuffer textBuffer;
         private final String emptyText = new String("");
 
         public TextCatVisitor(Compiler compiler) {
+            options = compiler.getCompilationContext().getOptions();
         }
 
         public void doVisit(Node n) throws JasperException {
             collectText();
         }
 
-        /*
-         * The following directives are ignored in text concatenation
+	/*
+         * The following directis are ignored in text concatenation
          */
 
         public void visit(Node.PageDirective n) throws JasperException {
         }
 
+        public void visit(Node.TagDirective n) throws JasperException {
+        }
+
         public void visit(Node.TaglibDirective n) throws JasperException {
+        }
+
+        public void visit(Node.AttributeDirective n) throws JasperException {
+        }
+
+        public void visit(Node.VariableDirective n) throws JasperException {
         }
 
         /*
@@ -57,6 +70,11 @@ public class TextOptimizer {
         }
 
         public void visit(Node.TemplateText n) throws JasperException {
+
+            if (options.getTrimSpaces() && n.isAllSpace()) {
+                n.setText(emptyText);
+                return;
+            }
 
             if (textNodeCount++ == 0) {
                 firstTextNode = n;
@@ -89,7 +107,7 @@ public class TextOptimizer {
         TextCatVisitor v = new TextCatVisitor(compiler);
         page.visit(v);
 
-        // Cleanup, in case the page ends with a template text
+	// Cleanup, in case the page ends with a template text
         v.collectText();
     }
 }

@@ -1,9 +1,10 @@
 /*
- * Copyright 1999, 2000, 2001 ,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -38,7 +39,7 @@ import org.apache.tester.unshared.UnsharedSessionBean;
  * deployment descriptor.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 396182 $ $Date: 2006-04-23 01:07:48 +0100 (Sun, 23 Apr 2006) $
+ * @version $Id: Jndi02.java 939535 2010-04-30 01:11:10Z kkolinko $
  */
 
 public class Jndi02 extends HttpServlet {
@@ -310,10 +311,10 @@ public class Jndi02 extends HttpServlet {
                 int counts[] = new int[names.length];
                 for (int i = 0; i < names.length; i++)
                     counts[i] = 0;
-                NamingEnumeration enumeration =
+                NamingEnumeration namingEnum =
                     initContext.listBindings("java:comp/env");
-                while (enumeration.hasMore()) {
-                    Binding binding = (Binding) enumeration.next();
+                while (namingEnum.hasMore()) {
+                    Binding binding = (Binding) namingEnum.next();
                     String name = binding.getName();
                     boolean found = false;
                     for (int i = 0; i < names.length; i++) {

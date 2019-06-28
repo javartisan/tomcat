@@ -18,15 +18,15 @@
 package org.apache.webapp.admin.realm;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the jdbc realm page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: JDBCRealmForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class JDBCRealmForm extends RealmForm {
@@ -301,8 +301,6 @@ public final class JDBCRealmForm extends RealmForm {
 
         StringBuffer sb = new StringBuffer("UserDatabaseRealmForm[adminAction=");
         sb.append(getAdminAction());
-        sb.append(",debugLvl=");
-        sb.append(getDebugLvl());
         sb.append(",digest=");
         sb.append(digest);
         sb.append("',driver='");
@@ -348,57 +346,50 @@ public final class JDBCRealmForm extends RealmForm {
         
         ActionErrors errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        //String type = request.getParameter("realmType");
-        
         // front end validation when save is clicked.        
-         if (submit != null) {
-             // the following fields are required.
-            
-            if ((driver == null) || (driver.length() < 1)) {
-                errors.add("driver",
-                new ActionMessage("error.driver.required"));
-            }
-         
-            if ((roleNameCol == null) || (roleNameCol.length() < 1)) {
-                errors.add("roleNameCol",
-                new ActionMessage("error.roleNameCol.required"));
-            }
+        if ((driver == null) || (driver.length() < 1)) {
+            errors.add("driver",
+            new ActionMessage("error.driver.required"));
+        }
+     
+        if ((roleNameCol == null) || (roleNameCol.length() < 1)) {
+            errors.add("roleNameCol",
+            new ActionMessage("error.roleNameCol.required"));
+        }
 
-            if ((userNameCol == null) || (userNameCol.length() < 1)) {
-                errors.add("userNameCol",
-                new ActionMessage("error.userNameCol.required"));
-            }
+        if ((userNameCol == null) || (userNameCol.length() < 1)) {
+            errors.add("userNameCol",
+            new ActionMessage("error.userNameCol.required"));
+        }
 
-             if ((passwordCol == null) || (passwordCol.length() < 1)) {
-                errors.add("passwordCol",
-                new ActionMessage("error.passwordCol.required"));
-            }
+        if ((passwordCol == null) || (passwordCol.length() < 1)) {
+            errors.add("passwordCol",
+            new ActionMessage("error.passwordCol.required"));
+        }
             
-            if ((userTable == null) || (userTable.length() < 1)) {
-                errors.add("userTable",
-                new ActionMessage("error.userTable.required"));
-            }
+        if ((userTable == null) || (userTable.length() < 1)) {
+            errors.add("userTable",
+            new ActionMessage("error.userTable.required"));
+        }
             
-            if ((roleTable == null) || (roleTable.length() < 1)) {
-                errors.add("roleTable",
-                new ActionMessage("error.roleTable.required"));
-            }
-            
-            if ((connectionName == null) || (connectionName.length() < 1)) {
-                errors.add("connectionName",
-                new ActionMessage("error.connectionName.required"));
-            }
-            
-            if ((connectionPassword == null) || (connectionPassword.length() < 1)) {
-                errors.add("connectionPassword",
-                new ActionMessage("error.connectionPassword.required"));
-            }
-            
-             if ((connectionURL == null) || (connectionURL.length() < 1)) {
-                errors.add("connectionURL",
-                new ActionMessage("error.connectionURL.required"));
-            }
+        if ((roleTable == null) || (roleTable.length() < 1)) {
+            errors.add("roleTable",
+            new ActionMessage("error.roleTable.required"));
+        }
+        
+        if ((connectionName == null) || (connectionName.length() < 1)) {
+            errors.add("connectionName",
+            new ActionMessage("error.connectionName.required"));
+        }
+        
+        if ((connectionPassword == null) || (connectionPassword.length() < 1)) {
+            errors.add("connectionPassword",
+            new ActionMessage("error.connectionPassword.required"));
+        }
+        
+        if ((connectionURL == null) || (connectionURL.length() < 1)) {
+            errors.add("connectionURL",
+            new ActionMessage("error.connectionURL.required"));
         }
                  
         return errors;

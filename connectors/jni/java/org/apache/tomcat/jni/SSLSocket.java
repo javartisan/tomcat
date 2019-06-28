@@ -20,7 +20,7 @@ package org.apache.tomcat.jni;
 /** SSL Socket
  *
  * @author Mladen Turk
- * @version $Revision: 466585 $, $Date: 2006-10-21 23:16:34 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SSLSocket.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public class SSLSocket {
@@ -57,7 +57,30 @@ public class SSLSocket {
     public static native int renegotiate(long thesocket);
 
     /**
-     * Retrun SSL Info parameter as byte array.
+     * Set Type of Client Certificate verification and Maximum depth of CA
+     * Certificates in Client Certificate verification.
+     * <br />
+     * This is used to change the verification level for a connection prior to
+     * starting a re-negotiation.
+     * <br />
+     * The following levels are available for level:
+     * <PRE>
+     * SSL_CVERIFY_NONE           - No client Certificate is required at all
+     * SSL_CVERIFY_OPTIONAL       - The client may present a valid Certificate
+     * SSL_CVERIFY_REQUIRE        - The client has to present a valid
+     *                              Certificate
+     * SSL_CVERIFY_OPTIONAL_NO_CA - The client may present a valid Certificate
+     *                              but it need not to be (successfully)
+     *                              verifiable
+     * </PRE>
+     * <br />
+     * @param sock  The socket to change.
+     * @param level Type of Client Certificate verification.
+     */
+    public static native void setVerify(long sock, int level, int depth);
+    
+    /**    
+     * Return SSL Info parameter as byte array.
      *
      * @param sock The socket to read the data from.
      * @param id Parameter id.
@@ -67,7 +90,7 @@ public class SSLSocket {
         throws Exception;
 
     /**
-     * Retrun SSL Info parameter as String.
+     * Return SSL Info parameter as String.
      *
      * @param sock The socket to read the data from.
      * @param id Parameter id.
@@ -77,7 +100,7 @@ public class SSLSocket {
         throws Exception;
 
     /**
-     * Retrun SSL Info parameter as integer.
+     * Return SSL Info parameter as integer.
      *
      * @param sock The socket to read the data from.
      * @param id Parameter id.

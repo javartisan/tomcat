@@ -26,9 +26,6 @@ import java.util.ArrayList;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -46,7 +43,7 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Delete Services</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteServiceAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteServiceAction extends Action {
@@ -56,12 +53,6 @@ public class DeleteServiceAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
 
     // --------------------------------------------------------- Public Methods
@@ -89,11 +80,8 @@ public class DeleteServiceAction extends Action {
         
 
         // Acquire the resources that we need
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -103,15 +91,20 @@ public class DeleteServiceAction extends Action {
             ("Cannot acquire MBeanServer reference", t);
         }
         
+        String select = request.getParameter("select");
         String adminService = null;
+        ObjectName oname = null;
+        String domain = null;
         // Get the service name the admin app runs on
         // this service cannot be deleted from the admin tool
         try {
+            oname = new ObjectName(select);
+            domain = oname.getDomain();
             adminService = Lists.getAdminAppService(
-                                  mBServer, "Catalina" ,request);
+                                  mBServer, domain ,request);
          } catch (Exception e) {
             String message =
-                resources.getMessage("error.serviceName.bad",
+                resources.getMessage(locale, "error.serviceName.bad",
                                  adminService);
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -122,7 +115,6 @@ public class DeleteServiceAction extends Action {
         // Set up a form bean containing the currently selected
         // objects to be deleted
         ServicesForm servicesForm = new ServicesForm();
-        String select = request.getParameter("select");
         if (select != null) {
             String services[] = new String[1];
             services[0] = select;
@@ -133,7 +125,7 @@ public class DeleteServiceAction extends Action {
         // Accumulate a list of all available services
         ArrayList list = new ArrayList();
         try {
-            String pattern = TomcatTreeBuilder.SERVICE_TYPE +
+            String pattern = "*" + TomcatTreeBuilder.SERVICE_TYPE +
                 TomcatTreeBuilder.WILDCARD;
             Iterator items =
                 mBServer.queryNames(new ObjectName(pattern), null).iterator();

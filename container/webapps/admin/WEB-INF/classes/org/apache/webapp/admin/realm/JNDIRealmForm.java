@@ -18,16 +18,17 @@
 package org.apache.webapp.admin.realm;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+
 import java.util.List;
 
 /**
  * Form bean for the JNDI realm page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: JNDIRealmForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class JNDIRealmForm extends RealmForm {
@@ -446,8 +447,6 @@ public final class JNDIRealmForm extends RealmForm {
 
         StringBuffer sb = new StringBuffer("UserDatabaseRealmForm[adminAction=");
         sb.append(getAdminAction());
-        sb.append(",debugLvl=");
-        sb.append(getDebugLvl());
         sb.append(",userSubtree=");
         sb.append(userSubtree);
         sb.append(",roleSubtree=");
@@ -503,93 +502,89 @@ public final class JNDIRealmForm extends RealmForm {
 
         ActionErrors errors = new ActionErrors();
 
-        String submit = request.getParameter("submit");
-
         // front end validation when save is clicked.
-        if (submit != null) {
-            // the following fields are required.
+        // the following fields are required.
 
-            if ((connectionURL == null) || (connectionURL.length() < 1)) {
-                errors.add("connectionURL",
-                new ActionMessage("error.connURL.required"));
-            }
-
-            // Either userPattern or userSearch should be specified not both
-            boolean isUserPatternSpecified = false;
-            boolean isUserSearchSpecified = false;
-            if ((userPattern != null) && (userPattern.length() > 0)) {
-                isUserPatternSpecified = true;
-            }
-
-            if ((userSearch != null) && (userSearch.length() > 0)) {
-                isUserSearchSpecified = true;
-            }
-
-            if (isUserPatternSpecified && isUserSearchSpecified) {
-                errors.add("userPattern" ,
-                new ActionMessage("error.userPattern.userSearch.defined"));
-            }
-
-            /*if ((digest == null) || (digest.length() < 1)) {
-                errors.add("digest",
-                new ActionMessage("error.digest.required"));
-            } */
-
-            /*if ((roleName == null) || (roleName.length() < 1)) {
-                errors.add("roleName",
-                new ActionMessage("error.roleName.required"));
-            }
-
-            if ((userRoleName == null) || (userRoleName.length() < 1)) {
-                errors.add("userRoleName",
-                new ActionMessage("error.userRoleName.required"));
-            }
-
-            if ((rolePattern == null) || (rolePattern.length() < 1)) {
-                errors.add("rolePattern",
-                new ActionMessage("error.rolePattern.required"));
-            }
-
-            if ((roleBase == null) || (roleBase.length() < 1)) {
-                errors.add("roleBase",
-                new ActionMessage("error.roleBase.required"));
-            }
-
-            if ((userBase == null) || (userBase.length() < 1)) {
-                errors.add("userBase",
-                new ActionMessage("error.userBase.required"));
-            }
-
-            if ((userPassword == null) || (userPassword.length() < 1)) {
-                errors.add("userPassword",
-                new ActionMessage("error.userPassword.required"));
-            }
-
-            if ((userPattern == null) || (userPattern.length() < 1)) {
-                errors.add("userPattern",
-                new ActionMessage("error.userPattern.required"));
-            }
-
-            if ((userSearch == null) || (userSearch.length() < 1)) {
-                errors.add("userSearch",
-                new ActionMessage("error.userSearch.required"));
-            }
-
-            if ((connectionName == null) || (connectionName.length() < 1)) {
-                errors.add("connectionName",
-                new ActionMessage("error.connName.required"));
-            }
-
-            if ((connectionPassword == null) || (connectionPassword.length() < 1)) {
-                errors.add("connectionPassword",
-                new ActionMessage("error.connPassword.required"));
-            }
-
-            if ((contextFactory == null) || (contextFactory.length() < 1)) {
-                errors.add("contextFactory",
-                new ActionMessage("error.contextFactory.required"));
-            } */
+        if ((connectionURL == null) || (connectionURL.length() < 1)) {
+            errors.add("connectionURL",
+            new ActionMessage("error.connURL.required"));
         }
+
+        // Either userPattern or userSearch should be specified not both
+        boolean isUserPatternSpecified = false;
+        boolean isUserSearchSpecified = false;
+        if ((userPattern != null) && (userPattern.length() > 0)) {
+            isUserPatternSpecified = true;
+        }
+
+        if ((userSearch != null) && (userSearch.length() > 0)) {
+            isUserSearchSpecified = true;
+        }
+
+        if (isUserPatternSpecified && isUserSearchSpecified) {
+            errors.add("userPattern" ,
+            new ActionMessage("error.userPattern.userSearch.defined"));
+        }
+
+        /*if ((digest == null) || (digest.length() < 1)) {
+            errors.add("digest",
+            new ActionMessage("error.digest.required"));
+        } */
+
+        /*if ((roleName == null) || (roleName.length() < 1)) {
+            errors.add("roleName",
+            new ActionMessage("error.roleName.required"));
+        }
+
+        if ((userRoleName == null) || (userRoleName.length() < 1)) {
+            errors.add("userRoleName",
+            new ActionMessage("error.userRoleName.required"));
+        }
+
+        if ((rolePattern == null) || (rolePattern.length() < 1)) {
+            errors.add("rolePattern",
+            new ActionMessage("error.rolePattern.required"));
+        }
+
+        if ((roleBase == null) || (roleBase.length() < 1)) {
+            errors.add("roleBase",
+            new ActionMessage("error.roleBase.required"));
+        }
+
+        if ((userBase == null) || (userBase.length() < 1)) {
+            errors.add("userBase",
+            new ActionMessage("error.userBase.required"));
+        }
+
+        if ((userPassword == null) || (userPassword.length() < 1)) {
+            errors.add("userPassword",
+            new ActionMessage("error.userPassword.required"));
+        }
+
+        if ((userPattern == null) || (userPattern.length() < 1)) {
+            errors.add("userPattern",
+            new ActionMessage("error.userPattern.required"));
+        }
+
+        if ((userSearch == null) || (userSearch.length() < 1)) {
+            errors.add("userSearch",
+            new ActionMessage("error.userSearch.required"));
+        }
+
+        if ((connectionName == null) || (connectionName.length() < 1)) {
+            errors.add("connectionName",
+            new ActionMessage("error.connName.required"));
+        }
+
+        if ((connectionPassword == null) || (connectionPassword.length() < 1)) {
+            errors.add("connectionPassword",
+            new ActionMessage("error.connPassword.required"));
+        }
+
+        if ((contextFactory == null) || (contextFactory.length() < 1)) {
+            errors.add("contextFactory",
+            new ActionMessage("error.contextFactory.required"));
+        } */
 
         return errors;
     }

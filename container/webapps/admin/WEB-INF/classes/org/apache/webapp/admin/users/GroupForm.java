@@ -20,17 +20,17 @@ package org.apache.webapp.admin.users;
 import java.net.URLDecoder;
 import javax.management.MBeanServer;
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 import org.apache.webapp.admin.ApplicationServlet;
-
+import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * Form bean for the individual group page.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: GroupForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -43,6 +43,7 @@ public final class GroupForm extends BaseForm {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mserver = null;
+    
 
     // ------------------------------------------------------------- Properties
 
@@ -123,7 +124,7 @@ public final class GroupForm extends BaseForm {
      */
     public ActionErrors validate(ActionMapping mapping,
     HttpServletRequest request) {
-
+        
         try {
             // Look up the components we will be using as needed
             if (mserver == null) {
@@ -132,7 +133,7 @@ public final class GroupForm extends BaseForm {
          
             // Set up beans containing all possible groups and roles
             String databaseName =
-                URLDecoder.decode(request.getParameter("databaseName"));
+                URLDecoder.decode(request.getParameter("databaseName"),TomcatTreeBuilder.URL_ENCODING);
             request.setAttribute("rolesForm",
                                  UserUtils.getRolesForm(mserver,
                                                         databaseName));

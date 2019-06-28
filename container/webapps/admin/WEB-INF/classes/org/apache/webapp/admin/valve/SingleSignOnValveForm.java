@@ -20,67 +20,20 @@ package org.apache.webapp.admin.valve;
 import javax.servlet.http.HttpServletRequest;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
-import java.util.List;
 
 /**
  * Form bean for the single sign on valve page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SingleSignOnValveForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SingleSignOnValveForm extends ValveForm {
     
     // ----------------------------------------------------- Instance Variables
 
-    /**
-     * The text for the debug level.
-     */
-    private String debugLvl = "0";
-        
-    /**
-     * Set of valid values for debug level.
-     */
-    private List debugLvlVals = null;
-    
     // ------------------------------------------------------------- Properties
     
-    /**
-     * Return the debugVals.
-     */
-    public List getDebugLvlVals() {
-        
-        return this.debugLvlVals;
-        
-    }
-    
-    /**
-     * Set the debugVals.
-     */
-    public void setDebugLvlVals(List debugLvlVals) {
-        
-        this.debugLvlVals = debugLvlVals;
-        
-    }
-    
-    /**
-     * Return the Debug Level Text.
-     */
-    public String getDebugLvl() {
-        
-        return this.debugLvl;
-        
-    }
-    
-    /**
-     * Set the Debug Level Text.
-     */
-    public void setDebugLvl(String debugLvl) {
-        
-        this.debugLvl = debugLvl;
-        
-    }
-        
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -92,7 +45,6 @@ public final class SingleSignOnValveForm extends ValveForm {
     public void reset(ActionMapping mapping, HttpServletRequest request) {
     
         super.reset(mapping, request);
-        this.debugLvl = "0";        
         
     }
     
@@ -105,8 +57,6 @@ public final class SingleSignOnValveForm extends ValveForm {
         sb.append(getAdminAction());
         sb.append("',valveType=");
         sb.append(getValveType());
-        sb.append(",debugLvl=");
-        sb.append(debugLvl);
         sb.append("',objectName='");
         sb.append(getObjectName());
         sb.append("]");

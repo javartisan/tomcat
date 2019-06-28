@@ -22,28 +22,21 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
-import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.Lists;
 import org.apache.webapp.admin.TomcatTreeBuilder;
+
 /**
  * The <code>Action</code> that sets up <em>Add Context</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AddContextAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class AddContextAction extends Action {
-    
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-    
     
     // --------------------------------------------------------- Public Methods
     
@@ -70,9 +63,6 @@ public class AddContextAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
         
         // Fill in the form values for display and editing
         ContextForm contextFm = new ContextForm();
@@ -81,10 +71,12 @@ public class AddContextAction extends Action {
         contextFm.setObjectName("");
         String parent = request.getParameter("parent");
         contextFm.setParentObjectName(parent);
+        int i = parent.indexOf(":");
+        String domain = parent.substring(0, i);
         int position = parent.indexOf(",");
-        String loader = TomcatTreeBuilder.LOADER_TYPE + 
+        String loader = domain + TomcatTreeBuilder.LOADER_TYPE + 
                 parent.substring(position, parent.length());
-        String manager = TomcatTreeBuilder.MANAGER_TYPE + 
+        String manager = domain + TomcatTreeBuilder.MANAGER_TYPE + 
                 parent.substring(position, parent.length());
         contextFm.setLoaderObjectName(loader);
         contextFm.setManagerObjectName(manager); 
@@ -97,21 +89,17 @@ public class AddContextAction extends Action {
         contextFm.setPath("");
         contextFm.setReloadable("false");
         contextFm.setSwallowOutput("false");
-        contextFm.setUseNaming("false");
+        contextFm.setUseNaming("true");
         contextFm.setWorkDir("");        
         contextFm.setPath("");
-        contextFm.setDebugLvl("0");
         //loader initialization
-        contextFm.setLdrCheckInterval("15");
-        contextFm.setLdrDebugLvl("0");
+        //contextFm.setLdrCheckInterval("15");
         contextFm.setLdrReloadable("false");
         //manager initialization
-        contextFm.setMgrCheckInterval("60");
-        contextFm.setMgrDebugLvl("0");
+        //contextFm.setMgrCheckInterval("60");
         contextFm.setMgrMaxSessions("-1");
         contextFm.setMgrSessionIDInit("");
         
-        contextFm.setDebugLvlVals(Lists.getDebugLevels());
         contextFm.setBooleanVals(Lists.getBooleanValues());        
         
         // Forward to the context display page

@@ -17,47 +17,47 @@
 
 package org.apache.catalina.ssi;
 
-import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import javax.servlet.ServletOutputStream;
 
+
 /**
- * Class that extends ServletOuputStream, used as a wrapper
- * from within <code>SsiInclude</code>
+ * Class that extends ServletOuputStream, used as a wrapper from within
+ * <code>SsiInclude</code>
  *
  * @author Bip Thelin
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ByteArrayServletOutputStream.java 939529 2010-04-30 00:51:34Z kkolinko $
  * @see ServletOutputStream and ByteArrayOutputStream
  */
 public class ByteArrayServletOutputStream extends ServletOutputStream {
     /**
-     * Our buffer to hold the stream
+     * Our buffer to hold the stream.
      */
-    protected ByteArrayOutputStream _buf = null;
+    protected ByteArrayOutputStream buf = null;
+
 
     /**
-     * Construct a new ServletOutputStream
-     *
+     * Construct a new ServletOutputStream.
      */
     public ByteArrayServletOutputStream() {
-        _buf = new ByteArrayOutputStream();
+        buf = new ByteArrayOutputStream();
     }
 
+
     /**
-     * Write our stream to the <code>OutputStream</code> provided.
-     *
-     * @exception IOException if an input/output error occurs
+     * @return the byte array.
      */
     public byte[] toByteArray() {
-        return _buf.toByteArray();
+        return buf.toByteArray();
     }
 
+
     /**
-     * Write to our buffer
+     * Write to our buffer.
      *
      * @param b The parameter to write
      */
     public void write(int b) {
-        _buf.write(b);
+        buf.write(b);
     }
 }

@@ -38,11 +38,12 @@ import org.apache.struts.action.ActionMapping;
  *
  * @author Jazmin Jonson
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SetUpTreeAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class SetUpTreeAction extends Action {
 
+    public static final String DOMAIN_KEY = "domain";
     public static final int INIT_PLUGIN_MAX = 10;
     public static final String TREEBUILDER_KEY = "treebuilders";
     public static final String ROOTNODENAME_KEY = "rootnodename";
@@ -81,6 +82,10 @@ public class SetUpTreeAction extends Action {
         String treeBuildersStr  =
             (String)servlet.getServletConfig().getInitParameter(TREEBUILDER_KEY);
         
+        String domain  =
+            (String)servlet.getServletConfig().getInitParameter(DOMAIN_KEY);
+        
+        
         // Make the root node and tree control
         
         // The root node gets rendered only if its value 
@@ -90,7 +95,7 @@ public class SetUpTreeAction extends Action {
             new TreeControlNode("ROOT-NODE",
                                 null, rootnodeName,
                                 "setUpTree.do?select=ROOT-NODE",
-                                "content", true);
+                                "content", true, domain);
                 
         TreeControl control = new TreeControl(root);
         

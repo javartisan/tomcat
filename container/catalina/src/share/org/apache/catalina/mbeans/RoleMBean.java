@@ -21,6 +21,7 @@ package org.apache.catalina.mbeans;
 import javax.management.MBeanException;
 import javax.management.MBeanServer;
 import javax.management.RuntimeOperationsException;
+
 import org.apache.commons.modeler.BaseModelMBean;
 import org.apache.commons.modeler.ManagedBean;
 import org.apache.commons.modeler.Registry;
@@ -31,7 +32,7 @@ import org.apache.commons.modeler.Registry;
  * <code>org.apache.catalina.Role</code> component.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RoleMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class RoleMBean extends BaseModelMBean {

@@ -26,8 +26,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -45,7 +43,7 @@ import org.apache.webapp.admin.TreeControlNode;
  * transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteHostsAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteHostsAction extends Action {
@@ -64,12 +62,6 @@ public class DeleteHostsAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -98,10 +90,8 @@ public class DeleteHostsAction extends Action {
         
         // Look up the components we will be using as needed
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
 
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -110,16 +100,15 @@ public class DeleteHostsAction extends Action {
             throw new ServletException
             ("Cannot acquire MBeanServer reference", t);
         }
-        
+               
         // Delete the specified Hosts
         String hosts[]  = ((HostsForm) form).getHosts();
         String values[] = new String[1];
         String operation = "removeHost";
+        
+        getServlet().log("enter DeleteHosts " + hosts);
 
         try {
-            // Look up our MBeanFactory MBean
-            ObjectName fname =
-                new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
 
             // Look up our tree control data structure
             TreeControl control = (TreeControl)
@@ -128,11 +117,13 @@ public class DeleteHostsAction extends Action {
             // Remove the specified hosts
             for (int i = 0; i < hosts.length; i++) {
                 values[0] = hosts[i];
-                mBServer.invoke(fname, operation,
-                                values, removeHostTypes);
+                getServlet().log("remove host " + hosts[i]);
                 if (control != null) {
                     control.selectNode(null);
                     TreeControlNode node = control.findNode(hosts[i]);
+                    ObjectName fname = TomcatTreeBuilder.getMBeanFactory();
+                    mBServer.invoke(fname, operation,
+                                values, removeHostTypes);
                     if (node != null) {
                         node.remove();
                     } else {

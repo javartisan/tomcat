@@ -21,17 +21,17 @@ package org.apache.webapp.admin.users;
 import java.net.URLDecoder;
 import javax.management.MBeanServer;
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 import org.apache.webapp.admin.ApplicationServlet;
-
+import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * Form bean for the individual user page.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: UserForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -46,7 +46,6 @@ public final class UserForm extends BaseForm {
     private MBeanServer mserver = null;
 
     // ------------------------------------------------------------- Properties
-
 
     /**
      * The full name of the associated user.
@@ -165,7 +164,7 @@ public final class UserForm extends BaseForm {
          
             // Set up beans containing all possible groups and roles
             String databaseName =
-                URLDecoder.decode(request.getParameter("databaseName"));
+                URLDecoder.decode(request.getParameter("databaseName"),TomcatTreeBuilder.URL_ENCODING);
             request.setAttribute("groupsForm",
                                  UserUtils.getGroupsForm(mserver,
                                                          databaseName));
@@ -175,7 +174,7 @@ public final class UserForm extends BaseForm {
         } catch (Exception e) {
             // do nothing since the form returns validation error
         }
-
+        
         ActionErrors errors = new ActionErrors();
 
         // username is a required field

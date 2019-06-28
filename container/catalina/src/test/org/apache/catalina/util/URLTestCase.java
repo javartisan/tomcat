@@ -29,7 +29,7 @@ import junit.framework.TestSuite;
  * Unit tests for the <code>org.apache.catalina.util.URL</code> class.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: URLTestCase.java 939532 2010-04-30 00:55:18Z kkolinko $
  */
 
 public class URLTestCase extends TestCase {

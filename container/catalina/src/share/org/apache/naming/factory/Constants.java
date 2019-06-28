@@ -43,20 +43,13 @@ public final class Constants {
         Package + ".EjbFactory";
 
     public static final String DBCP_DATASOURCE_FACTORY = 
-        "org.apache.commons.dbcp.BasicDataSourceFactory";
+        "org.apache.tomcat.dbcp.dbcp.BasicDataSourceFactory";
 
-    public static final String TYREX_RESOURCE_FACTORY =
-        Package + ".TyrexResourceFactory";
-
-    public static final String TYREX_TRANSACTION_FACTORY = 
-        Package + ".TyrexTransactionFactory";
+    public static final String OPENEJB_EJB_FACTORY = 
+        Package + ".OpenEjbFactory";
 
     public static final String OBJECT_FACTORIES = "";
 
     public static final String FACTORY = "factory";
-
-    public static final String TYREX_DOMAIN_CONFIG = "tyrexDomainConfig";
-
-    public static final String TYREX_DOMAIN_NAME = "tyrexDomainName";
 
 }

@@ -89,7 +89,8 @@
 	       debug="${compile.debug}"
 	       optimize="off"
 	       verbose="off"
-	       excludes="**/CVS/**">
+	       excludes="**/CVS/**"
+           encoding="ISO-8859-1">
             <classpath refid="compile.classpath"/>
             <exclude name="**/util/net/jsse/*" unless="jsse.present"/>
             <exclude name="**/util/log/CommonLogHandler.java" unless="commons-logging.present"/>
@@ -119,7 +120,6 @@
         </copy>
 
 	<jar jarfile="${tomcat-util.jar}"
-             index="true"
              basedir="${tomcat-util.build}/classes"
              manifest="java/tomcat-util.manifest" >
             <include name="org/apache/tomcat/util/**"/>
@@ -135,11 +135,11 @@
            debug="${compile.debug}"
            optimize="off"
            verbose="off"
-           excludes="**/CVS/**">
+           excludes="**/CVS/**"
+           encoding="ISO-8859-1">
             <classpath refid="compile.classpath"/>
         </javac>
      	<jar jarfile="${tomcat-loader.jar}"
-             index="true"
              basedir="${tomcat-util.build}/loader"
              manifest="loader/tomcat-loader.manifest" >
             <include name="org/apache/tomcat/util/loader/**"/>
@@ -157,7 +157,7 @@
                   version="true"
               windowtitle="Tomcat Utilities Documentation"
                  doctitle="Tomcat Utilities"
-                   bottom="Copyright &#169; 2001 Apache Software Foundation.  All Rights Reserved.">
+                   bottom="Copyright &amp;#169; 2001-2012 Apache Software Foundation.  All Rights Reserved.">
             <classpath refid="compile.classpath"/>
         </javadoc>
     </target>

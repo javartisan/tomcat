@@ -17,12 +17,13 @@
 
 package org.apache.catalina.mbeans;
 
-import java.net.URLDecoder;
 import java.util.ArrayList;
-import javax.management.MalformedObjectNameException;
+
 import javax.management.MBeanException;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.management.RuntimeOperationsException;
+
 import org.apache.catalina.deploy.ContextEnvironment;
 import org.apache.catalina.deploy.ContextResource;
 import org.apache.catalina.deploy.ContextResourceLink;
@@ -30,14 +31,14 @@ import org.apache.catalina.deploy.NamingResources;
 import org.apache.commons.modeler.BaseModelMBean;
 import org.apache.commons.modeler.ManagedBean;
 import org.apache.commons.modeler.Registry;
-
+import org.apache.tomcat.util.compat.JdkCompat;
 
 /**
  * <p>A <strong>ModelMBean</strong> implementation for the
  * <code>org.apache.catalina.deploy.NamingResources</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NamingResourcesMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class NamingResourcesMBean extends BaseModelMBean {
@@ -61,6 +62,15 @@ public class NamingResourcesMBean extends BaseModelMBean {
         super();
 
     }
+
+
+    // ----------------------------------------------------- Class Variables
+
+
+    /**
+     * JDK compatibility support
+     */
+    private static final JdkCompat jdkCompat = JdkCompat.getJdkCompat();
 
 
     // ----------------------------------------------------- Instance Variables
@@ -94,8 +104,10 @@ public class NamingResourcesMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), envs[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for environment " + envs[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -118,8 +130,10 @@ public class NamingResourcesMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), resources[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for resource " + resources[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -142,8 +156,10 @@ public class NamingResourcesMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), resourceLinks[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for resource " + resourceLinks[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -221,12 +237,11 @@ public class NamingResourcesMBean extends BaseModelMBean {
     /**
      * Add a resource link reference for this web application.
      *
-     * @param global New resource link reference global name
      * @param resourceLinkName New resource link reference name
      * @param type New resource link reference type
      */
-    public String addResourceLink(String resourceLinkName, String type, 
-                                  String global) throws MalformedObjectNameException {
+    public String addResourceLink(String resourceLinkName, String type)
+        throws MalformedObjectNameException {
         
         NamingResources nresources = (NamingResources) this.resource;
         if (nresources == null) {
@@ -242,7 +257,6 @@ public class NamingResourcesMBean extends BaseModelMBean {
         resourceLink = new ContextResourceLink();
         resourceLink.setName(resourceLinkName);
         resourceLink.setType(type);
-        resourceLink.setGlobal(global);
         nresources.addResourceLink(resourceLink);
         
         // Return the corresponding MBean name
@@ -281,7 +295,7 @@ public class NamingResourcesMBean extends BaseModelMBean {
      */
     public void removeResource(String resourceName) {
 
-        resourceName = URLDecoder.decode(resourceName);
+        resourceName = ObjectName.unquote(resourceName);
         NamingResources nresources = (NamingResources) this.resource;
         if (nresources == null) {
             return;
@@ -292,7 +306,6 @@ public class NamingResourcesMBean extends BaseModelMBean {
                 ("Invalid resource name '" + resourceName + "'");
         }
         nresources.removeResource(resourceName);
-        nresources.removeResourceParams(resourceName);
     
     }
     
@@ -304,7 +317,7 @@ public class NamingResourcesMBean extends BaseModelMBean {
      */
     public void removeResourceLink(String resourceLinkName) {
 
-        resourceLinkName = URLDecoder.decode(resourceLinkName);
+        resourceLinkName = ObjectName.unquote(resourceLinkName);
         NamingResources nresources = (NamingResources) this.resource;
         if (nresources == null) {
             return;

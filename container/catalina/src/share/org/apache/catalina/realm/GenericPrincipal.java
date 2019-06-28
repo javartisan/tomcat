@@ -22,6 +22,9 @@ package org.apache.catalina.realm;
 import java.security.Principal;
 import java.util.Arrays;
 import java.util.List;
+
+import javax.security.auth.login.LoginContext;
+
 import org.apache.catalina.Realm;
 
 
@@ -30,7 +33,7 @@ import org.apache.catalina.Realm;
  * is available for use by <code>Realm</code> implementations.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: GenericPrincipal.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class GenericPrincipal implements Principal {
@@ -66,18 +69,56 @@ public class GenericPrincipal implements Principal {
      */
     public GenericPrincipal(Realm realm, String name, String password,
                             List roles) {
+        this(realm, name, password, roles, null);
+    }
 
+    /**
+     * Construct a new Principal, associated with the specified Realm, for the
+     * specified username and password, with the specified role names
+     * (as Strings).
+     *
+     * @param realm The Realm that owns this principal
+     * @param name The username of the user represented by this Principal
+     * @param password Credentials used to authenticate this user
+     * @param roles List of roles (must be Strings) possessed by this user
+     * @param userPrincipal - the principal to be returned from the request 
+     *        getUserPrincipal call if not null; if null, this will be returned
+     */
+    public GenericPrincipal(Realm realm, String name, String password,
+                            List roles, Principal userPrincipal) {
+
+        this(realm, name, password, roles, userPrincipal, null);
+    }
+    
+    /**
+     * Construct a new Principal, associated with the specified Realm, for the
+     * specified username and password, with the specified role names
+     * (as Strings).
+     *
+     * @param realm The Realm that owns this principal
+     * @param name The username of the user represented by this Principal
+     * @param password Credentials used to authenticate this user
+     * @param roles List of roles (must be Strings) possessed by this user
+     * @param userPrincipal - the principal to be returned from the request 
+     *        getUserPrincipal call if not null; if null, this will be returned
+     * @param loginContext  - If provided, this will be used to log out the user
+     *        at the appropriate time
+     */
+    public GenericPrincipal(Realm realm, String name, String password,
+                            List roles, Principal userPrincipal,
+                            LoginContext loginContext) {
         super();
         this.realm = realm;
         this.name = name;
         this.password = password;
+        this.userPrincipal = userPrincipal;
         if (roles != null) {
             this.roles = new String[roles.size()];
             this.roles = (String[]) roles.toArray(this.roles);
             if (this.roles.length > 0)
                 Arrays.sort(this.roles);
         }
-
+        this.loginContext = loginContext;
     }
 
 
@@ -114,6 +155,10 @@ public class GenericPrincipal implements Principal {
         return (this.realm);
     }
 
+    void setRealm( Realm realm ) {
+        this.realm=realm;
+    }
+
 
     /**
      * The set of roles associated with this user.
@@ -125,6 +170,30 @@ public class GenericPrincipal implements Principal {
     }
 
 
+    /**
+     * The authenticated Principal to be exposed to applications.
+     */
+    protected Principal userPrincipal = null;
+
+    public Principal getUserPrincipal() {
+        if (userPrincipal != null) {
+            return userPrincipal;
+        } else {
+            return this;
+        }
+    }
+
+    
+    /**
+     * The JAAS LoginContext, if any, used to authenticate this Principal.
+     * Kept so we can call logout().
+     */
+    protected LoginContext loginContext = null;
+
+    void setLoginContext( LoginContext loginContext ) {
+        this.loginContext=loginContext;
+    }
+
     // --------------------------------------------------------- Public Methods
 
 
@@ -135,6 +204,8 @@ public class GenericPrincipal implements Principal {
      */
     public boolean hasRole(String role) {
 
+        if("*".equals(role)) // Special 2.4 role meaning everyone
+            return true;
         if (role == null)
             return (false);
         return (Arrays.binarySearch(roles, role) >= 0);
@@ -150,9 +221,30 @@ public class GenericPrincipal implements Principal {
 
         StringBuffer sb = new StringBuffer("GenericPrincipal[");
         sb.append(this.name);
-        sb.append("]");
+        sb.append("(");
+        for( int i=0;i<roles.length; i++ ) {
+            sb.append( roles[i]).append(",");
+        }
+        sb.append(")]");
         return (sb.toString());
 
+    }
+
+    
+    /**
+     * Calls logout, if necessary, on any associated JAASLoginContext. May in
+     * the future be extended to cover other logout requirements.
+     * 
+     * @throws Exception If something goes wrong with the logout. Uses Exception
+     *                   to allow for future expansion of this method to cover
+     *                   other logout mechanisms that might throw a different
+     *                   exception to LoginContext
+     * 
+     */
+    public void logout() throws Exception {
+        if (loginContext != null) {
+            loginContext.logout();
+        }
     }
 
 

@@ -32,7 +32,7 @@ import org.apache.naming.EjbRef;
  * Object factory for EJBs.
  * 
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EjbFactory.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class EjbFactory
@@ -115,11 +115,19 @@ public class EjbFactory
                     try {
                         factoryClass = tcl.loadClass(factoryClassName);
                     } catch(ClassNotFoundException e) {
+                        NamingException ex = new NamingException
+                            ("Could not load resource factory class");
+                        ex.initCause(e);
+                        throw ex;
                     }
                 } else {
                     try {
                         factoryClass = Class.forName(factoryClassName);
                     } catch(ClassNotFoundException e) {
+                        NamingException ex = new NamingException
+                            ("Could not load resource factory class");
+                        ex.initCause(e);
+                        throw ex;
                     }
                 }
                 if (factoryClass != null) {
@@ -128,9 +136,23 @@ public class EjbFactory
                     } catch(Throwable t) {
                     }
                 }
+            } else {
+                String javaxEjbFactoryClassName =
+                    System.getProperty("javax.ejb.Factory",
+                                       Constants.OPENEJB_EJB_FACTORY);
+                try {
+                    factory = (ObjectFactory)
+                        Class.forName(javaxEjbFactoryClassName).newInstance();
+                } catch(Throwable t) {
+                    if (t instanceof NamingException)
+                        throw (NamingException) t;
+                    NamingException ex = new NamingException
+                        ("Could not create resource factory instance");
+                    ex.initCause(t);
+                    throw ex;
+                }
             }
 
-            // Note: No defaults here
             if (factory != null) {
                 return factory.getObjectInstance
                     (obj, name, nameCtx, environment);

@@ -29,11 +29,11 @@ import java.util.ArrayList;
 import javax.naming.Context;
 import javax.sql.DataSource;
 
+import org.apache.naming.ContextBindings;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.ServerFactory;
 import org.apache.catalina.core.StandardServer;
 import org.apache.catalina.util.StringManager;
-import org.apache.naming.ContextBindings;
 
 /**
 *
@@ -45,7 +45,7 @@ import org.apache.naming.ContextBindings;
 * @author Craig R. McClanahan
 * @author Carson McDonald
 * @author Ignacio Ortega
-* @version $Revision: 781382 $
+* @version $Revision: 781379 $
 */
 
 public class DataSourceRealm
@@ -58,13 +58,13 @@ public class DataSourceRealm
     /**
      * The generated string for the roles PreparedStatement
      */
-    private StringBuffer preparedRoles = null;
+    private String preparedRoles = null;
 
 
     /**
      * The generated string for the credentials PreparedStatement
      */
-    private StringBuffer preparedCredentials = null;
+    private String preparedCredentials = null;
 
 
     /**
@@ -81,11 +81,11 @@ public class DataSourceRealm
 
 
     /**
-     * Does this realm use a context local datasource.
+     * Context local datasource.
      */
     protected boolean localDataSource = false;
-    
-    
+
+
     /**
      * Descriptive information about this Realm implementation.
      */
@@ -155,7 +155,7 @@ public class DataSourceRealm
     public boolean getLocalDataSource() {
         return localDataSource;
     }
-    
+
     /**
      * Set to true to cause the datasource to be looked up in the webapp JNDI
      * Context.
@@ -163,7 +163,7 @@ public class DataSourceRealm
      * @param localDataSource the new flag value
      */
     public void setLocalDataSource(boolean localDataSource) {
-        this.localDataSource = localDataSource;
+      this.localDataSource = localDataSource;
     }
 
     /**
@@ -269,14 +269,14 @@ public class DataSourceRealm
      *  authenticating this username
      */
     public Principal authenticate(String username, String credentials) {
-
-        // No user or no credentials
+    	
+    	// No user or no credentials
         // Can't possibly authenticate, don't bother the database then
-        if (username == null || credentials == null) {
-            return null;
-        }
-
-        Connection dbConnection = null;
+    	if (username == null || credentials == null) {
+    		return null;
+    	}
+        
+    	Connection dbConnection = null;
 
         try {
 
@@ -286,19 +286,19 @@ public class DataSourceRealm
                 // If the db connection open fails, return "not authenticated"
                 return null;
             }
-
+            
             // Acquire a Principal object for this user
             return authenticate(dbConnection, username, credentials);
-
+            
         } catch (SQLException e) {
             // Log the problem for posterity
-            log(sm.getString("dataSourceRealm.exception"), e);
+            containerLog.error(sm.getString("dataSourceRealm.exception"), e);
 
             // Return "not authenticated" for this request
             return (null);
 
         } finally {
-            close(dbConnection);
+        	close(dbConnection);
         }
 
     }
@@ -318,12 +318,10 @@ public class DataSourceRealm
      * @param username Username of the Principal to look up
      * @param credentials Password or other credentials to use in
      *  authenticating this username
-     *
-     * @exception SQLException if a database error occurs
      */
     protected Principal authenticate(Connection dbConnection,
-                                     String username,
-                                     String credentials) throws SQLException {
+                                               String username,
+                                               String credentials) throws SQLException{
 
         String dbCredentials = getPassword(dbConnection, username);
 
@@ -336,12 +334,14 @@ public class DataSourceRealm
             validated = (digest(credentials).equals(dbCredentials));
 
         if (validated) {
-            if (debug >=2)
-                log(sm.getString("dataSourceRealm.authenticateSuccess",
+            if (containerLog.isTraceEnabled())
+                containerLog.trace(
+                    sm.getString("dataSourceRealm.authenticateSuccess",
                                  username));
         } else {
-            if (debug >=2)
-                log(sm.getString("dataSourceRealm.authenticateFailure",
+            if (containerLog.isTraceEnabled())
+                containerLog.trace(
+                    sm.getString("dataSourceRealm.authenticateFailure",
                                  username));
             return (null);
         }
@@ -359,31 +359,36 @@ public class DataSourceRealm
      *
      * @param dbConnection The connection to be closed
      */
-    private void close(Connection dbConnection) {
+    protected void close(Connection dbConnection) {
 
         // Do nothing if the database connection is already closed
         if (dbConnection == null)
             return;
 
-        // Close this database connection, and log any errors
+        // Commit if not auto committed
         try {
             if (!dbConnection.getAutoCommit()) {
                 dbConnection.commit();
-            }
+            }            
+        } catch (SQLException e) {
+            containerLog.error("Exception committing connection before closing:", e);
+        }
+
+        // Close this database connection, and log any errors
+        try {
             dbConnection.close();
         } catch (SQLException e) {
-            log(sm.getString("dataSourceRealm.close"), e); // Just log it here
+            containerLog.error(sm.getString("dataSourceRealm.close"), e); // Just log it here
         }
 
     }
-
 
     /**
      * Open the specified database connection.
      *
      * @return Connection to the database
      */
-    private Connection open() {
+    protected Connection open() {
 
         try {
             Context context = null;
@@ -396,24 +401,22 @@ public class DataSourceRealm
                 context = server.getGlobalNamingContext();
             }
             DataSource dataSource = (DataSource)context.lookup(dataSourceName);
-            return dataSource.getConnection();
+	    return dataSource.getConnection();
         } catch (Exception e) {
             // Log the problem for posterity
-            log(sm.getString("dataSourceRealm.exception"), e);
+            containerLog.error(sm.getString("dataSourceRealm.exception"), e);
         }  
         return null;
     }
-
 
     /**
      * Return a short name for this Realm implementation.
      */
     protected String getName() {
 
-        return (DataSourceRealm.name);
+        return (name);
 
     }
-
 
     /**
      * Return the password associated with the given principal's user name.
@@ -429,26 +432,25 @@ public class DataSourceRealm
         }
 
         try {
-            return getPassword(dbConnection, username);         
+        	return getPassword(dbConnection, username);        	
         } finally {
             close(dbConnection);
         }
     }
-
+    
     /**
      * Return the password associated with the given principal's user name.
      * @param dbConnection The database connection to be used
      * @param username Username for which password should be retrieved
      */
     protected String getPassword(Connection dbConnection, 
-                                 String username) {
+								 String username) {
 
         ResultSet rs = null;
         PreparedStatement stmt = null;
         String dbCredentials = null;
 
         try {
-            // Look up the user's credentials
             stmt = credentials(dbConnection, username);
             rs = stmt.executeQuery();
             if (rs.next()) {
@@ -456,10 +458,11 @@ public class DataSourceRealm
             }
 
             return (dbCredentials != null) ? dbCredentials.trim() : null;
-
+            
         } catch(SQLException e) {
-        	log(sm.getString("dataSourceRealm.getPassword.exception",
-                    username));
+            containerLog.error(
+                    sm.getString("dataSourceRealm.getPassword.exception",
+                                 username));
         } finally {
         	try {
 	            if (rs != null) {
@@ -469,13 +472,14 @@ public class DataSourceRealm
 	                stmt.close();
 	            }
         	} catch (SQLException e) {
-            	log(sm.getString("dataSourceRealm.getPassword.exception",
-                        username));
+                    containerLog.error(
+                        sm.getString("dataSourceRealm.getPassword.exception",
+        		             username));
         		
         	}
         }
-
-        return (null);
+        
+        return null;
     }
 
 
@@ -483,23 +487,20 @@ public class DataSourceRealm
      * Return the Principal associated with the given user name.
      */
     protected Principal getPrincipal(String username) {
-
-        Connection dbConnection = open();
+    	Connection dbConnection = open();
         if (dbConnection == null) {
             return new GenericPrincipal(this,username, null, null);
         }
         try {
-            return (new GenericPrincipal(this,
-                    username,
-                    getPassword(dbConnection, username),
-                    getRoles(dbConnection, username)));
+        	return (new GenericPrincipal(this,
+        			username,
+					getPassword(dbConnection, username),
+					getRoles(dbConnection, username)));
         } finally {
-            close(dbConnection);
+        	close(dbConnection);
         }
 
     }
-
-
 
     /**
      * Return the roles associated with the given user name.
@@ -518,7 +519,7 @@ public class DataSourceRealm
         try {
             return getRoles(dbConnection, username);
         } finally {
-            close(dbConnection);
+        	close(dbConnection);
         }
     }
     
@@ -529,26 +530,28 @@ public class DataSourceRealm
      */
     protected ArrayList getRoles(Connection dbConnection,
                                      String username) {
-
+    	
         ResultSet rs = null;
         PreparedStatement stmt = null;
         ArrayList list = null;
-
+    	
         try {
-            stmt = roles(dbConnection, username);
-            rs = stmt.executeQuery();
-            list = new ArrayList();
-
-            while (rs.next()) {
-                String role = rs.getString(1);
-                if (role != null) {
-                    list.add(role.trim());
-                }
-            }
-            return (list);
-        } catch(SQLException e) {
-            log(sm.getString("dataSourceRealm.getRoles.exception", username));
-        } finally {
+    		stmt = roles(dbConnection, username);
+    		rs = stmt.executeQuery();
+    		list = new ArrayList();
+    		
+    		while (rs.next()) {
+    			String role = rs.getString(1);
+    			if (role != null) {
+    				list.add(role.trim());
+    			}
+    		}
+    		return list;
+    	} catch(SQLException e) {
+            containerLog.error(
+                sm.getString("dataSourceRealm.getRoles.exception", username));
+        }
+    	finally {
         	try {
 	            if (rs != null) {
 	                rs.close();
@@ -556,15 +559,15 @@ public class DataSourceRealm
 	            if (stmt != null) {
 	                stmt.close();
 	            }
-            } catch(SQLException e) {
-            	log(sm.getString("dataSourceRealm.getRoles.exception",
-                        username));
+        	} catch (SQLException e) {
+                    containerLog.error(
+                        sm.getString("dataSourceRealm.getRoles.exception",
+                                     username));
         	}
         }
-
-        return (null);
+    	
+    	return null;
     }
-
 
     /**
      * Return a PreparedStatement configured to perform the SELECT required
@@ -580,14 +583,13 @@ public class DataSourceRealm
         throws SQLException {
 
         PreparedStatement credentials =
-            dbConnection.prepareStatement(preparedCredentials.toString());
+            dbConnection.prepareStatement(preparedCredentials);
 
         credentials.setString(1, username);
         return (credentials);
 
     }
-
-
+    
     /**
      * Return a PreparedStatement configured to perform the SELECT required
      * to retrieve user roles for the specified username.
@@ -601,13 +603,12 @@ public class DataSourceRealm
         throws SQLException {
 
         PreparedStatement roles = 
-            dbConnection.prepareStatement(preparedRoles.toString());
+            dbConnection.prepareStatement(preparedRoles);
 
         roles.setString(1, username);
         return (roles);
 
     }
-
 
     // ------------------------------------------------------ Lifecycle Methods
 
@@ -621,27 +622,28 @@ public class DataSourceRealm
      */
     public void start() throws LifecycleException {
 
-        // Create the roles PreparedStatement string
-        preparedRoles = new StringBuffer("SELECT ");
-        preparedRoles.append(roleNameCol);
-        preparedRoles.append(" FROM ");
-        preparedRoles.append(userRoleTable);
-        preparedRoles.append(" WHERE ");
-        preparedRoles.append(userNameCol);
-        preparedRoles.append(" = ?");
-
-        // Create the credentials PreparedStatement string
-        preparedCredentials = new StringBuffer("SELECT ");
-        preparedCredentials.append(userCredCol);
-        preparedCredentials.append(" FROM ");
-        preparedCredentials.append(userTable);
-        preparedCredentials.append(" WHERE ");
-        preparedCredentials.append(userNameCol);
-        preparedCredentials.append(" = ?");
-
         // Perform normal superclass initialization
         super.start();
 
+        // Create the roles PreparedStatement string
+        StringBuffer temp = new StringBuffer("SELECT ");
+        temp.append(roleNameCol);
+        temp.append(" FROM ");
+        temp.append(userRoleTable);
+        temp.append(" WHERE ");
+        temp.append(userNameCol);
+        temp.append(" = ?");
+        preparedRoles = temp.toString();
+
+        // Create the credentials PreparedStatement string
+        temp = new StringBuffer("SELECT ");
+        temp.append(userCredCol);
+        temp.append(" FROM ");
+        temp.append(userTable);
+        temp.append(" WHERE ");
+        temp.append(userNameCol);
+        temp.append(" = ?");
+        preparedCredentials = temp.toString();
     }
 
 

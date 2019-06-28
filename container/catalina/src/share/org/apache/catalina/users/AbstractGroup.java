@@ -20,9 +20,9 @@ package org.apache.catalina.users;
 
 
 import java.util.Iterator;
+
 import org.apache.catalina.Group;
 import org.apache.catalina.Role;
-import org.apache.catalina.User;
 import org.apache.catalina.UserDatabase;
 
 
@@ -30,7 +30,7 @@ import org.apache.catalina.UserDatabase;
  * <p>Convenience base class for {@link Group} implementations.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AbstractGroup.java 939529 2010-04-30 00:51:34Z kkolinko $
  * @since 4.1
  */
 
@@ -114,7 +114,8 @@ public abstract class AbstractGroup implements Group {
 
 
     /**
-     * Return the set of {@link User}s that are members of this group.
+     * Return an Iterator over the set of {@link org.apache.catalina.User}s that 
+     * are members of this group.
      */
     public abstract Iterator getUsers();
 

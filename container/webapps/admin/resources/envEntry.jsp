@@ -1,9 +1,25 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <!-- Standard Struts Entries -->
 
 <%@ page language="java" import="java.net.URLEncoder" contentType="text/html;charset=utf-8" %>
-<%@ taglib uri="/WEB-INF/struts-bean.tld" prefix="bean" %>
-<%@ taglib uri="/WEB-INF/struts-html.tld" prefix="html" %>
-<%@ taglib uri="/WEB-INF/struts-logic.tld" prefix="logic" %>
+<%@ taglib uri="http://struts.apache.org/tags-bean" prefix="bean" %>
+<%@ taglib uri="http://struts.apache.org/tags-html" prefix="html" %>
+<%@ taglib uri="http://struts.apache.org/tags-logic" prefix="logic" %>
 <%@ taglib uri="/WEB-INF/controls.tld" prefix="controls" %>
 
 <html:html locale="true">
@@ -33,9 +49,9 @@
                name="envEntryForm" property="host"/>
   <html:hidden property="host"/>
 
-  <bean:define id="serviceInfo" type="java.lang.String"
-               name="envEntryForm" property="service"/>
-  <html:hidden property="service"/>
+  <bean:define id="domainInfo" type="java.lang.String"
+               name="envEntryForm" property="domain"/>
+  <html:hidden property="domain"/>
 
   <table width="100%" border="0" cellspacing="0" cellpadding="0">
     <tr class="page-title-row">
@@ -55,18 +71,18 @@
             </controls:action>
 
         <controls:action url='<%= "/resources/setUpEnvEntry.do?resourcetype=" +
-                            URLEncoder.encode(resourcetypeInfo) + "&path="+
-                            URLEncoder.encode(pathInfo) + "&host="+
-                            URLEncoder.encode(hostInfo) + "&service="+
-                            URLEncoder.encode(serviceInfo) %>'>
+                            URLEncoder.encode(resourcetypeInfo,"UTF-8") + "&path="+
+                            URLEncoder.encode(pathInfo,"UTF-8") + "&host="+
+                            URLEncoder.encode(hostInfo,"UTF-8") + "&domain="+
+                            URLEncoder.encode(domainInfo,"UTF-8") %>'>
                 <bean:message key="resources.actions.env.create"/>
             </controls:action>
             <controls:action url='<%= "/resources/listEnvEntries.do?resourcetype=" +
-                            URLEncoder.encode(resourcetypeInfo) + "&path="+
-                            URLEncoder.encode(pathInfo) + "&host="+
-                            URLEncoder.encode(hostInfo) + "&service="+
-                            URLEncoder.encode(serviceInfo) + "&forward=" +
-                            URLEncoder.encode("EnvEntries Delete List") %>'>
+                            URLEncoder.encode(resourcetypeInfo,"UTF-8") + "&path="+
+                            URLEncoder.encode(pathInfo,"UTF-8") + "&host="+
+                            URLEncoder.encode(hostInfo,"UTF-8") + "&domain="+
+                            URLEncoder.encode(domainInfo,"UTF-8") + "&forward=" +
+                            URLEncoder.encode("EnvEntries Delete List","UTF-8") %>'>
                 <bean:message key="resources.actions.env.delete"/>
             </controls:action>
          </controls:actions>
@@ -106,7 +122,7 @@
                 <html:hidden property="name"/>
               </logic:present>
               <logic:notPresent name="envEntryForm" property="objectName">
-                <html:text property="name" size="24" maxlength="32" styleId="name"/>
+                <html:text property="name" size="24" styleId="name"/>
               </logic:notPresent>
             </controls:data>
           </controls:row>
@@ -131,7 +147,7 @@
               <bean:message key="service.value"/>:
             </controls:label>
             <controls:data>
-              <html:text property="value" size="24" maxlength="64" styleId="value"/>
+              <html:textarea property="value" cols="30" rows="3" styleId="value"/>
             </controls:data>
           </controls:row>
 
@@ -151,7 +167,7 @@
               <bean:message key="users.prompt.description"/>
             </controls:label>
             <controls:data>
-              <html:text property="description" size="30" maxlength="64" styleId="description"/>
+              <html:text property="description" size="30" styleId="description"/>
             </controls:data>
           </controls:row>
 

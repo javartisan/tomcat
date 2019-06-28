@@ -20,7 +20,7 @@ package org.apache.tomcat.jni;
 /** Local socket
  *
  * @author Mladen Turk
- * @version $Revision: 466585 $, $Date: 2006-10-21 23:16:34 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Local.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public class Local {
@@ -56,7 +56,6 @@ public class Local {
     /**
      * Accept a new connection request
      * @param sock The socket we are listening on.
-     * @param pool The pool for the new socket.
      * @return  A copy of the socket that is connected to the socket that
      *          made the connection request.  This is the socket which should
      *          be used for all future communication.

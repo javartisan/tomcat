@@ -19,12 +19,14 @@
 package org.apache.naming.factory;
 
 import java.util.Hashtable;
-import javax.naming.Name;
+
 import javax.naming.Context;
+import javax.naming.Name;
 import javax.naming.NamingException;
-import javax.naming.Reference;
 import javax.naming.RefAddr;
+import javax.naming.Reference;
 import javax.naming.spi.ObjectFactory;
+
 import org.apache.naming.ResourceLinkRef;
 
 
@@ -32,7 +34,7 @@ import org.apache.naming.ResourceLinkRef;
  * <p>Object factory for resource links.</p>
  * 
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceLinkFactory.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class ResourceLinkFactory
@@ -83,6 +85,8 @@ public class ResourceLinkFactory
 
         // Can we process this request?
         Reference ref = (Reference) obj;
+
+        String type = ref.getClassName();
 
         // Read the global ref addr
         String globalName = null;

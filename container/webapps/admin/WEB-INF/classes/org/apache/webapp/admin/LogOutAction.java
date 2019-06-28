@@ -35,7 +35,7 @@ import org.apache.struts.action.ActionMapping;
  * session and returns to the main menu (which will trigger the login form).
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: LogOutAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class LogOutAction extends Action {

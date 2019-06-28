@@ -18,17 +18,18 @@
 package org.apache.webapp.admin.valve;
 
 import java.lang.IllegalArgumentException;
+import java.util.regex.Pattern;
 import javax.servlet.http.HttpServletRequest;
-import org.apache.regexp.RE;
-import org.apache.struts.action.ActionMessage;
+
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the remote addr valve page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RemoteAddrValveForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class RemoteAddrValveForm extends ValveForm {
@@ -51,12 +52,12 @@ public final class RemoteAddrValveForm extends ValveForm {
     /**
      * The set of <code>allow</code> regular expressions we will evaluate.
      */
-    private RE allows[] = new RE[0];
+    private Pattern allows[] = new Pattern[0];
 
     /**
      * The set of <code>deny</code> regular expressions we will evaluate.
      */
-    private RE denies[] = new RE[0];
+    private Pattern denies[] = new Pattern[0];
 
 
     // ------------------------------------------------------------- Properties
@@ -152,18 +153,14 @@ public final class RemoteAddrValveForm extends ValveForm {
         
         ActionErrors errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        
         // front end validation when save is clicked.        
-        if (submit != null) {
-            // validate allow/deny patterns
-            if ((allow == null) || (allow.length() < 1)) {
-                if ((deny == null) || (deny.length() < 1)) {
-                    errors.add("allow",
-                    new ActionMessage("error.allow.deny.required"));
-                }
-            }                
-        }
+        // validate allow/deny patterns
+        if ((allow == null) || (allow.length() < 1)) {
+            if ((deny == null) || (deny.length() < 1)) {
+                errors.add("allow",
+                new ActionMessage("error.allow.deny.required"));
+            }
+        }                
         
         try {
             allows = ValveUtil.precalculate(allow);            
@@ -186,13 +183,13 @@ public final class RemoteAddrValveForm extends ValveForm {
         }
         
         for (int i = 0; i < denies.length; i++) {
-            if (denies[i].match(ip)) {
+            if (denies[i].matcher(ip).matches()) {
                 if (allows.length < 1) {
                     errors.add("deny",
                         new ActionMessage("error.denyIP"));
                 }
                 for (int j = 0; j < allows.length; j++) {
-                    if (!allows[j].match(ip)) { 
+                    if (!allows[j].matcher(ip).matches()) { 
                         errors.add("deny",
                         new ActionMessage("error.denyIP"));
                     }
@@ -205,7 +202,7 @@ public final class RemoteAddrValveForm extends ValveForm {
             allowMatch = false;
         }
         for (int i = 0; i < allows.length; i++) {
-            if (allows[i].match(ip)) {
+            if (allows[i].matcher(ip).matches()) {
                 allowMatch = true;       
             }
         }       

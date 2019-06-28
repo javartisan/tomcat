@@ -1,9 +1,25 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <!-- Standard Struts Entries -->
 <%@ page language="java" import="java.net.URLEncoder" contentType="text/html;charset=utf-8" %>
-<%@ taglib uri="/WEB-INF/struts-bean.tld" prefix="bean" %>
-<%@ taglib uri="/WEB-INF/struts-html.tld" prefix="html" %>
+<%@ taglib uri="http://struts.apache.org/tags-bean" prefix="bean" %>
+<%@ taglib uri="http://struts.apache.org/tags-html" prefix="html" %>
 <%@ taglib uri="/WEB-INF/controls.tld" prefix="controls" %>
-<%@ taglib uri="/WEB-INF/struts-logic.tld" prefix="logic" %>
+<%@ taglib uri="http://struts.apache.org/tags-logic" prefix="logic" %>
 
 <html:html locale="true">
 
@@ -46,8 +62,8 @@
             <controls:action> --------------------------------- </controls:action>
             <logic:notEqual name="singleSignOnValveForm" property="adminAction" value="Create">
              <controls:action url='<%= "/DeleteValve.do?"  +
-                                 "select=" + URLEncoder.encode(thisObjectName) +
-                                 "&parent="+ URLEncoder.encode(thisParentName) %>'>
+                                 "select=" + URLEncoder.encode(thisObjectName,"UTF-8") +
+                                 "&parent="+ URLEncoder.encode(thisParentName,"UTF-8") %>'>
                 <bean:message key="actions.valves.delete"/>
               </controls:action>
               </logic:notEqual>
@@ -88,17 +104,6 @@
                 <logic:equal name="singleSignOnValveForm" property="adminAction" value="Edit">
                   <bean:write name="singleSignOnValveForm" property="valveType" scope="session"/>
                 </logic:equal>
-            </controls:data>
-        </controls:row>
-
-        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="debugLvlVals">
-            <controls:label><bean:message key="server.debuglevel"/>:</controls:label>
-            <controls:data>
-               <html:select property="debugLvl" styleId="debugLvlVals">
-                     <bean:define id="debugLvlVals" name="singleSignOnValveForm" property="debugLvlVals"/>
-                     <html:options collection="debugLvlVals" property="value"
-                        labelProperty="label"/>
-                </html:select>
             </controls:data>
         </controls:row>
 

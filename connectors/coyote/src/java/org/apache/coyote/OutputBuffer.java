@@ -26,7 +26,7 @@ import org.apache.tomcat.util.buf.ByteChunk;
  * Output buffer.
  *
  * This class is used internally by the protocol implementation. All writes from higher level code should happen
- * via Resonse.doWrite().
+ * via Response.doWrite().
  * 
  * @author Remy Maucherat
  */
@@ -37,7 +37,7 @@ public interface OutputBuffer {
      *
      * @param chunk data to write
      * @param response used to allow buffers that can be shared by multiple responses.
-     * @return
+     * @return number of bytes written
      * @throws IOException
      */
     public int doWrite(ByteChunk chunk, Response response)

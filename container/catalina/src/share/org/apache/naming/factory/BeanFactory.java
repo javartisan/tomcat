@@ -187,6 +187,9 @@ public class BeanFactory
                             } else if (propType.equals(Double.class) 
                                        || propType.equals(double.class)) {
                                 valueArray[0] = new Double(value);
+                            } else if (propType.equals(Boolean.class)
+                                       || propType.equals(boolean.class)) {
+                                valueArray[0] = new Boolean(value);
                             } else {
                                 throw new NamingException
                                     ("String conversion for property type '"
@@ -218,13 +221,21 @@ public class BeanFactory
                 return bean;
 
             } catch (java.beans.IntrospectionException ie) {
-                throw new NamingException(ie.getMessage());
+                NamingException ne = new NamingException(ie.getMessage());
+                ne.setRootCause(ie);
+                throw ne;
             } catch (java.lang.IllegalAccessException iae) {
-                throw new NamingException(iae.getMessage());
+                NamingException ne = new NamingException(iae.getMessage());
+                ne.setRootCause(iae);
+                throw ne;
             } catch (java.lang.InstantiationException ie2) {
-                throw new NamingException(ie2.getMessage());
+                NamingException ne = new NamingException(ie2.getMessage());
+                ne.setRootCause(ie2);
+                throw ne;
             } catch (java.lang.reflect.InvocationTargetException ite) {
-                throw new NamingException(ite.getMessage());
+                NamingException ne = new NamingException(ite.getMessage());
+                ne.setRootCause(ite);
+                throw ne;
             }
 
         } else {

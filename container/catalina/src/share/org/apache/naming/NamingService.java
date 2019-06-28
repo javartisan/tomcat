@@ -29,7 +29,7 @@ import javax.management.Notification;
  * Implementation of the NamingService JMX MBean.
  * 
  * @author <a href="mailto:remm@apache.org">Remy Maucherat</a>
- * @version $Revision: 466595 $
+ * @version $Revision: 466608 $
  */
 
 public final class NamingService
@@ -148,7 +148,7 @@ public final class NamingService
             System.setProperty(Context.URL_PKG_PREFIXES, value);
             
             oldValue = System.getProperty(Context.INITIAL_CONTEXT_FACTORY);
-            if (oldValue != null) {
+            if ((oldValue != null) && (oldValue.length() > 0)) {
                 oldIcValue = oldValue;
             } else {
                 System.setProperty(Context.INITIAL_CONTEXT_FACTORY,

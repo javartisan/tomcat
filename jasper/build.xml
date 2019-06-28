@@ -1,20 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
-   Licensed to the Apache Software Foundation (ASF) under one or more
-   contributor license agreements.  See the NOTICE file distributed with
-   this work for additional information regarding copyright ownership.
-   The ASF licenses this file to You under the Apache License, Version 2.0
-   (the "License"); you may not use this file except in compliance with
-   the License.  You may obtain a copy of the License at
-  
-       http://www.apache.org/licenses/LICENSE-2.0
-  
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
--->
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
 
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <project name="Jasper2" default="deploy" basedir=".">
 
 
@@ -22,9 +22,10 @@
 
   <!-- See "build.properties.sample" in the top level directory for all     -->
   <!-- property values you must customize for successful building!!!        -->
-  <property file="build.properties"/>
-  <property file="${catalina.home}/build.properties"/>
   <property file="${user.home}/build.properties"/>
+  <property file="build.properties"/>
+  <property file="build.properties.sample"/>
+  <property file="${catalina.home}/build.properties"/>
 
   <!-- Build Defaults -->
   <property name="jasper.build"      value="${basedir}/build"/>
@@ -35,28 +36,39 @@
   <property name="test.runner"       value="junit.textui.TestRunner"/>
   <property name="tools.jar"         value="${java.home}/lib/tools.jar"/>
   <property name="ant.jar"           value="${ant.home}/lib/ant.jar"/>
-  <property name="ant-launcher.jar"  value="${ant.home}/lib/ant-launcher.jar"/>
+  <property name="servlet-api.jar" value="${api.home}/jsr154/dist/lib/servlet-api.jar"/>
+  <property name="jsp-api.jar" value="${api.home}/jsr152/dist/lib/jsp-api.jar"/>
+
 
   <!-- Construct Jasper classpath -->
   <path id="jasper.classpath">
-    <pathelement location="${servlet.jar}"/>
+    <pathelement location="${ant.jar}"/>
+    <pathelement location="${servlet-api.jar}"/>
+    <pathelement location="${jsp-api.jar}"/>
     <pathelement location="${tools.jar}"/>
+    <pathelement location="${jdt.jar}"/>
     <pathelement location="${xerces.jar}"/>
     <pathelement location="${xercesImpl.jar}"/>
-    <pathelement location="${xmlParserAPIs.jar}"/>
+    <pathelement location="${xml-apis.jar}"/>
+    <pathelement location="${commons-el.jar}"/>
     <pathelement location="${commons-collections.jar}"/>
+    <pathelement location="${commons-logging.jar}"/>
+    <pathelement location="${commons-daemon-launcher.jar}"/>
     <pathelement location="${jasper.build}/shared/classes"/>
-    <pathelement location="${ant.jar}"/>
   </path>
 
   <!-- Construct unit tests classpath -->
   <path id="test.classpath">
+    <pathelement location="${ant.jar}"/>
     <pathelement location="${junit.jar}"/>
-    <pathelement location="${servlet.jar}"/>
+    <pathelement location="${servlet-api.jar}"/>
+    <pathelement location="${jsp-api.jar}"/>
     <pathelement location="${tools.jar}"/>
     <pathelement location="${xerces.jar}"/>
     <pathelement location="${xercesImpl.jar}"/>
-    <pathelement location="${xmlParserAPIs.jar}"/>
+    <pathelement location="${xml-apis.jar}"/>
+    <pathelement location="${commons-collections.jar}"/>
+    <pathelement location="${commons-launcher.jar}"/>
     <pathelement location="${jasper.build}/shared/classes"/>
     <pathelement location="${jasper.build}/tests"/>
   </path>
@@ -66,7 +78,18 @@
   <target name="build-prepare">
 
     <available classname="junit.framework.TestCase" property="junit.present" />
-    <available file="${ant-launcher.jar}" property="ant-launcher.present" />
+    <available property="launcher.present"
+     classname="org.apache.commons.launcher.Launcher"
+     classpath="${commons-daemon-launcher.jar}"/>
+    <available property="launcher.bootstrap.present"
+     file="${commons-daemon-launcher-bootstrap.class}"/>
+
+    <condition property="copy.launcher.jars">
+      <and>
+        <equals arg1="${launcher.present}" arg2="true" />
+        <equals arg1="${launcher.bootstrap.present}" arg2="true" />
+      </and>
+    </condition>
 
     <mkdir dir="${jasper.build}"/>
     <mkdir dir="${jasper.build}/bin"/>
@@ -78,34 +101,58 @@
   </target>
 
 
+  <!-- =================== BUILD: Copy Launcher Files ===================== -->
+  <target name="copy-launcher.jars" if="copy.launcher.jars">
+    <!-- <copy todir="${jasper.build}/common/lib" file="${ant.jar}"/> -->
+    <copy todir="${jasper.build}/bin" file="${commons-daemon-launcher.jar}"/>
+    <copy todir="${jasper.build}/bin" file="${commons-daemon-launcher-bootstrap.class}"/>
+    <copy todir="${jasper.build}/bin">
+      <fileset dir="src/bin" includes="*-using-launcher.*,launcher.properties,jasper.xml" />
+    </copy>
+  </target>
+
+
   <!-- =================== BUILD: Copy Static Files ======================= -->
-  <target name="build-static" depends="build-prepare">
+  <target name="build-static" depends="build-prepare,copy-launcher.jars">
 
     <!-- Executable Commands -->
     <copy todir="${jasper.build}/bin">
-      <fileset dir="src/bin" />
+      <fileset dir="src/bin" excludes="*-using-launcher.*,launcher.properties,jasper.xml" />
     </copy>
-    <fixcrlf srcdir="${jasper.build}/bin" includes="*.sh" eol="lf"/>
-    <fixcrlf srcdir="${jasper.build}/bin" includes="*.bat" eol="crlf"/>
-    <chmod perm="+x" file="${jasper.build}/bin/jasper.sh"/>
-    <chmod perm="+x" file="${jasper.build}/bin/jspc.sh"/>
+    <fixcrlf srcdir="${jasper.build}/bin" includes="*.sh" eol="lf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <fixcrlf srcdir="${jasper.build}/bin" includes="*.bat" eol="crlf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <chmod perm="+x" dir="${jasper.build}/bin" includes="*.sh"/>
 
   </target>
 
 
   <!-- ================= BUILD: Compile Server Components ================= -->
-  <target name="build-main" depends="build-static">
+  <target name="build-main" depends="build-static,build-only">
+    <!-- Extra operations: Supporting JAR Files -->
+    <copy todir="${jasper.build}/shared/lib" file="${commons-el.jar}"/>
+  </target>
+
+  <!-- Just build jasper -->
+  <target name="build-only">
+    <property name="jasper.classes" value="${jasper.build}/shared/classes"/>
+    <property name="jasper-compiler.jar" value="${jasper.build}/shared/lib/jasper-compiler.jar"/>
+    <property name="jasper-runtime.jar" value="${jasper.build}/shared/lib/jasper-runtime.jar"/>
 
     <!-- Compile internal server components -->
-    <javac srcdir="src/share" destdir="${jasper.build}/shared/classes"
-           debug="${compile.debug}" deprecation="${compile.deprecation}"
+    <javac srcdir="src/share" destdir="${jasper.classes}"
+           debug="${compile.debug}"
+           deprecation="${compile.deprecation}"
+           source="${compile.source}"
            optimize="${compile.optimize}"
-           excludes="**/CVS/**">
+           excludes="**/CVS/**"
+           encoding="ISO-8859-1">
       <classpath refid="jasper.classpath" />
     </javac>
 
     <!-- Copy static resource files -->
-    <copy todir="${jasper.build}/shared/classes">
+    <copy todir="${jasper.classes}">
       <fileset dir="src/share">
         <include name="**/*.properties"/>
         <include name="**/*.dtd"/>
@@ -113,35 +160,42 @@
     </copy>
 
    <!-- Jasper Compiler JAR File -->
-   <jar  jarfile="${jasper.build}/shared/lib/jasper-compiler.jar">
-      <fileset dir="${jasper.build}/shared/classes">
+   <jar  jarfile="${jasper-compiler.jar}">
+      <fileset dir="${jasper.classes}">
         <include name="org/apache/jasper/compiler/**" />
         <include name="org/apache/jasper/xmlparser/**" />
         <include name="org/apache/jasper/servlet/**" />
+        <include name="org/apache/jasper/tagplugins/**" />
         <exclude name="org/apache/jasper/Constants.class" />
         <exclude name="org/apache/jasper/JasperException.class" />
         <include name="org/apache/jasper/*.class" />
+        <!-- Javadoc and i18n exclusions -->
+        <exclude name="**/package.html" />
+        <exclude name="**/LocalStrings_*" />
       </fileset>
     </jar>
 
     <!-- Jasper Runtime JAR File -->
-    <jar  jarfile="${jasper.build}/shared/lib/jasper-runtime.jar">
-      <fileset dir="${jasper.build}/shared/classes">
+    <jar  jarfile="${jasper-runtime.jar}">
+      <fileset dir="${jasper.classes}">
         <include name="org/apache/jasper/Constants.class" />
         <include name="org/apache/jasper/JasperException.class" />
-        <include name="org/apache/jasper/logging/**" />
+        <include name="org/apache/jasper/compiler/Localizer.class" />
         <include name="org/apache/jasper/resources/**" />
         <include name="org/apache/jasper/runtime/**" />
+        <include name="org/apache/jasper/security/**" />
         <include name="org/apache/jasper/util/**" />
+        <!-- Javadoc and i18n exclusions -->
+        <exclude name="**/package.html" />
+        <exclude name="**/LocalStrings_*" />
       </fileset>
     </jar>
-
 
   </target>
 
 
   <!-- ================ BUILD: Create Jasper Javadocs ===================== -->
-  <target name="javadoc" depends="build-main">
+  <target name="javadoc">
     <delete dir="${jasper.build}/javadoc"/>
     <mkdir dir="${jasper.build}/javadoc"/>
     <javadoc packagenames="org.apache.jasper.*"
@@ -152,7 +206,8 @@
      version="true"
      windowtitle="Jasper Internal API Documentation"
      doctitle="Jasper API"
-     bottom="Copyright &#169; 2000 Apache Software Foundation.  All Rights Reserved."
+     bottom="Copyright &amp;#169; 2000-2012 Apache Software Foundation.  All Rights Reserved."
+     additionalparam="-breakiterator"
     />
   </target>
 
@@ -174,8 +229,12 @@
     <!-- Compile unit test classes -->
 <!--
     <javac   srcdir="src/test" destdir="${jasper.build}/tests"
-             deprecation="off" debug="on" optimize="off"
-             excludes="**/CVS/**">
+             deprecation="${compile.deprecation}"
+             debug="${compile.debug}"
+             source="${compile.source}"
+             optimize="off"
+             excludes="**/CVS/**"
+             encoding="ISO-8859-1">
       <classpath refid="test.classpath"/>
     </javac>
 -->
@@ -204,16 +263,17 @@
     <copy todir="${jasper.deploy}/bin">
       <fileset dir="${jasper.build}/bin" />
     </copy>
-    <fixcrlf srcdir="${jasper.deploy}/bin" includes="*.sh" eol="lf"/>
-    <fixcrlf srcdir="${jasper.deploy}/bin" includes="*.bat" eol="crlf"/>
-    <chmod perm="+x" file="${jasper.deploy}/bin/jasper.sh"/>
+    <fixcrlf srcdir="${jasper.deploy}/bin" includes="*.sh" eol="lf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <fixcrlf srcdir="${jasper.deploy}/bin" includes="*.bat" eol="crlf"
+        encoding="ISO-8859-1" fixlast="false" />
     <chmod perm="+x" file="${jasper.deploy}/bin/jspc.sh"/>
 
   </target>
 
 
   <!-- ====================== DEPLOY: Create Jasper JARs ================== -->
-  <target name="deploy" depends="deploy-static,build-main,-copyLauncher"
+  <target name="deploy" depends="deploy-static,build-main"
    description="Build and deploy Jasper component">
     <echo message="Deploy to ${jasper.deploy}/common/lib" /> 
     <!-- Jasper Compiler JAR File -->
@@ -223,14 +283,13 @@
     <copy file="${jasper.build}/shared/lib/jasper-runtime.jar"
           tofile="${jasper.deploy}/common/lib/jasper-runtime.jar" />
 
-    <!-- Copy Ant JAR -->
-    <copy todir="${jasper.deploy}/common/lib" file="${ant.jar}"/>
+    <!-- Copy JARs -->
+    <copy todir="${jasper.deploy}/common/lib" file="${jdt.jar}"/>
+    <copy todir="${jasper.deploy}/common/lib" file="${jsp-api.jar}"/>
+    <copy todir="${jasper.deploy}/common/lib" file="${commons-el.jar}"/>
+
   </target>
-  <target name="-copyLauncher" if="ant-launcher.present" >
-    <!-- From 1.6 onwards, launcher classes are in separate jar -->
-    <!-- If it is present, copy it -->
-    <copy todir="${jasper.deploy}/common/lib" file="${ant-launcher.jar}"/>
-  </target>
+
 
   <!-- ================ DIST: Create Distribution ========================= -->
   <target name="dist" depends="build-main"
@@ -241,9 +300,10 @@
     <copy todir="${jasper.dist}/bin">
       <fileset dir="${jasper.build}/bin" />
     </copy>
-    <fixcrlf srcdir="${jasper.dist}/bin" includes="*.sh" eol="lf"/>
-    <fixcrlf srcdir="${jasper.dist}/bin" includes="*.bat" eol="crlf"/>
-    <chmod perm="+x" file="${jasper.dist}/bin/jasper.sh"/>
+    <fixcrlf srcdir="${jasper.dist}/bin" includes="*.sh" eol="lf"
+        encoding="ISO-8859-1" fixlast="false" />
+    <fixcrlf srcdir="${jasper.dist}/bin" includes="*.bat" eol="crlf"
+        encoding="ISO-8859-1" fixlast="false" />
     <chmod perm="+x" file="${jasper.dist}/bin/jspc.sh"/>
 
     <!-- Jasper Compiler and Runtime JAR Files -->

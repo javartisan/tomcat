@@ -19,7 +19,9 @@ package org.apache.webapp.admin.service;
 
 
 import java.net.URLEncoder;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.Vector;
 import java.io.IOException;
 import javax.management.Attribute;
 import javax.management.MBeanServer;
@@ -28,19 +30,18 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.TreeControl;
 import org.apache.webapp.admin.TreeControlNode;
+import org.apache.webapp.admin.valve.ValveUtil;
 
 
 
@@ -49,7 +50,8 @@ import org.apache.webapp.admin.TreeControlNode;
  * <em>Edit Service</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Amy Roh
+ * @version $Id: SaveServiceAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveServiceAction extends Action {
@@ -59,35 +61,21 @@ public final class SaveServiceAction extends Action {
 
 
     /**
-     * Signature for the <code>createStandardEngine</code> operation.
+     * Signature for the <code>createStandardEngineService</code> operation.
      */
-    private String createStandardEngineTypes[] =
+    private String createStandardEngineServiceTypes[] =
     { "java.lang.String",     // parent
-      "java.lang.String",     // name
+      "java.lang.String",     // engineName
       "java.lang.String",     // defaultHost
+      "java.lang.String"      // serviceName
     };
-
-
-    /**
-     * Signature for the <code>createStandardService</code> operation.
-     */
-    private String createStandardServiceTypes[] =
-    { "java.lang.String",     // parent
-      "java.lang.String",     // name
-    };
-
-
+    
+    
     /**
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -115,10 +103,8 @@ public final class SaveServiceAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -133,7 +119,8 @@ public final class SaveServiceAction extends Action {
         String adminAction = sform.getAdminAction();
         String sObjectName = sform.getObjectName();
         String eObjectName = sform.getEngineObjectName();
-
+        ObjectName eoname = null;
+        ObjectName soname = null;
         // Perform a "Create Service" transaction (if requested)
         if ("Create".equals(adminAction)) {
 
@@ -141,56 +128,111 @@ public final class SaveServiceAction extends Action {
             String values[] = null;
 
             try {
-
+                // engine name is domain
+                String engineName = sform.getEngineName();
+                //String domain = (new ObjectName(serverObjectName)).getDomain();
                 // Ensure that the requested service name is unique
                 ObjectName oname =
-                    new ObjectName(TomcatTreeBuilder.SERVICE_TYPE +
-                                   ",name=" + sform.getServiceName());
+                    new ObjectName("*" + TomcatTreeBuilder.SERVICE_TYPE + 
+                                ",serviceName="+sform.getServiceName());
+                Iterator names = mBServer.queryNames(oname, null).iterator();
+                while (names.hasNext()) {       
+                    if (mBServer.isRegistered((ObjectName)names.next())) {
+                        ActionMessages errors = new ActionMessages();
+                        errors.add("serviceName",
+                               new ActionMessage("error.serviceName.exists"));
+                        saveErrors(request, errors);
+                        return (new ActionForward(mapping.getInput()));
+                    }
+                }
+                
+                oname = new ObjectName(engineName + TomcatTreeBuilder.ENGINE_TYPE);
                 if (mBServer.isRegistered(oname)) {
                     ActionMessages errors = new ActionMessages();
                     errors.add("serviceName",
-                               new ActionMessage("error.serviceName.exists"));
+                               new ActionMessage("error.engineName.exists"));
                     saveErrors(request, errors);
                     return (new ActionForward(mapping.getInput()));
                 }
-
+                
                 // Look up our MBeanFactory MBean
-                ObjectName fname =
-                    new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+                ObjectName fname = TomcatTreeBuilder.getMBeanFactory();
 
-                // Create a new StandardService object
-                values = new String[2];
+                // Create a new StandardService and StandardEngine object
+                values = new String[4];
                 values[0] = TomcatTreeBuilder.SERVER_TYPE;
-                values[1] = sform.getServiceName();
-                operation = "createStandardService";
-                sObjectName = (String)
+                values[1] = engineName;
+                values[2] = sform.getDefaultHost();
+                values[3] = sform.getServiceName();
+                operation = "createStandardEngineService";
+                Vector onames = (Vector)
                     mBServer.invoke(fname, operation,
-                                    values, createStandardServiceTypes);
+                                    values, createStandardEngineServiceTypes);
+                eoname = (ObjectName)onames.get(0);
+                soname = (ObjectName)onames.get(1);
+                sObjectName = soname.toString();
+                eObjectName = eoname.toString();
+                
+                String realmOName = ValveUtil.getObjectName(
+                                    eObjectName, TomcatTreeBuilder.REALM_TYPE);
+            
+                ObjectName roname = new ObjectName(realmOName);
+                if (mBServer.isRegistered(roname)) {
+                    mBServer.unregisterMBean(roname); 
+                }
+                
+                // Create a new UserDatabaseRealm object
+                values = new String[2];
+                values[0] = eObjectName;
+                values[1] = "UserDatabase";
+                operation = "createUserDatabaseRealm";
+                //realmOName = (String)
+                //    mBServer.invoke(fname, operation,
+                //                    values, createUserDatabaseRealmTypes);
+                                    
+                //Enumeration enum = onames.elements();
+                //while (enum.hasMoreElements()) {
+                //    getServlet().log("save service "+enum.nextElement());
+                //}
+                sObjectName = soname.toString();
+                eObjectName = eoname.toString();
+                
+                // Create a new StandardService object
+                //values = new String[3];
+                //values[0] = TomcatTreeBuilder.SERVER_TYPE;
+                //values[1] = sform.getServiceName();
+                //values[2] = engineName;
+                //operation = "createStandardService";
+                //sObjectName = (String)
+                //    mBServer.invoke(fname, operation,
+                //                    values, createStandardServiceTypes);
 
                 // Create a new StandardEngine object
-                values = new String[3];
-                values[0] = sObjectName;
-                values[1] = sform.getEngineName();
-                values[2] = sform.getDefaultHost();
-                if ("".equals(values[2])) {
-                    values[2] = null;
-                }
-                operation = "createStandardEngine";
-                eObjectName = (String)
-                    mBServer.invoke(fname, operation,
-                                    values, createStandardEngineTypes);
+                //values = new String[3];
+                //values[0] = sObjectName;
+                //values[1] = sform.getEngineName();
+                //values[2] = sform.getDefaultHost();
+                //if ("".equals(values[2])) {
+                //    values[2] = null;
+                //}
+                //operation = "createStandardEngine";
+                //eObjectName = (String)
+                //    mBServer.invoke(fname, operation,
+                //                    values, createStandardEngineTypes);
 
                 // Add the new Service to our tree control node
                 TreeControl control = (TreeControl)
                     session.getAttribute("treeControlTest");
                 if (control != null) {
-                    String parentName = TomcatTreeBuilder.SERVER_TYPE;
+                    String parentName = TomcatTreeBuilder.DEFAULT_DOMAIN + 
+                                            TomcatTreeBuilder.SERVER_TYPE;
                     TreeControlNode parentNode = control.findNode(parentName);
                     if (parentNode != null) {
-                        String nodeLabel =
-                            "Service (" + sform.getServiceName() + ")";
+                        String nodeLabel = resources.getMessage(locale, 
+                            "server.service.treeBuilder.subtreeNode") +" (" +
+                            soname.getKeyProperty("serviceName") + ")";
                         String encodedName =
-                            URLEncoder.encode(sObjectName);
+                            URLEncoder.encode(sObjectName,TomcatTreeBuilder.URL_ENCODING);
                         TreeControlNode childNode =
                             new TreeControlNode(sObjectName,
                                                 "Service.gif",
@@ -198,8 +240,28 @@ public final class SaveServiceAction extends Action {
                                                 "EditService.do?select=" +
                                                 encodedName,
                                                 "content",
-                                                true);
+                                                true, engineName);
                         parentNode.addChild(childNode);
+                        // update tree to display the newly added realm
+                        //Iterator realmNames =
+                        //    Lists.getRealms(mBServer, sObjectName).iterator();
+                        //while (realmNames.hasNext()) {
+                        //    String realmName = (String) realmNames.next();
+                        //    ObjectName objectName = new ObjectName(realmName);
+                        //    nodeLabel = "Realm for service (" + 
+                        //                        sform.getServiceName() + ")";
+                        //    TreeControlNode realmNode =
+                        //        new TreeControlNode(realmName,
+                        //                            "Realm.gif",
+                        //                            nodeLabel,
+                        //                            "EditRealm.do?select=" +
+                        //                            URLEncoder.encode(realmName) +
+                        //                            "&nodeLabel=" +
+                        //                            URLEncoder.encode(nodeLabel),
+                        //                            "content",
+                        //                            false, engineName);
+                        //    childNode.addChild(realmNode);               
+                        //}         
                         // FIXME - force a redisplay
                     } else {
                         getServlet().log
@@ -228,21 +290,9 @@ public final class SaveServiceAction extends Action {
         // Perform attribute updates as requested
         String attribute = null;
         try {
-
-            ObjectName soname = new ObjectName(sObjectName);
-            ObjectName eoname = new ObjectName(eObjectName);
-
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(sform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(soname,
-                                  new Attribute("debug", new Integer(debug)));
-            mBServer.setAttribute(eoname,
-                                  new Attribute("debug", new Integer(debug)));
+        
+            eoname = new ObjectName(eObjectName);
+            soname = new ObjectName(sObjectName);
 
             attribute = "defaultHost";
             String defaultHost = sform.getDefaultHost();

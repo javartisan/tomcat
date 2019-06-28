@@ -1,8 +1,24 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <!-- Standard Struts Entries -->
 <%@ page language="java" import="java.net.URLEncoder" contentType="text/html;charset=utf-8" %>
-<%@ taglib uri="/WEB-INF/struts-bean.tld" prefix="bean" %>
-<%@ taglib uri="/WEB-INF/struts-html.tld" prefix="html" %>
-<%@ taglib uri="/WEB-INF/struts-logic.tld" prefix="logic" %>
+<%@ taglib uri="http://struts.apache.org/tags-bean" prefix="bean" %>
+<%@ taglib uri="http://struts.apache.org/tags-html" prefix="html" %>
+<%@ taglib uri="http://struts.apache.org/tags-logic" prefix="logic" %>
 <%@ taglib uri="/WEB-INF/controls.tld" prefix="controls" %>
 
 <html:html locale="true">
@@ -43,34 +59,25 @@
             <controls:action selected="true"> ----<bean:message key="actions.available.actions"/>---- </controls:action>
             <controls:action disabled="true"> --------------------------------- </controls:action>
             <logic:notEqual name="contextForm" property="adminAction" value="Create">
-            <controls:action url='<%= "/AddLogger.do?parent=" +
-                                  URLEncoder.encode(thisObjectName) %>'>
-                <bean:message key="actions.loggers.create"/>
-            </controls:action>
-            <controls:action url='<%= "/DeleteLogger.do?parent=" +
-                                  URLEncoder.encode(thisObjectName) %>'>
-                <bean:message key="actions.loggers.deletes"/>
-            </controls:action>
             <%-- cannot delete or add the realm of the context of the admin app --%>
             <logic:notEqual name="contextForm" property="path"
                             value='<%= request.getContextPath() %>'>
-            <controls:action disabled="true"> ------------------------------------- </controls:action>
             <controls:action url='<%= "/AddRealm.do?parent=" +
-                                  URLEncoder.encode(thisObjectName) %>'>
+                                  URLEncoder.encode(thisObjectName,"UTF-8") %>'>
                 <bean:message key="actions.realms.create"/>
             </controls:action>
             <controls:action url='<%= "/DeleteRealm.do?parent=" +
-                                  URLEncoder.encode(thisObjectName) %>'>
+                                  URLEncoder.encode(thisObjectName,"UTF-8") %>'>
                 <bean:message key="actions.realms.deletes"/>
             </controls:action>
             </logic:notEqual>
             <controls:action disabled="true">  -------------------------------------  </controls:action>
             <controls:action url='<%= "/AddValve.do?parent=" +
-                                  URLEncoder.encode(thisObjectName) %>'>
+                                  URLEncoder.encode(thisObjectName,"UTF-8") %>'>
                <bean:message key="actions.valves.create"/>
             </controls:action>
             <controls:action url='<%= "/DeleteValve.do?parent=" +
-                                  URLEncoder.encode(thisObjectName) %>'>
+                                  URLEncoder.encode(thisObjectName,"UTF-8") %>'>
                <bean:message key="actions.valves.deletes"/>
             </controls:action>
             <%-- cannot delete the context of the admin app  from the tool --%>
@@ -78,7 +85,7 @@
                             value='<%= request.getContextPath() %>'>
             <controls:action disabled="true">  -------------------------------------  </controls:action>
             <controls:action url='<%= "/DeleteContext.do?select=" +
-                                        URLEncoder.encode(thisObjectName) %>'>
+                                        URLEncoder.encode(thisObjectName,"UTF-8") %>'>
                 <bean:message key="actions.contexts.delete"/>
             </controls:action>
             </logic:notEqual>
@@ -127,17 +134,6 @@
                      <bean:define id="booleanVals" name="contextForm" property="booleanVals"/>
                      <html:options collection="booleanVals" property="value"
                    labelProperty="label"/>
-                </html:select>
-            </controls:data>
-        </controls:row>
-
-        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="debuglevel">
-            <controls:label><bean:message key="server.debuglevel"/>:</controls:label>
-            <controls:data>
-               <html:select property="debugLvl" styleId="debuglevel">
-                     <bean:define id="debugLvlVals" name="contextForm" property="debugLvlVals"/>
-                     <html:options collection="debugLvlVals" property="value"
-                        labelProperty="label"/>
                 </html:select>
             </controls:data>
         </controls:row>
@@ -236,6 +232,17 @@
             </controls:data>
         </controls:row>
 
+      <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="antiResourceLocking">
+            <controls:label><bean:message key="context.antiResourceLocking"/>:</controls:label>
+            <controls:data>
+                <html:select property="antiResourceLocking" styleId="antiResourceLocking">
+                     <bean:define id="booleanVals" name="contextForm" property="booleanVals"/>
+                     <html:options collection="booleanVals" property="value"
+                   labelProperty="label"/>
+                </html:select>
+            </controls:data>
+        </controls:row>
+
 <%-- input only allowed on create transaction >
        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="workdir">
             <controls:label><bean:message key="context.workdir"/>:</controls:label>
@@ -274,23 +281,12 @@
             <controls:data><bean:message key="service.value"/></controls:data>
         </controls:row>
 
-        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="checkInterval">
+        <%--controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="checkInterval">
             <controls:label><bean:message key="context.checkInterval"/>:</controls:label>
             <controls:data>
                 <html:text property="ldrCheckInterval" size="5" styleId="checkInterval"/>
             </controls:data>
-        </controls:row>
-
-      <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="debugLvlVals">
-            <controls:label><bean:message key="server.debuglevel"/>:</controls:label>
-            <controls:data>
-               <html:select property="ldrDebugLvl" styleId="debugLvlVals">
-                     <bean:define id="debugLvlVals" name="contextForm" property="debugLvlVals"/>
-                     <html:options collection="debugLvlVals" property="value"
-                        labelProperty="label"/>
-                </html:select>
-            </controls:data>
-        </controls:row>
+        </controls:row--%>
 
       <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="reloadable">
             <controls:label><bean:message key="context.reloadable"/>:</controls:label>
@@ -325,23 +321,12 @@
             <controls:data><bean:message key="service.value"/></controls:data>
         </controls:row>
 
-        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="checkInterval">
+        <%--controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="checkInterval">
             <controls:label><bean:message key="context.checkInterval"/>:</controls:label>
             <controls:data>
                 <html:text property="mgrCheckInterval" size="5" styleId="checkInterval"/>
             </controls:data>
-        </controls:row>
-
-        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="debuglevel">
-            <controls:label><bean:message key="server.debuglevel"/>:</controls:label>
-            <controls:data>
-               <html:select property="mgrDebugLvl" styleId="debuglevel">
-                     <bean:define id="debugLvlVals" name="contextForm" property="debugLvlVals"/>
-                     <html:options collection="debugLvlVals" property="value"
-                        labelProperty="label"/>
-                </html:select>
-            </controls:data>
-        </controls:row>
+        </controls:row--%>
 
        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="sessionId">
             <controls:label><bean:message key="context.sessionId"/>:</controls:label>

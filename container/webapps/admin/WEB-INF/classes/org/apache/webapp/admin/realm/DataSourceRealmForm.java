@@ -17,216 +17,216 @@
 
 package org.apache.webapp.admin.realm;
 
-import java.util.List;
-
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
+import java.util.List;
 
 /**
  * Form bean for the datasource realm page.
- * 
+ *
  * @author Amy Roh
- * @version $Revision: 1.1 $ $Date: 2004/04/17 02:53:17 $
+ * @version $Id: DataSourceRealmForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class DataSourceRealmForm extends RealmForm {
-
+    
     // ----------------------------------------------------- Instance Variables
-
+    
     /**
      * The text for the JNDI named JDBC DataSource for your database.
      */
     private String dataSourceName = null;
-
+      
     /**
      * The text for the digest.
      */
     private String digest = null;
-
-    /**
+    
+    /** 
      * The text for if the DataSource is local to the webapp.
      */
     private String localDataSource = "false";
-
+    
     /**
      * The text for the roleNameCol.
      */
     private String roleNameCol = null;
-
+    
     /**
      * The text for the userCredCol.
      */
     private String userCredCol = null;
-
+    
     /**
      * The text for the userNameCol.
      */
     private String userNameCol = null;
-
+        
     /**
      * The text for the userRoleTable.
      */
     private String userRoleTable = null;
-
+    
     /**
      * The text for the user table.
      */
     private String userTable = null;
-
-    /**
+        
+    /*
      * Represent boolean (true, false) values for unpackWARs etc.
      */
     private List booleanVals = null;
-   
+    
     // ------------------------------------------------------------- Properties
-
+    
+    
     /**
      * Return the dataSourceName.
      */
     public String getDataSourceName() {
-
+        
         return this.dataSourceName;
-
+        
     }
-
+    
     /**
      * Set the dataSourceName.
      */
     public void setDataSourceName(String dataSourceName) {
-
+        
         this.dataSourceName = dataSourceName;
-
+        
     }
-
+    
     /**
      * Return the digest.
      */
     public String getDigest() {
-
+        
         return this.digest;
-
+        
     }
-
+    
     /**
      * Set the digest.
      */
     public void setDigest(String digest) {
-
+        
         this.digest = digest;
-
+        
     }
-
+    
     /**
      * Return the localDataSource.
      */
     public String getLocalDataSource() {
-
+        
         return this.localDataSource;
-
+        
     }
-
+    
     /**
      * Set the localDataSource.
      */
     public void setLocalDataSource(String localDataSource) {
-
+        
         this.localDataSource = localDataSource;
-
+        
     }
-
+    
     /**
      * Return the roleNameCol.
      */
     public String getRoleNameCol() {
-
+        
         return this.roleNameCol;
-
+        
     }
-
+    
     /**
      * Set the roleNameCol.
      */
     public void setRoleNameCol(String roleNameCol) {
-
+        
         this.roleNameCol = roleNameCol;
-
+        
     }
-
+    
     /**
      * Return the userCredCol.
      */
     public String getUserCredCol() {
-
+        
         return this.userCredCol;
-
+        
     }
-
+    
     /**
      * Set the userCredCol.
      */
     public void setUserCredCol(String userCredCol) {
-
+        
         this.userCredCol = userCredCol;
-
+        
     }
-
+    
     /**
      * Return the userNameCol.
      */
     public String getUserNameCol() {
-
+        
         return this.userNameCol;
-
+        
     }
-
+    
     /**
      * Set the userNameCol.
      */
     public void setUserNameCol(String userNameCol) {
-
+        
         this.userNameCol = userNameCol;
-
+        
     }
-
+    
     /**
      * Return the user role table.
      */
     public String getUserRoleTable() {
-
+        
         return this.userRoleTable;
-
+        
     }
-
+    
     /**
      * Set the user role table.
      */
     public void setUserRoleTable(String userRoleTable) {
-
+        
         this.userRoleTable = userRoleTable;
-
+        
     }
-
+    
     /**
      * Return the user table.
      */
     public String getUserTable() {
-
+        
         return this.userTable;
-
+        
     }
-
+    
     /**
      * Set the user Table.
      */
     public void setUserTable(String userTable) {
-
+        
         this.userTable = userTable;
-
+        
     }
-
+    
     /**
      * Return the booleanVals.
      */
@@ -246,29 +246,28 @@ public final class DataSourceRealmForm extends RealmForm {
     }
     
     // --------------------------------------------------------- Public Methods
-
+    
     /**
      * Reset all properties to their default values.
-     * 
-     * @param mapping
-     *            The mapping used to select this instance
-     * @param request
-     *            The servlet request we are processing
+     *
+     * @param mapping The mapping used to select this instance
+     * @param request The servlet request we are processing
      */
     public void reset(ActionMapping mapping, HttpServletRequest request) {
-
-        super.reset(mapping, request);
+        
+        super.reset(mapping, request);   
         this.dataSourceName = null;
         this.digest = null;
         this.localDataSource = "false";
+        
         this.roleNameCol = null;
         this.userCredCol = null;
         this.userNameCol = null;
         this.userTable = null;
         this.userRoleTable = null;
-
+        
     }
-
+    
     /**
      * Render this object as a String.
      */
@@ -276,8 +275,6 @@ public final class DataSourceRealmForm extends RealmForm {
 
         StringBuffer sb = new StringBuffer("DataSourceRealmForm[adminAction=");
         sb.append(getAdminAction());
-        sb.append(",debugLvl=");
-        sb.append(getDebugLvl());
         sb.append(",dataSourceName=");
         sb.append(dataSourceName);
         sb.append(",digest=");
@@ -302,56 +299,54 @@ public final class DataSourceRealmForm extends RealmForm {
         return (sb.toString());
 
     }
-
+    
     /**
-     * Validate the properties that have been set from this HTTP request, and
-     * return an <code>ActionErrors</code> object that encapsulates any
-     * validation errors that have been found. If no errors are found, return
+     * Validate the properties that have been set from this HTTP request,
+     * and return an <code>ActionErrors</code> object that encapsulates any
+     * validation errors that have been found.  If no errors are found, return
      * <code>null</code> or an <code>ActionErrors</code> object with no
      * recorded error messages.
-     * 
-     * @param mapping
-     *            The mapping used to select this instance
-     * @param request
-     *            The servlet request we are processing
+     *
+     * @param mapping The mapping used to select this instance
+     * @param request The servlet request we are processing
      */
-
+    
     public ActionErrors validate(ActionMapping mapping,
-            HttpServletRequest request) {
-
+    HttpServletRequest request) {
+        
         ActionErrors errors = new ActionErrors();
-
+        
+        // front end validation when save is clicked.        
         if ((dataSourceName == null) || (dataSourceName.length() < 1)) {
-            errors.add("dataSourceName", new ActionMessage(
-                    "error.dataSourceName.required"));
+            errors.add("dataSourceName",
+            new ActionMessage("error.dataSourceName.required"));
         }
-
+     
         if ((roleNameCol == null) || (roleNameCol.length() < 1)) {
-            errors.add("roleNameCol", new ActionMessage(
-                    "error.roleNameCol.required"));
+            errors.add("roleNameCol",
+            new ActionMessage("error.roleNameCol.required"));
         }
 
         if ((userCredCol == null) || (userCredCol.length() < 1)) {
-            errors.add("userCredCol", new ActionMessage(
-                    "error.userCredCol.required"));
+            errors.add("userCredCol",
+            new ActionMessage("error.userCredCol.required"));
         }
-
+    
         if ((userNameCol == null) || (userNameCol.length() < 1)) {
-            errors.add("userNameCol", new ActionMessage(
-                    "error.userNameCol.required"));
+            errors.add("userNameCol",
+            new ActionMessage("error.userNameCol.required"));
         }
-
+        
         if ((userRoleTable == null) || (userRoleTable.length() < 1)) {
-            errors.add("userRoleTable", new ActionMessage(
-                    "error.userRoleTable.required"));
+            errors.add("userRoleTable",
+            new ActionMessage("error.userRoleTable.required"));
         }
-
+    
         if ((userTable == null) || (userTable.length() < 1)) {
-            errors
-                    .add("userTable", new ActionMessage(
-                            "error.userTable.required"));
+            errors.add("userTable",
+            new ActionMessage("error.userTable.required"));
         }
-
+                 
         return errors;
     }
 }

@@ -18,16 +18,18 @@
 
 package org.apache.catalina.deploy;
 
+import java.io.Serializable;
+
 
 /**
  * Representation of an application environment entry, as represented in
  * an <code>&lt;env-entry&gt;</code> element in the deployment descriptor.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ContextEnvironment.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class ContextEnvironment {
+public class ContextEnvironment implements Serializable {
 
 
     // ------------------------------------------------------------- Properties

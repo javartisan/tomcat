@@ -27,7 +27,7 @@ import org.apache.struts.action.ActionMapping;
  * Base class for form beans for the resource administration.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: BaseForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 

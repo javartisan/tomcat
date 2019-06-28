@@ -18,14 +18,14 @@
 
 package org.apache.naming;
 
-import javax.naming.Reference;
 import javax.naming.Context;
+import javax.naming.Reference;
 
 /**
  * Represents a reference address to a resource environment.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceEnvRef.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class ResourceEnvRef
@@ -59,6 +59,8 @@ public class ResourceEnvRef
      * Resource env reference.
      * 
      * @param resourceType Type
+     * @param factory The factory class
+     * @param factoryLocation The factory location
      */
     public ResourceEnvRef(String resourceType, String factory,
                           String factoryLocation) {

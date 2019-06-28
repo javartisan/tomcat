@@ -20,7 +20,7 @@ package org.apache.tomcat.jni;
 /** Open SSL BIO Callback Interface
  *
  * @author Mladen Turk
- * @version $Revision: 466585 $, $Date: 2006-10-21 23:16:34 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: BIOCallback.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public interface BIOCallback {

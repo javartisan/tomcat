@@ -1,20 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
-   Licensed to the Apache Software Foundation (ASF) under one or more
-   contributor license agreements.  See the NOTICE file distributed with
-   this work for additional information regarding copyright ownership.
-   The ASF licenses this file to You under the Apache License, Version 2.0
-   (the "License"); you may not use this file except in compliance with
-   the License.  You may obtain a copy of the License at
-  
-       http://www.apache.org/licenses/LICENSE-2.0
-  
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
--->
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
 
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <project name="Tester" default="all">
 
   <!-- ========== Global Properties ======================================= -->
@@ -25,15 +25,19 @@
 <!--  <property name="protocol"       value="HTTP/1.0"/> -->
   <property name="protocol"       value="HTTP/1.0"/> <!-- Use HttpURLConnection -->
   <property name="context.path"   value="/tester"/>
-  <property name="examples.path"  value="/examples"/>
+  <property name="jsp-examples.path"  value="/jsp-examples"/>
+  <property name="servlets-examples.path"  value="/servlets-examples"/>
   <property name="golden.path"    value="${context.path}/golden"/>
   <property name="manager.path"   value="/manager"/>
   <property name="reload.path"    value="/tester"/>
-  <taskdef  name="tester"     classname="org.apache.tester.TestClient"/>
+  <taskdef  name="tester"     classname="org.apache.tester.TestClient">
+    <classpath>
+      <pathelement location="${catalina.home}/webapps/tester/WEB-INF/lib/tester.jar"/>
+    </classpath>
+  </taskdef>
 
 
   <target name="all" depends="ROOT,Authentication,CaseSensitive,Decoding,ErrorPage,FilterRequest,FilterResponse,Jndi,Jsp,Lifecycle,RequestDispatcher,Resources,Security,ServletContext,ServletRequest,ServletResponse,HttpSession,XercesTest"/>
-
 
   <target name="ROOT">
 
@@ -46,8 +50,8 @@
 
     <!-- Should be able to use relative path to document root -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/.." debug="${debug}"
-          status="302"/>
+         request="${jsp-examples.path}/.." debug="${debug}"
+          status="200"/>
 
     <!-- Should be able to successfully retrieve a golden file -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
@@ -114,6 +118,22 @@
        inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
           status="403"/>
 
+    <!-- ========== Combining Constraint Access ============= -->
+    <tester host="${host}" port="${port}" protocol="HTTP/1.0"
+          debug="${debug}"
+         request="${context.path}/disallowed/private/Authentication05"
+       inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
+          status="403"/>
+    <tester host="${host}" port="${port}" protocol="HTTP/1.0"
+          debug="${debug}"
+         request="${context.path}/allowed/public/Authentication06"
+      outContent="Authentication06 PASSED"/>
+    <tester host="${host}" port="${port}" protocol="HTTP/1.0"
+          debug="${debug}"
+         request="${context.path}/allowed/private/Authentication05"
+       inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
+          status="403"/>
+
   </target>
 
 
@@ -127,48 +147,38 @@
           status="404"/>
 
     <!-- Should be able to execute the Date example -->
-    <touch  file="${catalina.home}/webapps/examples/jsp/dates/date.jsp"/>
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/jsp/dates/date.jsp" debug="${debug}"
+         request="${jsp-examples.path}/dates/date.jsp" debug="${debug}"
           status="200"/>
 
     <!-- Should not be able to view the source of the Date example -->
-    <touch  file="${catalina.home}/webapps/examples/jsp/dates/date.jsp"/>
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/jsp/dates/date.Jsp" debug="${debug}"
+         request="${jsp-examples.path}/dates/date.Jsp" debug="${debug}"
           status="404"/>
 
     <!-- Should not be able to view the source of the Date example -->
-    <touch  file="${catalina.home}/webapps/examples/jsp/dates/date.jsp"/>
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/jsp/dates/Date.jsp" debug="${debug}"
+         request="${jsp-examples.path}/dates/Date.jsp" debug="${debug}"
           status="404"/>
 
     <!-- Should not be able to view the source of the Date example -->
-    <touch  file="${catalina.home}/webapps/examples/jsp/dates/date.jsp"/>
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/jsp/Dates/date.jsp" debug="${debug}"
-          status="404"/>
-
-    <!-- Should not be able to view the source of the Date example -->
-    <touch  file="${catalina.home}/webapps/examples/jsp/dates/date.jsp"/>
-    <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/Jsp/dates/date.jsp" debug="${debug}"
+         request="${jsp-examples.path}/Dates/date.jsp" debug="${debug}"
           status="404"/>
 
     <!-- Should be able to execute the HelloWorld servlet example -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/servlet/HelloWorldExample" debug="${debug}"
+         request="${servlets-examples.path}/servlet/HelloWorldExample" debug="${debug}"
           status="200"/>
 
     <!-- Should not be able to execute HelloWorld with different cases -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/servlet/helloWorldExample" debug="${debug}"
+         request="${servlets-examples.path}/servlet/helloWorldExample" debug="${debug}"
           status="404"/>
 
     <!-- Should not be able to execute HelloWorld with different cases -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/Servlet/HelloWorldExample" debug="${debug}"
+         request="${servlets-examples.path}/Servlet/HelloWorldExample" debug="${debug}"
           status="404"/>
 
   </target>
@@ -220,7 +230,7 @@
 
     <!-- Verify we can access the JSP page normally -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${examples.path}/jsp/snp/snoop.jsp"
+         request="${jsp-examples.path}/snp/snoop.jsp"
           status="200"/>
 
   </target>
@@ -279,13 +289,13 @@
          request="${context.path}/ErrorPage05?type=Number"
            debug="${debug}"
           status="500"
-      outContent="ErrorPage06 PASSED - HTML"/>
+          golden="${golden.path}/ErrorPage06html.txt"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/WrappedErrorPage05?type=Number"
            debug="${debug}"
           status="500"
-      outContent="ErrorPage06 PASSED - HTML"/>
+          golden="${golden.path}/ErrorPage06html.txt"/>
 
     <!-- ========== Load On Startup Exception Handling ==================== -->
 
@@ -293,12 +303,12 @@
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
          request="${context.path}/ErrorPage07"
            debug="${debug}"
-          status="503"/>
+          status="404"/>
 
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
          request="${context.path}/WrappedErrorPage07"
            debug="${debug}"
-          status="503"/>
+          status="404"/>
 
     <!-- ========== Exception Mapping (JSP Source) ======================== -->
 
@@ -330,26 +340,26 @@
          request="${context.path}/ErrorPage08?type=Number"
            debug="${debug}"
           status="500"
-      outContent="ErrorPage06 PASSED - HTML"/>
+          golden="${golden.path}/ErrorPage06html.txt"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/WrappedErrorPage08?type=Number"
            debug="${debug}"
           status="500"
-      outContent="ErrorPage06 PASSED - HTML"/>
+          golden="${golden.path}/ErrorPage06html.txt"/>
 
     <!-- ========== Exception Mapping (JSP Error Page) ==================== -->
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/ErrorPage09"
            debug="${debug}"
-          status="200"
+          status="500"
       outContent="ErrorPage10 PASSED"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/WrappedErrorPage09"
            debug="${debug}"
-          status="200"
+          status="500"
       outContent="ErrorPage10 PASSED"/>
 
   </target>
@@ -535,7 +545,7 @@
            debug="${debug}"
        inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
          request="${manager.path}/reload?path=${reload.path}"
-      outContent="OK - Reloaded application at context path ${reload.path}"/>
+      outContent="OK - "/>
 
     <!-- Repeat the tests to ensure the naming context is reinitialized -->
     <tester host="${host}" port="${port}" protocol="${protocol}"
@@ -618,6 +628,10 @@
          request="${context.path}/JspDoc01.jsp" debug="${debug}"
           golden="${golden.path}/JspDoc01.txt"/>
 
+    <tester host="${host}" port="${port}" protocol="HTTP/1.0"
+         request="${context.path}/JspDoc02.jsp" debug="${debug}"
+          golden="${golden.path}/JspDoc02.txt"/>
+
     <echo message="----- jsp:forward -----"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
@@ -675,7 +689,7 @@
 
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
          request="${context.path}/Lifecycle03?step=1" debug="${debug}"
-          status="503"/>
+          status="404"/>
 
 <!-- NOTE - cannot do this as originally intended, because the
      servlet was marked as permanently unavailable, so just
@@ -688,7 +702,7 @@
 
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
          request="${context.path}/Lifecycle03?step=2" debug="${debug}"
-          status="503"/>
+          status="404"/>
 
   </target>
 
@@ -1399,18 +1413,18 @@
 
     <!-- Should not be able to use relative path above document root -->
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
-         request="${examples.path}/../.." debug="${debug}"
+         request="${jsp-examples.path}/../.." debug="${debug}"
           status="400"/>
 
     <!-- Should not be able to use specially crafted URLs to get around 
          security constraints -->
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
-         request="${examples.path}/jsp/security//protected/index.jsp" 
-         debug="${debug}" status="302"/>
+         request="/tester//./protected//Authentication01" 
+         debug="${debug}" status="401"/>
 
     <!-- DefaultServlet should not decode the path again -->
     <tester host="${host}" port="${port}" protocol="HTTP/1.0"
-         request="${examples.path}/jsp/snp/snoop%252ejsp"
+         request="${jsp-examples.path}/snp/snoop%252ejsp"
           status="404"/>
 
   </target>
@@ -1435,7 +1449,7 @@
            debug="${debug}"
        inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
          request="${manager.path}/reload?path=${reload.path}"
-      outContent="OK - Reloaded application at context path ${reload.path}"/>
+      outContent="OK - "/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
            debug="${debug}"
@@ -1457,7 +1471,7 @@
            debug="${debug}"
        inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
          request="${manager.path}/reload?path=${reload.path}"
-      outContent="OK - Reloaded application at context path ${reload.path}"/>
+      outContent="OK - "/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
            debug="${debug}"
@@ -1523,10 +1537,17 @@
          request="${context.path}/WrappedAggregate02?a=1"
       outContent="Aggregate02 PASSED"/>
 
-    <!-- ========== Other ServletRequest Tests ============================ -->
+    <tester host="${host}" port="${port}" protocol="${protocol}"
+           debug="${debug}"
+         request="${context.path}/Request01"
+      outContent="Request01 PASSED"/>
 
-    <!-- Servlet compliance tests, until equivalent tests are included
-         in jakarta-watchdog-4.0.  -->
+    <tester host="${host}" port="${port}" protocol="${protocol}"
+           debug="${debug}"
+         request="${context.path}/WrappedRequest01"
+      outContent="Request01 PASSED"/>
+
+    <!-- ========== Other ServletRequest Tests ============================ -->
 
     <!-- HttpURLConnection does not handle multiple headers for the same
          name correctly, so use native socket connections, selected by
@@ -1672,7 +1693,7 @@
            debug="${debug}"
        inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
          request="${manager.path}/reload?path=${reload.path}"
-      outContent="OK - Reloaded application at context path ${reload.path}"/>
+      outContent="OK - "/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/Session03" debug="${debug}"
@@ -1698,7 +1719,7 @@
            debug="${debug}"
        inHeaders="Authorization:Basic dG9tY2F0OnRvbWNhdA=="
          request="${manager.path}/reload?path=${reload.path}"
-      outContent="OK - Reloaded application at context path ${reload.path}"/>
+      outContent="OK - "/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/WrappedSession03" debug="${debug}"
@@ -1900,10 +1921,6 @@
           golden="${golden.path}/SSIConditional08.txt"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
-         request="${context.path}/SSIConditional09.shtml" debug="${debug}"
-          golden="${golden.path}/SSIConditional09.txt"/>
-
-    <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/SSIVarSub01.shtml" debug="${debug}"
           golden="${golden.path}/SSIVarSub01.txt"/>
 
@@ -1917,17 +1934,17 @@
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/SSIVarSub04.shtml" debug="${debug}"
-          golden="${golden.path}/SSIVarSub04.txt"/>
+          golden="${golden.path}/SSIVarSub03.txt"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/SSIVarSub05.shtml" debug="${debug}"
-          golden="${golden.path}/SSIVarSub05.txt"/>
+          golden="${golden.path}/SSIVarSub04.txt"/>
 
     <tester host="${host}" port="${port}" protocol="${protocol}"
          request="${context.path}/SSIVarSub06.shtml" debug="${debug}"
-          golden="${golden.path}/SSIVarSub06.txt"/>
+          golden="${golden.path}/SSIVarSub05.txt"/>
 
-  </target>
+</target>
 -->
 
 <!--

@@ -30,7 +30,7 @@ import org.apache.struts.action.ActionServlet;
  * ApplicationLocales class.
  *
  * @author Patrick Luby
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationServlet.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class ApplicationServlet extends ActionServlet {
@@ -98,13 +98,8 @@ public class ApplicationServlet extends ActionServlet {
      * @exception ServletException if an initialization error occurs.
      */
     public void init() throws javax.servlet.ServletException {
-
-        // Perform normal superclass initialization
         super.init();
-
-        // Perform initialization specific to this application
         initApplicationLocales();
-
     }
 
 
@@ -133,8 +128,8 @@ public class ApplicationServlet extends ActionServlet {
      */
     protected void initRegistry() throws ServletException {
 
-        registry = (Registry) getServletContext().getAttribute
-            ("org.apache.catalina.Registry");
+        registry = Registry.getRegistry(null, null);
+
         if (registry == null)
             throw new UnavailableException("Registry is not available");
 
@@ -151,8 +146,9 @@ public class ApplicationServlet extends ActionServlet {
      */
     protected void initServer() throws ServletException {
 
-        server = (MBeanServer) getServletContext().getAttribute
-            ("org.apache.catalina.MBeanServer");
+        server = Registry.getRegistry(null, null).getMBeanServer();
+        //(MBeanServer) getServletContext().getAttribute
+        //    ("org.apache.catalina.MBeanServer");
         if (server == null)
             throw new UnavailableException("MBeanServer is not available");
 

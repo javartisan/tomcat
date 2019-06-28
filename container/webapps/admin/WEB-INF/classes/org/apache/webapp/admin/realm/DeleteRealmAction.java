@@ -26,9 +26,6 @@ import java.util.ArrayList;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -40,13 +37,13 @@ import org.apache.struts.util.MessageResources;
 
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.TomcatTreeBuilder;
-import org.apache.webapp.admin.logger.DeleteLoggerAction;
+import org.apache.webapp.admin.valve.ValveUtil;
 
 /**
  * The <code>Action</code> that sets up <em>Delete Realms</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteRealmAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteRealmAction extends Action {
@@ -56,12 +53,6 @@ public class DeleteRealmAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-    
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
     
     // --------------------------------------------------------- Public Methods
@@ -89,11 +80,8 @@ public class DeleteRealmAction extends Action {
         
         
         // Acquire the resources that we need
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -122,7 +110,7 @@ public class DeleteRealmAction extends Action {
         
         if (parent != null) {
             try {
-                pattern = DeleteLoggerAction.getObjectName(
+                pattern = ValveUtil.getObjectName(
                              parent,TomcatTreeBuilder.REALM_TYPE);
             } catch (Exception e) {
                 getServlet().log

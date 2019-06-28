@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,35 +13,24 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 
 package org.apache.jasper;
 
-import java.util.ResourceBundle;
-import java.util.MissingResourceException;
-import java.text.MessageFormat;
-
-import org.apache.jasper.logging.Logger;
 
 /**
  * Some constants and other global data that are used by the compiler and the runtime.
  *
  * @author Anil K. Vijendran
  * @author Harish Prabandham
+ * @author Shawn Bayern
+ * @author Mark Roth
  */
 public class Constants {
-    
-    public static Logger jasperLog = null;
-
-    static {
-        jasperLog = Logger.getDefaultLogger();
-        jasperLog.setName("JASPER_LOG");
-    }
-
     /**
      * The base class of the generated servlets. 
      */
-    public static final String JSP_SERVLET_BASE = "HttpJspBase";
+    public static final String JSP_SERVLET_BASE = "org.apache.jasper.runtime.HttpJspBase";
 
     /**
      * _jspService is the name of the method that is called by 
@@ -59,19 +49,17 @@ public class Constants {
      * generated code. 
      */
     public static final String[] STANDARD_IMPORTS = { 
-        "javax.servlet.*", 
-        "javax.servlet.http.*", 
-        "javax.servlet.jsp.*", 
-        "org.apache.jasper.runtime.*", 
+	"javax.servlet.*", 
+	"javax.servlet.http.*", 
+	"javax.servlet.jsp.*"
     };
 
     /**
      * FIXME
      * ServletContext attribute for classpath. This is tomcat specific. 
-     * Other servlet engines can choose to have this attribute if they 
+     * Other servlet engines may choose to support this attribute if they 
      * want to have this JSP engine running on them. 
      */
-    //public static final String SERVLET_CLASSPATH = "org.apache.tomcat.jsp_classpath";
     public static final String SERVLET_CLASSPATH = "org.apache.catalina.jsp_classpath";
 
     /**
@@ -105,6 +93,11 @@ public class Constants {
     public static final int DEFAULT_TAG_BUFFER_SIZE = 512;
 
     /**
+     * Default tag handler pool size.
+     */
+    public static final int MAX_POOL_SIZE = 5;
+
+    /**
      * The query parameter that causes the JSP engine to just
      * pregenerated the servlet but not invoke it. 
      */
@@ -116,6 +109,11 @@ public class Constants {
     public static final String JSP_PACKAGE_NAME = "org.apache.jsp";
 
     /**
+     * The default package name for tag handlers generated from tag files
+     */
+    public static final String TAG_FILE_PACKAGE_NAME = "org.apache.jsp.tag";
+
+    /**
      * Servlet context and request attributes that the JSP engine
      * uses. 
      */
@@ -124,31 +122,34 @@ public class Constants {
     public static final String TMP_DIR = "javax.servlet.context.tempdir";
     public static final String FORWARD_SEEN = "javax.servlet.forward.seen";
 
+    // Must be kept in sync with org/apache/catalina/Globals.java
+    public static final String ALT_DD_ATTR = "org.apache.catalina.deploy.alt_dd";
+
     /**
      * Public Id and the Resource path (of the cached copy) 
      * of the DTDs for tag library descriptors. 
      */
     public static final String TAGLIB_DTD_PUBLIC_ID_11 = 
-        "-//Sun Microsystems, Inc.//DTD JSP Tag Library 1.1//EN";
+	"-//Sun Microsystems, Inc.//DTD JSP Tag Library 1.1//EN";
     public static final String TAGLIB_DTD_RESOURCE_PATH_11 = 
-        "/javax/servlet/jsp/resources/web-jsptaglibrary_1_1.dtd";
+	"/javax/servlet/jsp/resources/web-jsptaglibrary_1_1.dtd";
     public static final String TAGLIB_DTD_PUBLIC_ID_12 = 
-        "-//Sun Microsystems, Inc.//DTD JSP Tag Library 1.2//EN";
+	"-//Sun Microsystems, Inc.//DTD JSP Tag Library 1.2//EN";
     public static final String TAGLIB_DTD_RESOURCE_PATH_12 = 
-        "/javax/servlet/jsp/resources/web-jsptaglibrary_1_2.dtd";
+	"/javax/servlet/jsp/resources/web-jsptaglibrary_1_2.dtd";
 
     /**
      * Public Id and the Resource path (of the cached copy) 
      * of the DTDs for web application deployment descriptors
      */
     public static final String WEBAPP_DTD_PUBLIC_ID_22 = 
-        "-//Sun Microsystems, Inc.//DTD Web Application 2.2//EN";
+	"-//Sun Microsystems, Inc.//DTD Web Application 2.2//EN";
     public static final String WEBAPP_DTD_RESOURCE_PATH_22 = 
-        "/javax/servlet/resources/web-app_2_2.dtd";
+	"/javax/servlet/resources/web-app_2_2.dtd";
     public static final String WEBAPP_DTD_PUBLIC_ID_23 = 
-        "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN";
+	"-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN";
     public static final String WEBAPP_DTD_RESOURCE_PATH_23 = 
-        "/javax/servlet/resources/web-app_2_3.dtd";
+	"/javax/servlet/resources/web-app_2_3.dtd";
 
     /**
      * List of the Public IDs that we cache, and their
@@ -157,16 +158,16 @@ public class Constants {
      * cached copy of a DTD.
      */
     public static final String[] CACHED_DTD_PUBLIC_IDS = {
-        TAGLIB_DTD_PUBLIC_ID_11,
-        TAGLIB_DTD_PUBLIC_ID_12,
-        WEBAPP_DTD_PUBLIC_ID_22,
-        WEBAPP_DTD_PUBLIC_ID_23,
+	TAGLIB_DTD_PUBLIC_ID_11,
+	TAGLIB_DTD_PUBLIC_ID_12,
+	WEBAPP_DTD_PUBLIC_ID_22,
+	WEBAPP_DTD_PUBLIC_ID_23,
     };
     public static final String[] CACHED_DTD_RESOURCE_PATHS = {
-        TAGLIB_DTD_RESOURCE_PATH_11,
-        TAGLIB_DTD_RESOURCE_PATH_12,
-        WEBAPP_DTD_RESOURCE_PATH_22,
-        WEBAPP_DTD_RESOURCE_PATH_23,
+	TAGLIB_DTD_RESOURCE_PATH_11,
+	TAGLIB_DTD_RESOURCE_PATH_12,
+	WEBAPP_DTD_RESOURCE_PATH_22,
+	WEBAPP_DTD_RESOURCE_PATH_23,
     };
     
     /**
@@ -179,82 +180,46 @@ public class Constants {
         "http://java.sun.com/products/plugin/1.2.2/jinstall-1_2_2-win.cab#Version=1,2,2,0";
 
     /**
-     * This is where all our error messages and such are stored. 
+     * Prefix to use for generated temporary variable names
      */
-    private static ResourceBundle resources;
+    public static final String TEMP_VARIABLE_NAME_PREFIX =
+        "_jspx_temp";
+
+    /**
+     * Previous replacement char for "\$".
+     * @deprecated
+     */
+    public static final char ESC='\u001b';
     
-    private static void initResources() {
-        try {
-            resources =
-                ResourceBundle.getBundle("org.apache.jasper.resources.messages");
-        } catch (MissingResourceException e) {
-            throw new Error("Fatal Error: missing resource bundle: "+e.getClassName());
-        }
-    }
-
     /**
-     * Get hold of a "message" or any string from our resources
-     * database. 
+     * Previous replacement char for "\$".
+     * @deprecated
      */
-    public static final String getString(String key) {
-        return getString(key, null);
-    }
-
+    public static final String ESCStr="'\\u001b'";
+    
     /**
-     * Format the string that is looked up using "key" using "args". 
+     * Replacement char for "\$". This is the first unicode character in the
+     * private use area.
+     * XXX This is a hack to avoid changing EL interpreter to recognize "\$"
+     * @deprecated
      */
-    public static final String getString(String key, Object[] args) {
-        if (resources == null) 
-            initResources();
-        
-        try {
-            String msg = resources.getString(key);
-            if (args == null)
-                return msg;
-            MessageFormat form = new MessageFormat(msg);
-            return form.format(args);
-        } catch (MissingResourceException ignore) {
-            throw new Error("Fatal Error: missing resource: "+ignore.getClassName());
-        }
-    }
-
-    /** 
-     * Print a message into standard error with a certain verbosity
-     * level. 
-     * 
-     * @param key is used to look up the text for the message (using
-     *            getString()). 
-     * @param verbosityLevel is used to determine if this output is
-     *                       appropriate for the current verbosity
-     *                       level. 
-     */
-    public static final void message(String key, int verbosityLevel) {
-        message(key, null, verbosityLevel);
-    }
-
-
+    public static final char HACK_CHAR = '\ue000';
+    
     /**
-     * Print a message into standard error with a certain verbosity
-     * level after formatting it using "args". 
-     *
-     * @param key is used to look up the message. 
-     * @param args is used to format the message. 
-     * @param verbosityLevel is used to determine if this output is
-     *                       appropriate for the current verbosity
-     *                       level. 
+     * Replacement string for "\$". This is the first unicode character in the
+     * private use area.
+     * XXX This is a hack to avoid changing EL interpreter to recognize "\$"
+     * @deprecated
      */
-    public static final void message(String key, Object[] args, int verbosityLevel) {
-        if (jasperLog == null) {
-            jasperLog = Logger.getLogger("JASPER_LOG");
-            if (jasperLog == null) {
-                jasperLog = Logger.getDefaultLogger();
-            }
-        }
-
-        if (jasperLog != null) {
-            jasperLog.log(getString(key, args), verbosityLevel);
-        }
-    }
+    public static final String HACK_STR = "'\\ue000'";
+    
+    /**
+     * The name of the path parameter used to pass the session identifier
+     * back and forth with the client.
+     */
+    public static final String SESSION_PARAMETER_NAME =
+        System.getProperty("org.apache.catalina.SESSION_PARAMETER_NAME",
+                "jsessionid");
 
 }
 

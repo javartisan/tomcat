@@ -18,6 +18,8 @@
 
 package org.apache.catalina.deploy;
 
+import java.io.Serializable;
+
 
 /**
  * Representation of an EJB resource reference for a web application, as
@@ -25,27 +27,15 @@ package org.apache.catalina.deploy;
  * deployment descriptor.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Peter Rossbach (pero@apache.org)
+ * @version $Id: ContextEjb.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class ContextEjb {
+public class ContextEjb extends ResourceBase implements Serializable {
 
 
     // ------------------------------------------------------------- Properties
 
-
-    /**
-     * The description of this EJB.
-     */
-    private String description = null;
-
-    public String getDescription() {
-        return (this.description);
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
 
 
     /**
@@ -75,21 +65,6 @@ public final class ContextEjb {
         this.link = link;
     }
 
-
-    /**
-     * The name of this EJB.
-     */
-    private String name = null;
-
-    public String getName() {
-        return (this.name);
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-
     /**
      * The name of the EJB remote implementation class.
      */
@@ -103,21 +78,7 @@ public final class ContextEjb {
         this.remote = remote;
     }
 
-
-    /**
-     * The name of the EJB bean implementation class.
-     */
-    private String type = null;
-
-    public String getType() {
-        return (this.type);
-    }
-
-    public void setType(String type) {
-        this.type = type;
-    }
-
-
+    
     // --------------------------------------------------------- Public Methods
 
 
@@ -128,14 +89,14 @@ public final class ContextEjb {
 
         StringBuffer sb = new StringBuffer("ContextEjb[");
         sb.append("name=");
-        sb.append(name);
-        if (description != null) {
+        sb.append(getName());
+        if (getDescription() != null) {
             sb.append(", description=");
-            sb.append(description);
+            sb.append(getDescription());
         }
-        if (type != null) {
+        if (getType() != null) {
             sb.append(", type=");
-            sb.append(type);
+            sb.append(getType());
         }
         if (home != null) {
             sb.append(", home=");
@@ -152,23 +113,6 @@ public final class ContextEjb {
         sb.append("]");
         return (sb.toString());
 
-    }
-
-
-    // -------------------------------------------------------- Package Methods
-
-
-    /**
-     * The NamingResources with which we are associated (if any).
-     */
-    protected NamingResources resources = null;
-
-    public NamingResources getNamingResources() {
-        return (this.resources);
-    }
-
-    void setNamingResources(NamingResources resources) {
-        this.resources = resources;
     }
 
 

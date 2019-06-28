@@ -20,18 +20,21 @@ package org.apache.catalina.core;
 
 
 import java.io.IOException;
+
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletRequestEvent;
+import javax.servlet.ServletRequestListener;
 import javax.servlet.http.HttpServletResponse;
-import org.apache.catalina.Context;
-import org.apache.catalina.HttpRequest;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+
+import org.apache.catalina.Container;
+import org.apache.catalina.Globals;
 import org.apache.catalina.Wrapper;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.StringManager;
 import org.apache.catalina.valves.ValveBase;
-
+import org.apache.tomcat.util.buf.MessageBytes;
 
 /**
  * Valve that implements the default basic behavior for the
@@ -41,7 +44,7 @@ import org.apache.catalina.valves.ValveBase;
  * when processing HTTP requests.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 680948 $ $Date: 2008-07-30 10:31:54 +0100 (Wed, 30 Jul 2008) $
+ * @version $Id: StandardContextValve.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 final class StandardContextValve
@@ -65,6 +68,9 @@ final class StandardContextValve
         StringManager.getManager(Constants.Package);
 
 
+    private StandardContext context = null;
+    
+
     // ------------------------------------------------------------- Properties
 
 
@@ -82,6 +88,17 @@ final class StandardContextValve
 
 
     /**
+     * Cast to a StandardContext right away, as it will be needed later.
+     * 
+     * @see org.apache.catalina.Contained#setContainer(org.apache.catalina.Container)
+     */
+    public void setContainer(Container container) {
+        super.setContainer(container);
+        context = (StandardContext) container;
+    }
+
+    
+    /**
      * Select the appropriate child Wrapper to process this request,
      * based on the specified request URI.  If no matching Wrapper can
      * be found, return an appropriate HTTP error.
@@ -93,77 +110,93 @@ final class StandardContextValve
      * @exception IOException if an input/output error occurred
      * @exception ServletException if a servlet error occurred
      */
-    public void invoke(Request request, Response response,
-                       ValveContext valveContext)
+    public final void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        // Validate the request and response object types
-        if (!(request.getRequest() instanceof HttpServletRequest) ||
-            !(response.getResponse() instanceof HttpServletResponse)) {
-            return;     // NOTE - Not much else we can do generically
-        }
-
         // Disallow any direct access to resources under WEB-INF or META-INF
-        HttpServletRequest hreq = (HttpServletRequest) request.getRequest();
-        String contextPath = hreq.getContextPath();
-        String requestURI = ((HttpRequest) request).getDecodedRequestURI();
-        String relativeURI =
-            requestURI.substring(contextPath.length()).toUpperCase();
-        if (relativeURI.equals("/META-INF") ||
-            relativeURI.equals("/WEB-INF") ||
-            relativeURI.startsWith("/META-INF/") ||
-            relativeURI.startsWith("/WEB-INF/")) {
-            notFound((HttpServletResponse) response.getResponse());
+        MessageBytes requestPathMB = request.getRequestPathMB();
+        if ((requestPathMB.startsWithIgnoreCase("/META-INF/", 0))
+            || (requestPathMB.equalsIgnoreCase("/META-INF"))
+            || (requestPathMB.startsWithIgnoreCase("/WEB-INF/", 0))
+            || (requestPathMB.equalsIgnoreCase("/WEB-INF"))) {
+            notFound(response);
             return;
         }
 
-        Context context = (Context) getContainer();
+        // Wait if we are reloading
+        while (context.getPaused()) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                ;
+            }
+        }
 
         // Select the Wrapper to be used for this Request
-        Wrapper wrapper = null;
-        try {
-            wrapper = (Wrapper) context.map(request, true);
-        } catch (IllegalArgumentException e) {
-            badRequest(requestURI, 
-                       (HttpServletResponse) response.getResponse());
-            return;
-        }
+        Wrapper wrapper = request.getWrapper();
         if (wrapper == null) {
-            notFound((HttpServletResponse) response.getResponse());
+            notFound(response);
             return;
         }
 
-        // Ask this Wrapper to process this Request
-        response.setContext(context);
+        // Normal request processing
+        Object instances[] = context.getApplicationEventListeners();
 
-        wrapper.invoke(request, response);
+        ServletRequestEvent event = null;
 
+        if ((instances != null) 
+                && (instances.length > 0)) {
+            event = new ServletRequestEvent
+                (((StandardContext) container).getServletContext(), 
+                 request.getRequest());
+            // create pre-service event
+            for (int i = 0; i < instances.length; i++) {
+                if (instances[i] == null)
+                    continue;
+                if (!(instances[i] instanceof ServletRequestListener))
+                    continue;
+                ServletRequestListener listener =
+                    (ServletRequestListener) instances[i];
+                try {
+                    listener.requestInitialized(event);
+                } catch (Throwable t) {
+                    container.getLogger().error(sm.getString("standardContext.requestListener.requestInit",
+                                     instances[i].getClass().getName()), t);
+                    ServletRequest sreq = request.getRequest();
+                    sreq.setAttribute(Globals.EXCEPTION_ATTR,t);
+                    return;
+                }
+            }
+        }
+
+        wrapper.getPipeline().getFirst().invoke(request, response);
+
+        if ((instances !=null ) &&
+                (instances.length > 0)) {
+            // create post-service event
+            for (int i = 0; i < instances.length; i++) {
+                if (instances[i] == null)
+                    continue;
+                if (!(instances[i] instanceof ServletRequestListener))
+                    continue;
+                ServletRequestListener listener =
+                    (ServletRequestListener) instances[i];
+                try {
+                    listener.requestDestroyed(event);
+                } catch (Throwable t) {
+                    container.getLogger().error(sm.getString("standardContext.requestListener.requestDestroy",
+                                     instances[i].getClass().getName()), t);
+                    ServletRequest sreq = request.getRequest();
+                    sreq.setAttribute(Globals.EXCEPTION_ATTR,t);
+                }
+            }
+        }
+                
     }
 
 
     // -------------------------------------------------------- Private Methods
 
-
-    /**
-     * Report a "bad request" error for the specified resource.  FIXME:  We
-     * should really be using the error reporting settings for this web
-     * application, but currently that code runs at the wrapper level rather
-     * than the context level.
-     *
-     * @param requestURI The request URI for the requested resource
-     * @param response The response we are creating
-     */
-    private void badRequest(String requestURI, HttpServletResponse response) {
-
-        try {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, requestURI);
-        } catch (IllegalStateException e) {
-            ;
-        } catch (IOException e) {
-            ;
-        }
-
-    }
 
     /**
      * Report a "not found" error for the specified resource.  FIXME:  We
@@ -184,5 +217,6 @@ final class StandardContextValve
         }
 
     }
+
 
 }

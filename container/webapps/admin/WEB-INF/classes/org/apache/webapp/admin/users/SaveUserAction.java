@@ -25,9 +25,7 @@ import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -37,14 +35,14 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
-
+import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * <p>Implementation of <strong>Action</strong> that saves a new or
  * updated User back to the underlying database.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveUserAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -52,12 +50,6 @@ public final class SaveUserAction extends Action {
 
 
     // ----------------------------------------------------- Instance Variables
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     /**
@@ -94,11 +86,8 @@ public final class SaveUserAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Has this transaction been cancelled?
         if (isCancelled(request)) {
@@ -116,7 +105,7 @@ public final class SaveUserAction extends Action {
         // Perform any extra validation that is required
         UserForm userForm = (UserForm) form;
         String databaseName =
-            URLDecoder.decode(userForm.getDatabaseName());
+            URLDecoder.decode(userForm.getDatabaseName(),TomcatTreeBuilder.URL_ENCODING);
         String objectName = userForm.getObjectName();
 
         // Perform an "Add User" transaction
@@ -207,8 +196,8 @@ public final class SaveUserAction extends Action {
             addsig[0] = "java.lang.String";
             Object addpar[] = new Object[1];
             for (int i = 0; i < groups.length; i++) {
-                addpar[0] =
-                    (new ObjectName(groups[i])).getKeyProperty("groupname");
+                addpar[0] = ObjectName.unquote(
+                    (new ObjectName(groups[i])).getKeyProperty("groupname"));
                 mserver.invoke(oname, "addGroup",
                                addpar, addsig);
             }

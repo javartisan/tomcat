@@ -21,14 +21,14 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.io.IOException;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import org.apache.regexp.RE;
-import org.apache.regexp.RESyntaxException;
 import org.apache.struts.Globals;
 import org.apache.struts.action.ActionMapping;
 import org.apache.struts.util.MessageResources;
@@ -41,7 +41,7 @@ import org.apache.webapp.admin.TreeControlNode;
  * A utility class that contains methods common across valves.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ValveUtil.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class ValveUtil {
@@ -83,7 +83,6 @@ public final class ValveUtil {
         String vObjectName = null;
         
         try {
-            
             String parentNodeName = parent;
             ObjectName pname = new ObjectName(parent);
             StringBuffer sb = new StringBuffer(pname.getDomain());
@@ -92,13 +91,11 @@ public final class ValveUtil {
             // Parent in this case needs to be the container mBean for the service
             try {
                 if ("Service".equalsIgnoreCase(pname.getKeyProperty("type"))) {
-                    sb.append(":type=Engine,service=");
-                    sb.append(pname.getKeyProperty("name"));
+                    sb.append(":type=Engine");
                     parent = sb.toString();
                 }
             } catch (Exception e) {
-                String message =
-                resources.getMessage("error.engineName.bad",
+                String message = resources.getMessage("error.engineName.bad",
                 sb.toString());
                 servlet.log(message);
                 response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -113,17 +110,17 @@ public final class ValveUtil {
             if (mBServer.isRegistered(oname)) {
                 ActionErrors errors = new ActionErrors();
                 errors.add("valveName",
-                    new ActionMessage("error.valveName.exists"));
+                    new ActionError("error.valveName.exists"));
                 String message =
-                    resources.getMessage("error.valveName.exists", sb.toString());
+                    resources.getMessage(locale, "error.valveName.exists", sb.toString());
                 response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);                
                 return (new ActionForward(mapping.getInput()));
             }
             */
             
+            String domain = pname.getDomain();
             // Look up our MBeanFactory MBean
-            ObjectName fname =
-            new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+            ObjectName fname = TomcatTreeBuilder.getMBeanFactory();
             
             // Create a new StandardValve object
             values = new String[1];            
@@ -145,16 +142,16 @@ public final class ValveUtil {
                     String nodeLabel =
                     "Valve for " + parentNode.getLabel();
                     String encodedName =
-                    URLEncoder.encode(vObjectName);
+                    URLEncoder.encode(vObjectName,TomcatTreeBuilder.URL_ENCODING);
                     TreeControlNode childNode =
                     new TreeControlNode(vObjectName,
                     "Valve.gif",
                     nodeLabel,
                     "EditValve.do?select=" + encodedName +
-                    "&nodeLabel=" + URLEncoder.encode(nodeLabel) +
-                    "&parent=" + URLEncoder.encode(parentNodeName),
+                    "&nodeLabel=" + URLEncoder.encode(nodeLabel,TomcatTreeBuilder.URL_ENCODING) +
+                    "&parent=" + URLEncoder.encode(parentNodeName,TomcatTreeBuilder.URL_ENCODING),
                     "content",
-                    true);
+                    true, domain);
                     parentNode.addChild(childNode);
                     // FIXME - force a redisplay
                 } else {
@@ -195,14 +192,14 @@ public final class ValveUtil {
      * @exception IllegalArgumentException if one of the patterns has
      *  invalid syntax
      */
-    public static RE[] precalculate(String list) 
+    public static Pattern[] precalculate(String list) 
                                     throws IllegalArgumentException {
 
         if (list == null)
-            return (new RE[0]);
+            return (new Pattern[0]);
         list = list.trim();
         if (list.length() < 1)
-            return (new RE[0]);
+            return (new Pattern[0]);
         list += ",";
 
         ArrayList reList = new ArrayList();
@@ -212,17 +209,49 @@ public final class ValveUtil {
                 break;
             String pattern = list.substring(0, comma).trim();
             try {
-                reList.add(new RE(pattern));
-            } catch (RESyntaxException e) {
+                reList.add(Pattern.compile(pattern));
+            } catch (PatternSyntaxException e) {
                 throw new IllegalArgumentException
                     ("Syntax error in request filter pattern");
             }
             list = list.substring(comma + 1);
         }
 
-        RE reArray[] = new RE[reList.size()];
-        return ((RE[]) reList.toArray(reArray));
+        Pattern reArray[] = new Pattern[reList.size()];
+        return ((Pattern[]) reList.toArray(reArray));
 
     }    
+
+    public static String getObjectName(String parent, String MBeanType)
+    throws Exception{
+        
+        // Form the pattern that gets the logger for this particular
+        // service, host or context.
+        ObjectName poname = new ObjectName(parent);
+        String domain = poname.getDomain();
+        StringBuffer sb = new StringBuffer(domain+MBeanType);
+        String type = poname.getKeyProperty("type");
+        String j2eeType = poname.getKeyProperty("j2eeType");
+        String path = "";
+        String host = "";
+        String name = poname.getKeyProperty("name");
+        if ((name != null) && (name.length() > 0)) {
+            name = name.substring(2);
+            int i = name.indexOf("/");
+            host = name.substring(0,i);
+            path = name.substring(i); 
+        }
+        if ("WebModule".equalsIgnoreCase(j2eeType)) { // container is context            
+            sb.append(",path="+path);
+            sb.append(",host="+host);
+        }
+        if ("Host".equalsIgnoreCase(type)) {    // container is host
+            sb.append(",host=");
+            sb.append(poname.getKeyProperty("host"));
+        }
+        if ("Service".equalsIgnoreCase(type)) {  // container is service
+        }
+        return sb.toString();  
+    }
 
 }

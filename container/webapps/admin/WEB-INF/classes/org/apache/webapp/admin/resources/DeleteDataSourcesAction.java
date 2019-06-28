@@ -23,9 +23,6 @@ import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -41,7 +38,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * specified set of dataSource entries.</p>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteDataSourcesAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -55,12 +52,6 @@ public final class DeleteDataSourcesAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mserver = null;
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -91,11 +82,8 @@ public final class DeleteDataSourcesAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Has this transaction been cancelled?
         if (isCancelled(request)) {
@@ -123,33 +111,9 @@ public final class DeleteDataSourcesAction extends Action {
             String resourcetype = dataSourcesForm.getResourcetype();
             String path = dataSourcesForm.getPath();
             String host = dataSourcesForm.getHost();
-            String service = dataSourcesForm.getService();
+            //String domain = dataSourcesForm.getDomain();
             
             ObjectName dname = null;
-
-            if (resourcetype!=null) {
-                // Construct the MBean Name for the naming source
-                if (resourcetype.equals("Global")) {
-                    dname = new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                                            ResourceUtils.GLOBAL_TYPE);
-                } else if (resourcetype.equals("Context")) {            
-                    dname = new ObjectName (ResourceUtils.NAMINGRESOURCES_TYPE + 
-                                ResourceUtils.CONTEXT_TYPE + ",path=" + path + 
-                                ",host=" + host + ",service=" + service);
-                } else if (resourcetype.equals("DefaultContext")) {
-                    if (host.length() > 0) {
-                        dname = 
-                            new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                            ResourceUtils.HOST_DEFAULTCONTEXT_TYPE + ",host=" + 
-                            host + ",service=" + service);
-                    } else {
-                        dname = 
-                            new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                            ResourceUtils.SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + 
-                            service);
-                    }
-                }
-            }
 
             String signature[] = new String[1];
             signature[0] = "java.lang.String";
@@ -157,6 +121,9 @@ public final class DeleteDataSourcesAction extends Action {
              
             for (int i = 0; i < dataSources.length; i++) {
                 ObjectName oname = new ObjectName(dataSources[i]);
+                String domain = oname.getDomain();
+                dname = ResourceUtils.getNamingResourceObjectName(domain,
+                            resourcetype, path, host);
                 params[0] = oname.getKeyProperty("name");
                 mserver.invoke(dname, "removeResource",
                                params, signature);

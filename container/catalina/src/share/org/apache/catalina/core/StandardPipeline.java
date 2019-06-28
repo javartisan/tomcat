@@ -19,21 +19,23 @@
 package org.apache.catalina.core;
 
 
-import java.io.IOException;
-import javax.servlet.ServletException;
+import java.util.ArrayList;
+
+import javax.management.ObjectName;
+
 import org.apache.catalina.Contained;
 import org.apache.catalina.Container;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Logger;
 import org.apache.catalina.Pipeline;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
 import org.apache.catalina.Valve;
-import org.apache.catalina.ValveContext;
 import org.apache.catalina.util.LifecycleSupport;
 import org.apache.catalina.util.StringManager;
+import org.apache.catalina.valves.ValveBase;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.modeler.Registry;
 
 
 /**
@@ -50,8 +52,10 @@ import org.apache.catalina.util.StringManager;
  */
 
 public class StandardPipeline
-    implements Pipeline, Contained, Lifecycle {
+    implements Pipeline, Contained, Lifecycle 
+ {
 
+    private static Log log = LogFactory.getLog(StandardPipeline.class);
 
     // ----------------------------------------------------------- Constructors
 
@@ -96,12 +100,6 @@ public class StandardPipeline
 
 
     /**
-     * The debugging detail level for this component.
-     */
-    protected int debug = 0;
-
-
-    /**
      * Descriptive information about this implementation.
      */
     protected String info = "org.apache.catalina.core.StandardPipeline/1.0";
@@ -127,10 +125,9 @@ public class StandardPipeline
 
 
     /**
-     * The set of Valves (not including the Basic one, if any) associated with
-     * this Pipeline.
+     * The first valve associated with this Pipeline.
      */
-    protected Valve valves[] = new Valve[0];
+    protected Valve first = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -208,7 +205,6 @@ public class StandardPipeline
 
     }
 
-
     /**
      * Prepare for active use of the public methods of this Component.
      *
@@ -228,12 +224,16 @@ public class StandardPipeline
         started = true;
 
         // Start the Valves in our pipeline (including the basic), if any
-        for (int i = 0; i < valves.length; i++) {
-            if (valves[i] instanceof Lifecycle)
-                ((Lifecycle) valves[i]).start();
+        Valve current = first;
+        if (current == null) {
+        	current = basic;
         }
-        if ((basic != null) && (basic instanceof Lifecycle))
-            ((Lifecycle) basic).start();
+        while (current != null) {
+            if (current instanceof Lifecycle)
+                ((Lifecycle) current).start();
+            registerValve(current);
+        	current = current.getNext();
+        }
 
         // Notify our interested LifecycleListeners
         lifecycle.fireLifecycleEvent(START_EVENT, null);
@@ -265,18 +265,69 @@ public class StandardPipeline
         started = false;
 
         // Stop the Valves in our pipeline (including the basic), if any
-        if ((basic != null) && (basic instanceof Lifecycle))
-            ((Lifecycle) basic).stop();
-        for (int i = 0; i < valves.length; i++) {
-            if (valves[i] instanceof Lifecycle)
-                ((Lifecycle) valves[i]).stop();
+        Valve current = first;
+        if (current == null) {
+        	current = basic;
+        }
+        while (current != null) {
+            if (current instanceof Lifecycle)
+                ((Lifecycle) current).stop();
+            unregisterValve(current);
+        	current = current.getNext();
         }
 
         // Notify our interested LifecycleListeners
         lifecycle.fireLifecycleEvent(AFTER_STOP_EVENT, null);
-
     }
 
+    private void registerValve(Valve valve) {
+
+        if( valve instanceof ValveBase &&
+                ((ValveBase)valve).getObjectName()==null ) {
+            try {
+                
+                String domain=((ContainerBase)container).getDomain();
+                if( container instanceof StandardContext ) {
+                    domain=((StandardContext)container).getEngineName();
+                }
+                if( container instanceof StandardWrapper) {
+                    Container ctx=((StandardWrapper)container).getParent();
+                    domain=((StandardContext)ctx).getEngineName();
+                }
+                ObjectName vname=((ValveBase)valve).createObjectName(
+                        domain,
+                        ((ContainerBase)container).getJmxName());
+                if( vname != null ) {
+                    ((ValveBase)valve).setObjectName(vname);
+                    Registry.getRegistry(null, null).registerComponent
+                        (valve, vname, valve.getClass().getName());
+                    ((ValveBase)valve).setController
+                        (((ContainerBase)container).getJmxName());
+                }
+            } catch( Throwable t ) {
+                log.info( "Can't register valve " + valve , t );
+            }
+        }
+    }
+    
+    private void unregisterValve(Valve valve) {
+        if( valve instanceof ValveBase ) {
+            try {
+                ValveBase vb=(ValveBase)valve;
+                if( vb.getController()!=null &&
+                        vb.getController() == 
+                        ((ContainerBase)container).getJmxName() ) {
+                    
+                    ObjectName vname=vb.getObjectName();
+                    Registry.getRegistry(null, null).getMBeanServer()
+                        .unregisterMBean(vname);
+                    ((ValveBase)valve).setObjectName(null);
+                }
+            } catch( Throwable t ) {
+                log.info( "Can't unregister valve " + valve , t );
+            }
+        }
+    }    
 
     // ------------------------------------------------------- Pipeline Methods
 
@@ -317,7 +368,7 @@ public class StandardPipeline
                 try {
                     ((Lifecycle) oldBasic).stop();
                 } catch (LifecycleException e) {
-                    log("StandardPipeline.setBasic: stop", e);
+                    log.error("StandardPipeline.setBasic: stop", e);
                 }
             }
             if (oldBasic instanceof Contained) {
@@ -339,10 +390,21 @@ public class StandardPipeline
             try {
                 ((Lifecycle) valve).start();
             } catch (LifecycleException e) {
-                log("StandardPipeline.setBasic: start", e);
+                log.error("StandardPipeline.setBasic: start", e);
                 return;
             }
         }
+
+        // Update the pipeline
+        Valve current = first;
+        while (current != null) {
+        	if (current.getNext() == oldBasic) {
+        		current.setNext(valve);
+        		break;
+        	}
+        	current = current.getNext();
+        }
+        
         this.basic = valve;
 
     }
@@ -368,26 +430,38 @@ public class StandardPipeline
      *  associated with a different Container
      */
     public void addValve(Valve valve) {
-
+    
         // Validate that we can add this Valve
         if (valve instanceof Contained)
             ((Contained) valve).setContainer(this.container);
 
         // Start the new component if necessary
-        if (started && (valve instanceof Lifecycle)) {
-            try {
-                ((Lifecycle) valve).start();
-            } catch (LifecycleException e) {
-                log("StandardPipeline.addValve: start: ", e);
+        if (started) {
+            if (valve instanceof Lifecycle) {
+                try {
+                    ((Lifecycle) valve).start();
+                } catch (LifecycleException e) {
+                    log.error("StandardPipeline.addValve: start: ", e);
+                }
             }
+            // Register the newly added valve
+            registerValve(valve);
         }
 
         // Add this Valve to the set associated with this Pipeline
-        synchronized (valves) {
-            Valve results[] = new Valve[valves.length +1];
-            System.arraycopy(valves, 0, results, 0, valves.length);
-            results[valves.length] = valve;
-            valves = results;
+        if (first == null) {
+        	first = valve;
+        	valve.setNext(basic);
+        } else {
+            Valve current = first;
+            while (current != null) {
+				if (current.getNext() == basic) {
+					current.setNext(valve);
+					valve.setNext(basic);
+					break;
+				}
+				current = current.getNext();
+			}
         }
 
     }
@@ -400,40 +474,37 @@ public class StandardPipeline
      */
     public Valve[] getValves() {
 
-        if (basic == null)
-            return (valves);
-        synchronized (valves) {
-            Valve results[] = new Valve[valves.length + 1];
-            System.arraycopy(valves, 0, results, 0, valves.length);
-            results[valves.length] = basic;
-            return (results);
+    	ArrayList valveList = new ArrayList();
+        Valve current = first;
+        if (current == null) {
+        	current = basic;
+        }
+        while (current != null) {
+        	valveList.add(current);
+        	current = current.getNext();
         }
 
-    }
-
-
-    /**
-     * Cause the specified request and response to be processed by the Valves
-     * associated with this pipeline, until one of these valves causes the
-     * response to be created and returned.  The implementation must ensure
-     * that multiple simultaneous requests (on different threads) can be
-     * processed through the same Pipeline without interfering with each
-     * other's control flow.
-     *
-     * @param request The servlet request we are processing
-     * @param response The servlet response we are creating
-     *
-     * @exception IOException if an input/output error occurs
-     * @exception ServletException if a servlet exception is thrown
-     */
-    public void invoke(Request request, Response response)
-        throws IOException, ServletException {
-
-        // Invoke the first Valve in this pipeline for this request
-        (new StandardPipelineValveContext()).invokeNext(request, response);
+        return ((Valve[]) valveList.toArray(new Valve[0]));
 
     }
 
+    public ObjectName[] getValveObjectNames() {
+
+    	ArrayList valveList = new ArrayList();
+        Valve current = first;
+        if (current == null) {
+        	current = basic;
+        }
+        while (current != null) {
+        	if (current instanceof ValveBase) {
+        		valveList.add(((ValveBase) current).getObjectName());
+        	}
+        	current = current.getNext();
+        }
+
+        return ((ObjectName[]) valveList.toArray(new ObjectName[0]));
+
+    }
 
     /**
      * Remove the specified Valve from the pipeline associated with this
@@ -445,163 +516,48 @@ public class StandardPipeline
      */
     public void removeValve(Valve valve) {
 
-        synchronized (valves) {
-
-            // Locate this Valve in our list
-            int j = -1;
-            for (int i = 0; i < valves.length; i++) {
-                if (valve == valves[i]) {
-                    j = i;
-                    break;
-                }
-            }
-            if (j < 0)
-                return;
-
-            // Remove this valve from our list
-            Valve results[] = new Valve[valves.length - 1];
-            int n = 0;
-            for (int i = 0; i < valves.length; i++) {
-                if (i == j)
-                    continue;
-                results[n++] = valves[i];
-            }
-            valves = results;
-            try {
-                if (valve instanceof Contained)
-                    ((Contained) valve).setContainer(null);
-            } catch (Throwable t) {
-                ;
-            }
-
+        Valve current;
+        if(first == valve) {
+            first = first.getNext();
+            current = null;
+        } else {
+            current = first;
         }
+        while (current != null) {
+            if (current.getNext() == valve) {
+                current.setNext(valve.getNext());
+                break;
+            }
+            current = current.getNext();
+        }
+
+        if (first == basic) first = null;
+        
+        if (valve instanceof Contained)
+            ((Contained) valve).setContainer(null);
 
         // Stop this valve if necessary
-        if (started && (valve instanceof Lifecycle)) {
-            try {
-                ((Lifecycle) valve).stop();
-            } catch (LifecycleException e) {
-                log("StandardPipeline.removeValve: stop: ", e);
+        if (started) {
+            if (valve instanceof Lifecycle) {
+                try {
+                    ((Lifecycle) valve).stop();
+                } catch (LifecycleException e) {
+                    log.error("StandardPipeline.removeValve: stop: ", e);
+                }
             }
+            // Unregister the removed valave
+            unregisterValve(valve);
         }
-
+    
     }
 
 
-    // ------------------------------------------------------ Protected Methods
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     */
-    protected void log(String message) {
-
-        Logger logger = null;
-        if (container != null)
-            logger = container.getLogger();
-        if (logger != null)
-            logger.log("StandardPipeline[" + container.getName() + "]: " +
-                       message);
-        else
-            System.out.println("StandardPipeline[" + container.getName() +
-                               "]: " + message);
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
-     */
-    protected void log(String message, Throwable throwable) {
-
-        Logger logger = null;
-        if (container != null)
-            logger = container.getLogger();
-        if (logger != null)
-            logger.log("StandardPipeline[" + container.getName() + "]: " +
-                       message, throwable);
-        else {
-            System.out.println("StandardPipeline[" + container.getName() +
-                               "]: " + message);
-            throwable.printStackTrace(System.out);
+    public Valve getFirst() {
+        if (first != null) {
+            return first;
+        } else {
+            return basic;
         }
-
-    }
-
-
-    // ------------------------------- StandardPipelineValveContext Inner Class
-
-
-    protected class StandardPipelineValveContext
-        implements ValveContext {
-
-
-        // ------------------------------------------------- Instance Variables
-
-
-        protected int stage = 0;
-
-
-        // --------------------------------------------------------- Properties
-
-
-        /**
-          * Return descriptive information about this ValveContext 
-          * implementation.
-          */
-        public String getInfo() {
-            return info;
-        }
-
-
-        // ----------------------------------------------------- Public Methods
-
-
-        /**
-         * Cause the <code>invoke()</code> method of the next Valve that is 
-         * part of the Pipeline currently being processed (if any) to be 
-         * executed, passing on the specified request and response objects 
-         * plus this <code>ValveContext</code> instance.  Exceptions thrown by
-         * a subsequently executed Valve (or a Filter or Servlet at the 
-         * application level) will be passed on to our caller.
-         *
-         * If there are no more Valves to be executed, an appropriate
-         * ServletException will be thrown by this ValveContext.
-         *
-         * @param request The request currently being processed
-         * @param response The response currently being created
-         *
-         * @exception IOException if thrown by a subsequent Valve, Filter, or
-         *  Servlet
-         * @exception ServletException if thrown by a subsequent Valve, Filter,
-         *  or Servlet
-         * @exception ServletException if there are no further Valves 
-         *  configured in the Pipeline currently being processed
-         */
-        public void invokeNext(Request request, Response response)
-            throws IOException, ServletException {
-
-            int subscript = stage;
-            stage = stage + 1;
-
-            // Invoke the requested Valve for the current request thread
-            if (subscript < valves.length) {
-                valves[subscript].invoke(request, response, this);
-            } else if ((subscript == valves.length) && (basic != null)) {
-                basic.invoke(request, response, this);
-            } else {
-                throw new ServletException
-                    (sm.getString("standardPipeline.noValve"));
-            }
-
-        }
-
-
     }
 
 

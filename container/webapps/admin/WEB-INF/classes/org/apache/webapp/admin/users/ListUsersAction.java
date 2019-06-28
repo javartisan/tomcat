@@ -26,16 +26,13 @@ import javax.management.MBeanServer;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
-
+import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * <p>Retrieve the set of MBean names for all currently defined users,
@@ -49,7 +46,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * </ul>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ListUsersAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -63,12 +60,6 @@ public class ListUsersAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mserver = null;
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -100,16 +91,13 @@ public class ListUsersAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
 
         // Create a form bean containing the requested MBean Names
         String databaseName =
-            URLDecoder.decode(request.getParameter("databaseName"));
+            URLDecoder.decode(request.getParameter("databaseName"),TomcatTreeBuilder.URL_ENCODING);
         UsersForm usersForm = null;
         try {
             usersForm = UserUtils.getUsersForm(mserver, databaseName);
@@ -121,13 +109,14 @@ public class ListUsersAction extends Action {
                 (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
                  resources.getMessage
                  (locale, "users.error.attribute.get", "users"));
+            return null;
         }
 
         // Stash the results in request scope
         request.setAttribute("usersForm", usersForm);
         saveToken(request);
         String forward =
-            URLDecoder.decode(request.getParameter("forward"));
+            URLDecoder.decode(request.getParameter("forward"),TomcatTreeBuilder.URL_ENCODING);
         return (mapping.findForward(forward));
 
     }

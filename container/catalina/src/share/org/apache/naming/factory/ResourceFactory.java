@@ -31,7 +31,7 @@ import org.apache.naming.ResourceRef;
  * Object factory for Resources.
  * 
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceFactory.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class ResourceFactory
@@ -78,28 +78,31 @@ public class ResourceFactory
                     try {
                         factoryClass = tcl.loadClass(factoryClassName);
                     } catch(ClassNotFoundException e) {
-                        throw new NamingException(
-                            "Could not create resource factory, ClassNotFoundException:" +
-                            e.getMessage());
+                        NamingException ex = new NamingException
+                            ("Could not load resource factory class");
+                        ex.initCause(e);
+                        throw ex;
                     }
                 } else {
                     try {
                         factoryClass = Class.forName(factoryClassName);
                     } catch(ClassNotFoundException e) {
-                        throw new NamingException(
-                            "Could not create resource factory, ClassNotFoundException:" +
-                            e.getMessage());
+                        NamingException ex = new NamingException
+                            ("Could not load resource factory class");
+                        ex.initCause(e);
+                        throw ex;
                     }
                 }
                 if (factoryClass != null) {
                     try {
                         factory = (ObjectFactory) factoryClass.newInstance();
-                    } catch(Throwable t) {
-                        if( t instanceof NamingException)
-                            throw (NamingException)t;
-                        throw new NamingException(
-                            "Could not create resource factory instance, " +
-                            t.getMessage());
+                    } catch (Throwable t) {
+                        if (t instanceof NamingException)
+                            throw (NamingException) t;
+                        NamingException ex = new NamingException
+                            ("Could not create resource factory instance");
+                        ex.initCause(t);
+                        throw ex;
                     }
                 }
             } else {
@@ -111,8 +114,11 @@ public class ResourceFactory
                         factory = (ObjectFactory) 
                             Class.forName(javaxSqlDataSourceFactoryClassName)
                             .newInstance();
-                    } catch(Throwable t) {
-
+                    } catch (Throwable t) {
+                        NamingException ex = new NamingException
+                            ("Could not create resource factory instance");
+                        ex.initCause(t);
+                        throw ex;
                     }
                 } else if (ref.getClassName().equals("javax.mail.Session")) {
                     String javaxMailSessionFactoryClassName =
@@ -123,16 +129,10 @@ public class ResourceFactory
                             Class.forName(javaxMailSessionFactoryClassName)
                             .newInstance();
                     } catch(Throwable t) {
-                    }
-                } else if (ref.getClassName().equals("tyrex.resource.Resource")) {
-                    String tyrexResourceFactoryClassName =
-                        System.getProperty("tyrex.resource.Resource.Factory",
-                                           Constants.TYREX_RESOURCE_FACTORY);
-                    try {
-                        factory = (ObjectFactory)
-                            Class.forName(tyrexResourceFactoryClassName)
-                            .newInstance();
-                    } catch(Throwable t) {
+                        NamingException ex = new NamingException
+                            ("Could not create resource factory instance");
+                        ex.initCause(t);
+                        throw ex;
                     }
                 }
             }

@@ -20,7 +20,9 @@ package org.apache.tomcat.jni;
 /** Thread
  *
  * @author Mladen Turk
- * @version $Revision: 467206 $, $Date: 2006-10-24 03:45:46 +0100 (Tue, 24 Oct 2006) $
+ * @version $Id: Thread.java 939522 2010-04-30 00:26:15Z kkolinko $
+ * @deprecated This class is not used by Tomcat itself and does no
+ * longer exist in Tomcat 6 and beyond.
  */
 
 public class Thread {

@@ -27,7 +27,7 @@ package org.apache.catalina.util;
  * of the digest.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MD5Encoder.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public final class MD5Encoder {

@@ -19,23 +19,25 @@
 package org.apache.naming.resources;
 
 import java.util.Hashtable;
+
 import javax.naming.Context;
 import javax.naming.Name;
 import javax.naming.NameParser;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
-import javax.naming.directory.DirContext;
 import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
 import javax.naming.directory.ModificationItem;
 import javax.naming.directory.SearchControls;
-import org.apache.naming.StringManager;
+
 import org.apache.naming.NameParserImpl;
+import org.apache.naming.StringManager;
 
 /**
  * Directory Context implementation helper class.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: BaseDirContext.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public abstract class BaseDirContext implements DirContext {
@@ -64,12 +66,6 @@ public abstract class BaseDirContext implements DirContext {
 
 
     // ----------------------------------------------------- Instance Variables
-
-
-    /**
-     * The debugging detail level for this component.
-     */
-    protected int debug = 0;
 
 
     /**
@@ -111,28 +107,10 @@ public abstract class BaseDirContext implements DirContext {
     /**
      * Max size of resources which will have their content cached.
      */
-    protected int cacheObjectMaxSize = 32768; // 32 KB
+    protected int cacheMaxSize = 10240; // 10 MB
 
 
     // ------------------------------------------------------------- Properties
-
-
-    /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-        return (this.debug);
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-        this.debug = debug;
-    }
 
 
     /**
@@ -199,18 +177,18 @@ public abstract class BaseDirContext implements DirContext {
 
 
     /**
-     * Set cacheObjectMaxSize.
+     * Return the maximum size of the cache in KB.
      */
-    public void setCacheObjectMaxSize(int cacheObjectMaxSize) {
-        this.cacheObjectMaxSize = cacheObjectMaxSize;
+    public int getCacheMaxSize() {
+        return cacheMaxSize;
     }
 
 
     /**
-     * Get cacheObjectMaxSize.
+     * Set the maximum size of the cache in KB.
      */
-    public int getCacheObjectMaxSize() {
-        return cacheObjectMaxSize;
+    public void setCacheMaxSize(int cacheMaxSize) {
+        this.cacheMaxSize = cacheMaxSize;
     }
 
 

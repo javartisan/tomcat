@@ -19,17 +19,18 @@
 package org.apache.webapp.admin.service;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+
 import java.util.List;
 
 /**
  * Form bean for the service page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ServiceForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class ServiceForm extends ActionForm {
@@ -59,6 +60,11 @@ public final class ServiceForm extends ActionForm {
      * The text for the serviceName.
      */
     private String serviceName = null;    
+
+    /**
+     * The text for the serverObjectName.
+     */
+    private String serverObjectName = null; 
     
    /**
      * The text for the node label.
@@ -72,11 +78,6 @@ public final class ServiceForm extends ActionForm {
     
     
     /**
-     * The text for the debug level.
-     */
-    private String debugLvl = "0";
-    
-    /**
      * The name of the service the admin app runs on.
      */
     private String adminServiceName = null;    
@@ -86,7 +87,6 @@ public final class ServiceForm extends ActionForm {
      */
     private String defaultHost = null;
     
-    private List debugLvlVals = null;
     private List hostNameVals = null;
 
 
@@ -172,25 +172,6 @@ public final class ServiceForm extends ActionForm {
     }
         
     /**
-     * Return the debugVals.
-     */
-    public List getDebugLvlVals() {
-        
-        return this.debugLvlVals;
-        
-    }
-    
-    /**
-     * Set the debugVals.
-     */
-    public void setDebugLvlVals(List debugLvlVals) {
-        
-        this.debugLvlVals = debugLvlVals;
-        
-    }
-    
-    
-    /**
      * Return the host name values.
      */
     public List getHostNameVals() {
@@ -230,21 +211,20 @@ public final class ServiceForm extends ActionForm {
     }
     
     /**
-     * Return the Debug Level Text.
+     * Return the Server ObjectName.
      */
-    
-    public String getDebugLvl() {
+    public String getServerObjectName() {
         
-        return this.debugLvl;
+        return this.serverObjectName;
         
     }
     
     /**
-     * Set the Debug Level Text.
+     * Set the Server Name.
      */
-    public void setDebugLvl(String debugLvl) {
+    public void setServerObjectName(String serverObjectName) {
         
-        this.debugLvl = debugLvl;
+        this.serverObjectName = serverObjectName;
         
     }
     
@@ -318,7 +298,6 @@ public final class ServiceForm extends ActionForm {
         this.serviceName = null;
         this.engineName = null;
         this.adminServiceName = null;
-        this.debugLvl = "0";
         this.defaultHost = null;
     }
     
@@ -330,8 +309,6 @@ public final class ServiceForm extends ActionForm {
 
         StringBuffer sb = new StringBuffer("ServiceForm[adminAction=");
         sb.append(adminAction);
-        sb.append(",debugLvl=");
-        sb.append(debugLvl);
         sb.append(",defaultHost=");
         sb.append(defaultHost);
         sb.append(",engineName=");
@@ -342,6 +319,8 @@ public final class ServiceForm extends ActionForm {
         sb.append(objectName);
         sb.append("',serviceName=");
         sb.append(serviceName);
+        sb.append("',serverObjectName=");
+        sb.append(serverObjectName);
         sb.append("',adminServiceName=");
         sb.append(adminServiceName);
         sb.append("]");
@@ -364,22 +343,17 @@ public final class ServiceForm extends ActionForm {
     HttpServletRequest request) {
         
         ActionErrors errors = new ActionErrors();
-        String submit = request.getParameter("submit");
-        
-        if (submit != null) {
 
-            if ((serviceName == null) || (serviceName.length() < 1)) {
-                errors.add("serviceName",
-                           new ActionMessage("error.serviceName.required"));
-            }
-            
-            if ((engineName == null) || (engineName.length() < 1)) {
-                errors.add("engineName",
-                           new ActionMessage("error.engineName.required"));
-            }
-
+        if ((serviceName == null) || (serviceName.length() < 1)) {
+            errors.add("serviceName",
+                       new ActionMessage("error.serviceName.required"));
         }
         
+        if ((engineName == null) || (engineName.length() < 1)) {
+            errors.add("engineName",
+                       new ActionMessage("error.engineName.required"));
+        }
+
         return errors;
     }
     

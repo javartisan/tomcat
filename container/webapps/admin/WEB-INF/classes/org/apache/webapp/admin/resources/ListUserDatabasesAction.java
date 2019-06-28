@@ -26,16 +26,13 @@ import javax.management.MBeanServer;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
-
+import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * <p>Retrieve the set of MBean names for all currently defined environment entries,
@@ -47,7 +44,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * </ul>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ListUserDatabasesAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -61,12 +58,6 @@ public class ListUserDatabasesAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mserver = null;
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -98,16 +89,19 @@ public class ListUserDatabasesAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
+        String domain = request.getParameter("domain");
+        if (domain != null) {
+            domain = URLDecoder.decode(domain,TomcatTreeBuilder.URL_ENCODING);
+        }
         // Create a form bean containing the requested MBean Names
         UserDatabasesForm userDatabasesForm = null;
         try {
-              userDatabasesForm = ResourceUtils.getUserDatabasesForm(mserver);
+              userDatabasesForm = 
+                        ResourceUtils.getUserDatabasesForm(mserver, domain);
+              userDatabasesForm.setDomain(domain);
         } catch (Exception e) {
             getServlet().log(resources.getMessage
                              (locale,
@@ -122,7 +116,7 @@ public class ListUserDatabasesAction extends Action {
         request.setAttribute("userDatabasesForm", userDatabasesForm);
         saveToken(request);
         String forward =
-            URLDecoder.decode(request.getParameter("forward"));
+            URLDecoder.decode(request.getParameter("forward"),TomcatTreeBuilder.URL_ENCODING);
         return (mapping.findForward(forward));
     }
 

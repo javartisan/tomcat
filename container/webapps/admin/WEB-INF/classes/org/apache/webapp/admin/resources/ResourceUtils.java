@@ -22,31 +22,34 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Collections;
 
+import javax.management.Attribute;
+import javax.management.AttributeNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.management.ObjectInstance;
+
 
 /**
  * <p>Shared utility methods for the resource administration module.</p>
  *
  * @author Manveen Kaur
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceUtils.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
 public class ResourceUtils {
 
-    public final static String ENVIRONMENT_TYPE = "Catalina:type=Environment";
-    public final static String RESOURCE_TYPE = "Catalina:type=Resource";
-    public final static String RESOURCELINK_TYPE = "Catalina:type=ResourceLink";
-    public final static String NAMINGRESOURCES_TYPE = "Catalina:type=NamingResources";
+    public final static String ENVIRONMENT_TYPE = ":type=Environment";
+    public final static String RESOURCE_TYPE = ":type=Resource";
+    public final static String RESOURCELINK_TYPE = ":type=ResourceLink";
+    public final static String NAMINGRESOURCES_TYPE = ":type=NamingResources";
     public final static String GLOBAL_TYPE = ",resourcetype=Global";
     public final static String CONTEXT_TYPE = ",resourcetype=Context";
     public final static String SERVICE_DEFAULTCONTEXT_TYPE = 
                                                 ",resourcetype=ServiceDefaultContext";
     public final static String HOST_DEFAULTCONTEXT_TYPE = 
-                                                ",resourcetype=HostDefaultContext";    
+                                                ",resourcetype=HostDefaultContext";                                                
     
     // resource class names
     public final static String USERDB_CLASS = "org.apache.catalina.UserDatabase";
@@ -55,6 +58,37 @@ public class ResourceUtils {
 
     // --------------------------------------------------------- Public Methods
 
+
+    public static ObjectName getNamingResourceObjectName(String domain,
+            String resourcetype, String path, String host) throws Exception {
+
+        ObjectName oname = null;
+        if ((resourcetype==null) || (domain==null)) {
+            return null;
+        }
+        // Construct the MBean Name for the naming source
+        if (resourcetype.equals("Global")) {
+            oname = new ObjectName(domain + NAMINGRESOURCES_TYPE +
+                                GLOBAL_TYPE);
+        } else if (resourcetype.equals("Context")) {
+            oname = new ObjectName(domain + NAMINGRESOURCES_TYPE +
+                                CONTEXT_TYPE + 
+                                ",path=" + path + ",host=" + host);
+        } else if (resourcetype.equals("DefaultContext")) {
+            if (host.length() > 0) {
+                oname = new ObjectName(domain + NAMINGRESOURCES_TYPE +
+                                        HOST_DEFAULTCONTEXT_TYPE + 
+                                        ",host=" + host);
+            } else {
+                oname = new ObjectName(domain + NAMINGRESOURCES_TYPE +
+                                        SERVICE_DEFAULTCONTEXT_TYPE);            
+            }
+        }
+        
+        return oname;
+        
+    }
+    
     /**
      * Construct and return a ResourcesForm identifying all currently defined
      * resources in the specified resource database.
@@ -64,28 +98,29 @@ public class ResourceUtils {
      * @exception Exception if an error occurs
      */
     public static EnvEntriesForm getEnvEntriesForm(MBeanServer mserver, 
-        String resourcetype, String path, String host, String service) 
+        String resourcetype, String path, String host, String domain) 
         throws Exception {
                            
         ObjectName ename = null;
         if (resourcetype!=null) {
             if (resourcetype.equals("Global")) {
-                ename = new ObjectName( ENVIRONMENT_TYPE + GLOBAL_TYPE + ",*");
+                ename = new ObjectName( domain + ENVIRONMENT_TYPE + 
+                                        GLOBAL_TYPE + ",*");
             } else if (resourcetype.equals("Context")) {
-                ename = new ObjectName(ENVIRONMENT_TYPE + CONTEXT_TYPE + 
-                    ",path=" + path + ",host=" + host + ",service=" + 
-                    service + ",*");
+                ename = new ObjectName ( domain + ENVIRONMENT_TYPE + 
+                                        CONTEXT_TYPE + ",path=" + path + 
+                                        ",host=" + host + ",*");
             } else if (resourcetype.equals("DefaultContext")) {
                 if (host.length() > 0) {
-                    ename = new ObjectName(ENVIRONMENT_TYPE + 
-                        HOST_DEFAULTCONTEXT_TYPE + ",host=" + host + 
-                        ",service=" + service + ",*");
+                    ename = new ObjectName( domain + ENVIRONMENT_TYPE + 
+                        HOST_DEFAULTCONTEXT_TYPE + ",host=" + host + ",*");
                 } else {
-                    ename = new ObjectName(ENVIRONMENT_TYPE + 
-                        SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + service + ",*");
+                    ename = new ObjectName( domain + ENVIRONMENT_TYPE + 
+                        SERVICE_DEFAULTCONTEXT_TYPE + ",*");
                 }
             }
         }
+        
         Iterator iterator = (mserver.queryMBeans(ename, null).iterator());
         
         ArrayList results = new ArrayList();        
@@ -114,12 +149,12 @@ public class ResourceUtils {
             envEntriesForm.setHost(host);
         } else {
             envEntriesForm.setHost("");
-        }        
-        if (service != null) {
-            envEntriesForm.setService(service);
+        }          
+        if (domain != null) {
+            envEntriesForm.setDomain(domain);
         } else {
-            envEntriesForm.setService("");
-        }     
+            envEntriesForm.setDomain("");
+        }          
         
         return (envEntriesForm);
 
@@ -134,39 +169,45 @@ public class ResourceUtils {
      * @exception Exception if an error occurs
      */
     public static DataSourcesForm getDataSourcesForm(MBeanServer mserver, 
-        String resourcetype, String path, String host, String service) 
+        String resourcetype, String path, String host, String domain) 
         throws Exception {
                             
         ObjectName rname = null;
         if (resourcetype!=null) {
             if (resourcetype.equals("Global")) {
-                rname = new ObjectName( RESOURCE_TYPE + GLOBAL_TYPE + 
+                rname = new ObjectName( domain + RESOURCE_TYPE + GLOBAL_TYPE + 
                                         ",class=" + DATASOURCE_CLASS + ",*");
             } else if (resourcetype.equals("Context")) {
-                rname = new ObjectName (RESOURCE_TYPE + CONTEXT_TYPE + 
-                    ",path=" + path + ",host=" + host + ",service=" + 
-                    service + ",class=" + DATASOURCE_CLASS + ",*");
+                rname = new ObjectName ( domain + RESOURCE_TYPE + CONTEXT_TYPE + 
+                    ",path=" + path + ",host=" + host + ",class=" + 
+                    DATASOURCE_CLASS + ",*");
             } else if (resourcetype.equals("DefaultContext")) {
                 if (host.length() > 0) {
-                    rname = new ObjectName(RESOURCE_TYPE + 
+                    rname = new ObjectName( domain + RESOURCE_TYPE + 
                         HOST_DEFAULTCONTEXT_TYPE + ",host=" + host + 
-                        ",service=" + service + ",class=" + 
-                        DATASOURCE_CLASS + ",*");
+                        ",class=" + DATASOURCE_CLASS + ",*");
                 } else {
-                    rname = new ObjectName(RESOURCE_TYPE + 
-                        SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + service + 
+                    rname = new ObjectName( domain + RESOURCE_TYPE + 
+                        SERVICE_DEFAULTCONTEXT_TYPE +  
                         ",class=" + DATASOURCE_CLASS + ",*");
                 }
             }
         }
-       
         Iterator iterator = (mserver.queryMBeans(rname, null).iterator());
         
         ArrayList results = new ArrayList();        
         while (iterator.hasNext()) {
             
             ObjectInstance instance = (ObjectInstance) iterator.next(); 
-            results.add(instance.getObjectName().toString());
+            ObjectName oname = instance.getObjectName();
+            try {
+                // only add resource mbean if definition exists
+                mserver.getAttribute(oname, "driverClassName");
+                results.add(oname.toString());
+            } catch (AttributeNotFoundException ex) {
+                mserver.setAttribute(oname, 
+                    new Attribute("driverClassName", ""));
+            }
         }
 
         Collections.sort(results);        
@@ -189,12 +230,11 @@ public class ResourceUtils {
         } else {
             dataSourcesForm.setHost("");
         }        
-        if (service != null) {
-            dataSourcesForm.setService(service);
+        if (domain != null) {
+            dataSourcesForm.setDomain(domain);
         } else {
-            dataSourcesForm.setService("");
-        }   
-        
+            dataSourcesForm.setDomain("");
+        }          
         return (dataSourcesForm);
 
     }
@@ -208,27 +248,26 @@ public class ResourceUtils {
      * @exception Exception if an error occurs
      */
     public static MailSessionsForm getMailSessionsForm(MBeanServer mserver, 
-        String resourcetype, String path, String host, String service) 
+        String resourcetype, String path, String host, String domain) 
         throws Exception {
                             
         ObjectName rname = null;
         if (resourcetype!=null) {
             if (resourcetype.equals("Global")) {
-                rname = new ObjectName( RESOURCE_TYPE + GLOBAL_TYPE + 
+                rname = new ObjectName( domain + RESOURCE_TYPE + GLOBAL_TYPE + 
                                         ",class=" + MAILSESSION_CLASS + ",*");
             } else if (resourcetype.equals("Context")) {
-                rname = new ObjectName (RESOURCE_TYPE + CONTEXT_TYPE + 
-                    ",path=" + path + ",host=" + host + ",service=" + 
-                    service + ",class=" + MAILSESSION_CLASS + ",*");
+                rname = new ObjectName (domain + RESOURCE_TYPE + CONTEXT_TYPE + 
+                    ",path=" + path + ",host=" + host + ",class=" + 
+                    MAILSESSION_CLASS + ",*");
             } else if (resourcetype.equals("DefaultContext")) {
                 if (host.length() > 0) {
-                    rname = new ObjectName(RESOURCE_TYPE + 
+                    rname = new ObjectName(domain + RESOURCE_TYPE + 
                         HOST_DEFAULTCONTEXT_TYPE + ",host=" + host + 
-                        ",service=" + service + ",class=" + 
-                        MAILSESSION_CLASS + ",*");
+                        ",class=" + MAILSESSION_CLASS + ",*");
                 } else {
-                    rname = new ObjectName(RESOURCE_TYPE + 
-                        SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + service + 
+                    rname = new ObjectName(domain + RESOURCE_TYPE + 
+                        SERVICE_DEFAULTCONTEXT_TYPE +
                         ",class=" + MAILSESSION_CLASS + ",*");
                 }
             }
@@ -263,11 +302,11 @@ public class ResourceUtils {
         } else {
             mailSessionsForm.setHost("");
         }        
-        if (service != null) {
-            mailSessionsForm.setService(service);
+        if (domain != null) {
+            mailSessionsForm.setDomain(domain);
         } else {
-            mailSessionsForm.setService("");
-        }   
+            mailSessionsForm.setDomain("");
+        }          
         
         return (mailSessionsForm);
 
@@ -282,25 +321,26 @@ public class ResourceUtils {
      * @exception Exception if an error occurs
      */
     public static ResourceLinksForm getResourceLinksForm(MBeanServer mserver, 
-        String resourcetype, String path, String host, String service) 
+        String resourcetype, String path, String host, String domain) 
         throws Exception {
 
         ObjectName rname = null;
         if (resourcetype!=null) {
             if (resourcetype.equals("Global")) {
-                rname = new ObjectName( RESOURCELINK_TYPE + GLOBAL_TYPE + ",*");
+                rname = new ObjectName( domain + RESOURCELINK_TYPE + 
+                                        GLOBAL_TYPE + ",*");
             } else if (resourcetype.equals("Context")) {
-                rname = new ObjectName (RESOURCELINK_TYPE + CONTEXT_TYPE + 
-                    ",path=" + path + ",host=" + host + ",service=" + 
-                    service + ",*");
+                rname = new ObjectName ( domain + RESOURCELINK_TYPE + 
+                            CONTEXT_TYPE + ",path=" + path + 
+                            ",host=" + host + ",*");
             } else if (resourcetype.equals("DefaultContext")) {
                 if (host.length() > 0) {
-                    rname = new ObjectName(RESOURCELINK_TYPE + 
-                        HOST_DEFAULTCONTEXT_TYPE + ",host=" + host + 
-                        ",service=" + service + ",*");
+                    rname = new ObjectName( domain + RESOURCELINK_TYPE + 
+                                HOST_DEFAULTCONTEXT_TYPE + 
+                                ",host=" + host + ",*");
                 } else {
-                    rname = new ObjectName(RESOURCELINK_TYPE + 
-                        SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + service + ",*");
+                    rname = new ObjectName( domain + RESOURCELINK_TYPE + 
+                                SERVICE_DEFAULTCONTEXT_TYPE + ",*");
                 }
             }
         }
@@ -333,11 +373,11 @@ public class ResourceUtils {
         } else {
             resourceLinksForm.setHost("");
         }        
-        if (service != null) {
-            resourceLinksForm.setService(service);
+        if (domain != null) {
+            resourceLinksForm.setDomain(domain);
         } else {
-            resourceLinksForm.setService("");
-        }   
+            resourceLinksForm.setDomain("");
+        }          
         
         return (resourceLinksForm);
         
@@ -351,10 +391,10 @@ public class ResourceUtils {
      *
      * @exception Exception if an error occurs
      */
-    public static UserDatabasesForm getUserDatabasesForm(MBeanServer mserver)
+    public static UserDatabasesForm getUserDatabasesForm(MBeanServer mserver,String domain)
         throws Exception {
             
-        ObjectName rname = new ObjectName( RESOURCE_TYPE + GLOBAL_TYPE +
+        ObjectName rname = new ObjectName( domain + RESOURCE_TYPE + GLOBAL_TYPE +
                             ",class=" + USERDB_CLASS + ",*");
         
         Iterator iterator = (mserver.queryMBeans(rname, null).iterator());

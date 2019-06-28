@@ -1,9 +1,10 @@
 /*
- * Copyright 1999, 2000, 2001 ,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -26,7 +27,7 @@ import javax.servlet.http.*;
 
 /**
  * Test aggregation of query string and POST parameters.  According to
- * Servlet 2.3 PFD, Section 4.1, all such parameters should be aggregated,
+ * Servlet 2.4 PFD, Section 4.1, all such parameters should be aggregated,
  * and if there are duplicate parameter names from both sources, the
  * parameter value(s) from the query string should appear first in the
  * values returned by request.getParameterValues().
@@ -35,7 +36,7 @@ import javax.servlet.http.*;
  * <code>getParameterMap()</code> method to retrieve parameter values.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 289023 $ $Date: 2004-08-26 23:06:34 +0100 (Thu, 26 Aug 2004) $
+ * @version $Id: Aggregate02.java 939535 2010-04-30 01:11:10Z kkolinko $
  */
 
 public class Aggregate02 extends HttpServlet {

@@ -32,8 +32,10 @@ import org.apache.catalina.Role;
 import org.apache.catalina.User;
 import org.apache.catalina.UserDatabase;
 import org.apache.catalina.util.StringManager;
-import org.apache.commons.digester.Digester;
-import org.apache.commons.digester.ObjectCreationFactory;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.tomcat.util.digester.Digester;
+import org.apache.tomcat.util.digester.ObjectCreationFactory;
 import org.xml.sax.Attributes;
 
 
@@ -43,12 +45,14 @@ import org.xml.sax.Attributes;
  * and uses a specified XML file for its persistent storage.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MemoryUserDatabase.java 1140072 2011-06-27 09:28:44Z markt $
  * @since 4.1
  */
 
 public class MemoryUserDatabase implements UserDatabase {
 
+
+    private static Log log = LogFactory.getLog(MemoryUserDatabase.class);
 
     // ----------------------------------------------------------- Constructors
 
@@ -112,6 +116,11 @@ public class MemoryUserDatabase implements UserDatabase {
      */
     protected String pathnameNew = pathname + ".new";
 
+
+    /**
+     * A flag, indicating if the user database is read only.
+     */
+    protected boolean readonly = false;
 
     /**
      * The set of {@link Role}s defined in this database, keyed by
@@ -179,6 +188,28 @@ public class MemoryUserDatabase implements UserDatabase {
         this.pathname = pathname;
         this.pathnameOld = pathname + ".old";
         this.pathnameNew = pathname + ".new";
+
+    }
+
+
+    /**
+     * Returning the readonly status of the user database
+     */
+    public boolean getReadonly() {
+
+        return (this.readonly);
+
+    }
+
+
+    /**
+     * Setting the readonly status of the user database
+     *
+     * @param readonly The new readonly status
+     */
+    public void setReadonly(boolean readonly) {
+
+        this.readonly = readonly;
 
     }
 
@@ -443,12 +474,39 @@ public class MemoryUserDatabase implements UserDatabase {
 
 
     /**
+     * Check for permissions to save this user database
+     * to persistent storage location
+     *
+     */
+    public boolean isWriteable() {
+
+        File file = new File(pathname);
+        if (!file.isAbsolute()) {
+            file = new File(System.getProperty("catalina.base"),
+                            pathname);
+        }
+        File dir = file.getParentFile();
+        return dir.exists() && dir.isDirectory() && dir.canWrite();
+
+    }
+
+
+    /**
      * Save any updated information to the persistent storage location for
      * this user database.
      *
      * @exception Exception if any exception is thrown during saving
      */
     public void save() throws Exception {
+
+        if (getReadonly()) {
+            return;
+        }
+
+        if (!isWriteable()) {
+            log.warn(sm.getString("memoryUserDatabase.notPersistable"));
+            return;
+        }
 
         // Write out contents to a temporary file
         File fileNew = new File(pathnameNew);
@@ -483,7 +541,7 @@ public class MemoryUserDatabase implements UserDatabase {
             values = getUsers();
             while (values.hasNext()) {
                 writer.print("  ");
-                writer.println(values.next());
+                writer.println(((MemoryUser) values.next()).toXml());
             }
 
             // Print the file epilog
@@ -507,7 +565,7 @@ public class MemoryUserDatabase implements UserDatabase {
         }
 
         // Perform the required renames to permanently save this file
-        File fileOld = new File(pathnameNew);
+        File fileOld = new File(pathnameOld);
         if (!fileOld.isAbsolute()) {
             fileOld =
                 new File(System.getProperty("catalina.base"), pathnameOld);

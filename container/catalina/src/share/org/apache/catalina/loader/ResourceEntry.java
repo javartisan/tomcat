@@ -26,7 +26,7 @@ import java.util.jar.Manifest;
  * Resource entry.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceEntry.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 public class ResourceEntry {
 
@@ -47,7 +47,7 @@ public class ResourceEntry {
     /**
      * Loaded class.
      */
-    public Class loadedClass = null;
+    public volatile Class loadedClass = null;
 
 
     /**

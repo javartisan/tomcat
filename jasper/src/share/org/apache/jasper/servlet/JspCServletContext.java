@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 
 package org.apache.jasper.servlet;
 
@@ -27,6 +28,7 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Set;
 import java.util.Vector;
+
 import javax.servlet.RequestDispatcher;
 import javax.servlet.Servlet;
 import javax.servlet.ServletContext;
@@ -234,7 +236,22 @@ public class JspCServletContext implements ServletContext {
         if (!path.startsWith("/"))
             throw new MalformedURLException("Path '" + path +
                                             "' does not start with '/'");
-        return (new URL(myResourceBaseURL, path.substring(1)));
+        URL url = new URL(myResourceBaseURL, path.substring(1));
+        InputStream is = null;
+        try {
+            is = url.openStream();
+        } catch (Throwable t) {
+            url = null;
+        } finally {
+            if (is != null) {
+                try {
+                    is.close();
+                } catch (Throwable t2) {
+                    // Ignore
+                }
+            }
+        }
+        return url;
 
     }
 

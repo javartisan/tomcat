@@ -15,18 +15,21 @@
  * limitations under the License.
  */
 
-
 package org.apache.catalina.realm;
 
-
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.Principal;
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 
 import javax.naming.Context;
 import javax.naming.CommunicationException;
+import javax.naming.CompositeName;
 import javax.naming.InvalidNameException;
 import javax.naming.NameNotFoundException;
 import javax.naming.NamingEnumeration;
@@ -34,6 +37,7 @@ import javax.naming.NamingException;
 import javax.naming.NameParser;
 import javax.naming.Name;
 import javax.naming.AuthenticationException;
+import javax.naming.ServiceUnavailableException;
 import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
@@ -42,7 +46,8 @@ import javax.naming.directory.SearchControls;
 import javax.naming.directory.SearchResult;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.util.Base64;
-
+import org.apache.tomcat.util.buf.ByteChunk;
+import org.apache.tomcat.util.buf.CharChunk;
 
 /**
  * <p>Implementation of <strong>Realm</strong> that works with a directory
@@ -148,7 +153,7 @@ import org.apache.catalina.util.Base64;
  *
  * @author John Holman
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: JNDIRealm.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class JNDIRealm extends RealmBase {
@@ -808,16 +813,23 @@ public class JNDIRealm extends RealmBase {
 
             } catch (CommunicationException e) {
 
+                // log the exception so we know it's there.
+                containerLog.warn(sm.getString("jndiRealm.exception"), e);
 
-                // If contains the work closed. Then assume socket is closed.
-                // If message is null, assume the worst and allow the
-                // connection to be closed.
-                if (e.getMessage()!=null &&
-                    e.getMessage().indexOf("closed") < 0)
-                    throw(e);
+                // close the connection so we know it will be reopened.
+                if (context != null)
+                    close(context);
+
+                // open a new directory context.
+                context = open();
+
+                // Try the authentication again.
+                principal = authenticate(context, username, credentials);
+
+            } catch (ServiceUnavailableException e) {
 
                 // log the exception so we know it's there.
-                log(sm.getString("jndiRealm.exception"), e);
+                containerLog.warn(sm.getString("jndiRealm.exception"), e);
 
                 // close the connection so we know it will be reopened.
                 if (context != null)
@@ -841,7 +853,7 @@ public class JNDIRealm extends RealmBase {
         } catch (NamingException e) {
 
             // Log the problem for posterity
-            log(sm.getString("jndiRealm.exception"), e);
+            containerLog.error(sm.getString("jndiRealm.exception"), e);
 
             // Close the connection so that it gets reopened next time
             if (context != null)
@@ -900,7 +912,7 @@ public class JNDIRealm extends RealmBase {
                         }
                     } catch (InvalidNameException ine) {
                         // Log the problem for posterity
-                        log(sm.getString("jndiRealm.exception"), ine);
+                        containerLog.warn(sm.getString("jndiRealm.exception"), ine);
                         // ignore; this is probably due to a name not fitting
                         // the search path format exactly, as in a fully-
                         // qualified name being munged into a search path
@@ -987,17 +999,11 @@ public class JNDIRealm extends RealmBase {
                                               String[] attrIds)
         throws NamingException {
 
-        if (debug >= 2)
-            log("lookupUser(" + username + ")");
-
         if (username == null || userPatternFormatArray[curUserPattern] == null)
             return (null);
 
         // Form the dn from the user pattern
         String dn = userPatternFormatArray[curUserPattern].format(new String[] { username });
-        if (debug >= 3) {
-            log("  dn=" + dn);
-        }
 
         // Get required attributes from user entry
         Attributes attrs = null;
@@ -1060,20 +1066,12 @@ public class JNDIRealm extends RealmBase {
             attrIds = new String[0];
         constraints.setReturningAttributes(attrIds);
 
-        if (debug > 3) {
-            log("  Searching for " + username);
-            log("  base: " + userBase + "  filter: " + filter);
-        }
-
         NamingEnumeration results =
             context.search(userBase, filter, constraints);
 
 
         // Fail if no entries found
         if (results == null || !results.hasMore()) {
-            if (debug > 2) {
-                log("  username not found");
-            }
             return (null);
         }
 
@@ -1082,21 +1080,15 @@ public class JNDIRealm extends RealmBase {
 
         // Check no further entries were found
         if (results.hasMore()) {
-            log("username " + username + " has multiple entries");
+            if(containerLog.isInfoEnabled())
+                containerLog.info("username " + username + " has multiple entries");
             return (null);
         }
 
-        // Get the entry's distinguished name
-        NameParser parser = context.getNameParser("");
-        Name contextName = parser.parse(context.getNameInNamespace());
-        Name baseName = parser.parse(userBase);
-        Name entryName = parser.parse(result.getName());
-        Name name = contextName.addAll(baseName);
-        name = name.addAll(entryName);
-        String dn = name.toString();
+        String dn = getDistinguishedName(context, userBase, result);
 
-        if (debug > 2)
-            log("  entry found for " + username + " with dn " + dn);
+        if (containerLog.isTraceEnabled())
+            containerLog.trace("  entry found for " + username + " with dn " + dn);
 
         // Get the entry's attributes
         Attributes attrs = result.getAttributes();
@@ -1145,12 +1137,12 @@ public class JNDIRealm extends RealmBase {
              validated = compareCredentials(context, user, credentials);
          }
 
-         if (debug >= 2) {
+         if (containerLog.isTraceEnabled()) {
              if (validated) {
-                 log(sm.getString("jndiRealm.authenticateSuccess",
+                 containerLog.trace(sm.getString("jndiRealm.authenticateSuccess",
                                   user.username));
              } else {
-                 log(sm.getString("jndiRealm.authenticateFailure",
+                 containerLog.trace(sm.getString("jndiRealm.authenticateFailure",
                                   user.username));
              }
          }
@@ -1182,15 +1174,15 @@ public class JNDIRealm extends RealmBase {
             return (false);
 
         // Validate the credentials specified by the user
-        if (debug >= 3)
-            log("  validating credentials");
+        if (containerLog.isTraceEnabled())
+            containerLog.trace("  validating credentials");
 
         boolean validated = false;
         if (hasMessageDigest()) {
-            // iPlanet support if the values starts with {SHA1}
+            // Some directories prefix the password with the hash type
             // The string is in a format compatible with Base64.encode not
             // the Hex encoding of the parent class.
-            if (password.startsWith("{SHA}")) {
+            if (password.startsWith("{MD5}") || password.startsWith("{SHA}")) {
                 /* sync since super.digest() does this same thing */
                 synchronized (this) {
                     password = password.substring(5);
@@ -1200,6 +1192,44 @@ public class JNDIRealm extends RealmBase {
                         new String(Base64.encode(md.digest()));
                     validated = password.equals(digestedPassword);
                 }
+            } else if (password.startsWith("{SSHA}")) {
+                // Bugzilla 32938
+                /* sync since super.digest() does this same thing */
+                synchronized (this) {
+                    password = password.substring(6);
+
+                    md.reset();
+                    md.update(credentials.getBytes());
+
+                    // Decode stored password.
+                    ByteChunk pwbc = new ByteChunk(password.length());
+                    try {
+                        pwbc.append(password.getBytes(), 0, password.length());
+                    } catch (IOException e) {
+                        // Should never happen
+                        containerLog.error("Could not append password bytes to chunk: ", e);
+                    }
+
+                    CharChunk decoded = new CharChunk();
+                    Base64.decode(pwbc, decoded);
+                    char[] pwarray = decoded.getBuffer();
+
+                    // Split decoded password into hash and salt.
+                    final int saltpos = 20;
+                    byte[] hash = new byte[saltpos];
+                    for (int i=0; i< hash.length; i++) {
+                        hash[i] = (byte) pwarray[i];
+                    }
+
+                    byte[] salt = new byte[pwarray.length - saltpos];
+                    for (int i=0; i< salt.length; i++)
+                        salt[i] = (byte)pwarray[i+saltpos];
+
+                    md.update(salt);
+                    byte[] dp = md.digest();
+
+                    validated = Arrays.equals(dp, hash);
+                } // End synchronized(this) block
             } else {
                 // Hex hashes should be compared case-insensitive
                 validated = (digest(credentials).equalsIgnoreCase(password));
@@ -1235,8 +1265,8 @@ public class JNDIRealm extends RealmBase {
              return (false);
 
          // Validate the credentials specified by the user
-         if (debug >= 3) {
-             log("  validating credentials by binding as the user");
+         if (containerLog.isTraceEnabled()) {
+             containerLog.trace("  validating credentials by binding as the user");
         }
 
         // Set up security environment to bind as the user
@@ -1246,15 +1276,15 @@ public class JNDIRealm extends RealmBase {
         // Elicit an LDAP bind operation
         boolean validated = false;
         try {
-            if (debug > 2) {
-                log("  binding as "  + dn);
+            if (containerLog.isTraceEnabled()) {
+                containerLog.trace("  binding as "  + dn);
             }
             attr = context.getAttributes("", null);
             validated = true;
         }
         catch (AuthenticationException e) {
-            if (debug > 2) {
-                log("  bind attempt failed");
+            if (containerLog.isTraceEnabled()) {
+                containerLog.trace("  bind attempt failed");
             }
         }
 
@@ -1301,8 +1331,8 @@ public class JNDIRealm extends RealmBase {
         if (dn == null || username == null)
             return (null);
 
-        if (debug >= 2)
-            log("  getRoles(" + dn + ")");
+        if (containerLog.isTraceEnabled())
+            containerLog.trace("  getRoles(" + dn + ")");
 
         // Start with roles retrieved from the user entry
         ArrayList list = user.roles;
@@ -1324,11 +1354,6 @@ public class JNDIRealm extends RealmBase {
         controls.setReturningAttributes(new String[] {roleName});
 
         // Perform the configured search and process the results
-        if (debug >= 3) {
-            log("  Searching role base '" + roleBase + "' for attribute '" +
-                roleName + "'");
-            log("  With filter expression '" + filter + "'");
-        }
         NamingEnumeration results =
             context.search(roleBase, filter, controls);
         if (results == null)
@@ -1342,13 +1367,13 @@ public class JNDIRealm extends RealmBase {
         }
 
 
-        if (debug >= 2) {
+        if (containerLog.isTraceEnabled()) {
             if (list != null) {
-                log("  Returning " + list.size() + " roles");
+                containerLog.trace("  Returning " + list.size() + " roles");
                 for (int i=0; i<list.size(); i++)
-                    log(  "  Found role " + list.get(i));
+                    containerLog.trace(  "  Found role " + list.get(i));
             } else {
-                log("  getRoles about to return null ");
+                containerLog.trace("  getRoles about to return null ");
             }
         }
 
@@ -1367,8 +1392,8 @@ public class JNDIRealm extends RealmBase {
     private String getAttributeValue(String attrId, Attributes attrs)
         throws NamingException {
 
-        if (debug >= 3)
-            log("  retrieving attribute " + attrId);
+        if (containerLog.isTraceEnabled())
+            containerLog.trace("  retrieving attribute " + attrId);
 
         if (attrId == null || attrs == null)
             return null;
@@ -1404,8 +1429,8 @@ public class JNDIRealm extends RealmBase {
                                          ArrayList values)
         throws NamingException{
 
-        if (debug >= 3)
-            log("  retrieving values for attribute " + attrId);
+        if (containerLog.isTraceEnabled())
+            containerLog.trace("  retrieving values for attribute " + attrId);
         if (attrId == null || attrs == null)
             return values;
         if (values == null)
@@ -1435,11 +1460,11 @@ public class JNDIRealm extends RealmBase {
 
         // Close our opened connection
         try {
-            if (debug >= 1)
-                log("Closing directory context");
+            if (containerLog.isDebugEnabled())
+                containerLog.debug("Closing directory context");
             context.close();
         } catch (NamingException e) {
-            log(sm.getString("jndiRealm.close"), e);
+            containerLog.error(sm.getString("jndiRealm.close"), e);
         }
         this.context = null;
 
@@ -1465,7 +1490,6 @@ public class JNDIRealm extends RealmBase {
 
     }
 
-
     /**
      * Return the Principal associated with the given user name.
      */
@@ -1489,7 +1513,22 @@ public class JNDIRealm extends RealmBase {
             } catch (CommunicationException e) {
 
                 // log the exception so we know it's there.
-                log(sm.getString("jndiRealm.exception"), e);
+                containerLog.warn(sm.getString("jndiRealm.exception"), e);
+
+                // close the connection so we know it will be reopened.
+                if (context != null)
+                    close(context);
+
+                // open a new directory context.
+                context = open();
+
+                // Try the authentication again.
+                principal = getPrincipal(context, username);
+
+            } catch (ServiceUnavailableException e) {
+
+                // log the exception so we know it's there.
+                containerLog.warn(sm.getString("jndiRealm.exception"), e);
 
                 // close the connection so we know it will be reopened.
                 if (context != null)
@@ -1513,7 +1552,7 @@ public class JNDIRealm extends RealmBase {
         } catch (NamingException e) {
 
             // Log the problem for posterity
-            log(sm.getString("jndiRealm.exception"), e);
+            containerLog.error(sm.getString("jndiRealm.exception"), e);
 
             // Close the connection so that it gets reopened next time
             if (context != null)
@@ -1523,6 +1562,7 @@ public class JNDIRealm extends RealmBase {
             return (null);
 
         }
+
 
     }
 
@@ -1536,10 +1576,13 @@ public class JNDIRealm extends RealmBase {
         
         User user = getUser(context, username);
         
-        return new GenericPrincipal(this, user.username, user.password ,
-                getRoles(context, user));
-    }
+        if (user != null) {
+            return new GenericPrincipal(this, user.username, user.password,
+                    getRoles(context, user));
+        }
 
+        return null;
+    }
 
     /**
      * Open (if necessary) and return a connection to the configured
@@ -1563,7 +1606,7 @@ public class JNDIRealm extends RealmBase {
             connectionAttempt = 1;
 
             // log the first exception.
-            log(sm.getString("jndiRealm.exception"), e);
+            containerLog.warn(sm.getString("jndiRealm.exception"), e);
 
             // Try connecting to the alternate url.
             context = new InitialDirContext(getDirectoryContextEnvironment());
@@ -1590,10 +1633,10 @@ public class JNDIRealm extends RealmBase {
         Hashtable env = new Hashtable();
 
         // Configure our directory context environment.
-        if (debug >= 1 && connectionAttempt == 0)
-            log("Connecting to URL " + connectionURL);
-        else if (debug >= 1 && connectionAttempt > 0)
-            log("Connecting to URL " + alternateURL);
+        if (containerLog.isDebugEnabled() && connectionAttempt == 0)
+            containerLog.debug("Connecting to URL " + connectionURL);
+        else if (containerLog.isDebugEnabled() && connectionAttempt > 0)
+            containerLog.debug("Connecting to URL " + alternateURL);
         env.put(Context.INITIAL_CONTEXT_FACTORY, contextFactory);
         if (connectionName != null)
             env.put(Context.SECURITY_PRINCIPAL, connectionName);
@@ -1640,15 +1683,15 @@ public class JNDIRealm extends RealmBase {
      */
     public void start() throws LifecycleException {
 
+        // Perform normal superclass initialization
+        super.start();
+
         // Validate that we can open our connection
         try {
             open();
         } catch (NamingException e) {
             throw new LifecycleException(sm.getString("jndiRealm.open"), e);
         }
-
-        // Perform normal superclass initialization
-        super.start();
 
     }
 
@@ -1727,7 +1770,7 @@ public class JNDIRealm extends RealmBase {
      *     \  -> \5c
      *     \0 -> \00
      * @param inString string to escape according to RFC 2254 guidelines
-     * @return The escaped string
+     * @return String the escaped/encoded result
      */
     protected String doRFC2254Encoding(String inString) {
         StringBuffer buf = new StringBuffer(inString.length());
@@ -1755,6 +1798,62 @@ public class JNDIRealm extends RealmBase {
             }
         }
         return buf.toString();
+    }
+
+
+    /**
+     * Returns the distinguished name of a search result.
+     *
+     * @param context Our DirContext
+     * @param base The base DN
+     * @param result The search result
+     * @return String containing the distinguished name
+     */
+    protected String getDistinguishedName(DirContext context, String base,
+            SearchResult result) throws NamingException {
+        // Get the entry's distinguished name.  For relative results, this means
+        // we need to composite a name with the base name, the context name, and
+        // the result name.  For non-relative names, use the returned name.
+        if (result.isRelative()) {
+           if (containerLog.isTraceEnabled()) {
+               containerLog.trace("  search returned relative name: " +
+                       result.getName());
+           }
+           NameParser parser = context.getNameParser("");
+           Name contextName = parser.parse(context.getNameInNamespace());
+           Name baseName = parser.parse(base);
+   
+           // Bugzilla 32269
+           Name entryName =
+               parser.parse(new CompositeName(result.getName()).get(0));
+   
+           Name name = contextName.addAll(baseName);
+           name = name.addAll(entryName);
+           return name.toString();
+        } else {
+           String absoluteName = result.getName();
+           if (containerLog.isTraceEnabled())
+               containerLog.trace("  search returned absolute name: " +
+                       result.getName());
+           try {
+               // Normalize the name by running it through the name parser.
+               NameParser parser = context.getNameParser("");
+               URI userNameUri = new URI(absoluteName);
+               String pathComponent = userNameUri.getPath();
+               // Should not ever have an empty path component, since that is /{DN}
+               if (pathComponent.length() < 1 ) {
+                   throw new InvalidNameException(
+                           "Search returned unparseable absolute name: " +
+                           absoluteName );
+               }
+               Name name = parser.parse(pathComponent.substring(1));
+               return name.toString();
+           } catch ( URISyntaxException e ) {
+               throw new InvalidNameException(
+                       "Search returned unparseable absolute name: " +
+                       absoluteName );
+           }
+        }
     }
 
 

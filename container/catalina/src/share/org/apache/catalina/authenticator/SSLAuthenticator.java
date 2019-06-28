@@ -22,12 +22,14 @@ package org.apache.catalina.authenticator;
 import java.io.IOException;
 import java.security.Principal;
 import java.security.cert.X509Certificate;
-import javax.servlet.http.HttpServletRequest;
+
 import javax.servlet.http.HttpServletResponse;
+
+import org.apache.coyote.ActionCode;
 import org.apache.catalina.Globals;
-import org.apache.catalina.HttpRequest;
-import org.apache.catalina.HttpResponse;
 import org.apache.catalina.LifecycleException;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.deploy.LoginConfig;
 
 
@@ -36,8 +38,11 @@ import org.apache.catalina.deploy.LoginConfig;
  * An <b>Authenticator</b> and <b>Valve</b> implementation of authentication
  * that utilizes SSL certificates to identify client users.
  *
+ * You will likely want to read the SSL HowTo in the Tomcat documentation:
+ * http://tomcat.apache.org/tomcat-5.5-doc/ssl-howto.html
+ *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SSLAuthenticator.java 939523 2010-04-30 00:28:42Z kkolinko $
  */
 
 public class SSLAuthenticator
@@ -69,9 +74,8 @@ public class SSLAuthenticator
 
     /**
      * Authenticate the user by checking for the existence of a certificate
-     * chain (which should have been made visible by an instance of
-     * <code>CertificatesValve</code), and optionally asking a trust
-     * manager to validate that we trust this user.
+     * chain, and optionally asking a trust manager to validate that we trust
+     * this user.
      *
      * @param request Request we are processing
      * @param response Response we are creating
@@ -80,29 +84,28 @@ public class SSLAuthenticator
      *
      * @exception IOException if an input/output error occurs
      */
-    public boolean authenticate(HttpRequest request,
-                                HttpResponse response,
+    public boolean authenticate(Request request,
+                                Response response,
                                 LoginConfig config)
         throws IOException {
 
         // Have we already authenticated someone?
-        Principal principal =
-            ((HttpServletRequest) request.getRequest()).getUserPrincipal();
+        Principal principal = request.getUserPrincipal();
         //String ssoId = (String) request.getNote(Constants.REQ_SSOID_NOTE);
         if (principal != null) {
-            if (debug >= 1)
-                log("Already authenticated '" + principal.getName() + "'");
+            if (containerLog.isDebugEnabled())
+                containerLog.debug("Already authenticated '" + principal.getName() + "'");
             // Associate the session with any existing SSO session in order
             // to get coordinated session invalidation at logout
             String ssoId = (String) request.getNote(Constants.REQ_SSOID_NOTE);
             if (ssoId != null)
-                associate(ssoId, getSession(request, true));
+                associate(ssoId, request.getSessionInternal(true));
             return (true);
         }
 
         // NOTE: We don't try to reauthenticate using any existing SSO session,
         // because that will only work if the original authentication was
-        // BASIC or FORM, which are less secure than the CLIENT-CERT auth-type
+        // BASIC or FORM, which are less secure than the CLIENT_CERT auth-type
         // specified for this webapp
         //
         // Uncomment below to allow previous FORM or BASIC authentications
@@ -111,8 +114,9 @@ public class SSLAuthenticator
         /*
         // Is there an SSO session against which we can try to reauthenticate?
         if (ssoId != null) {
-            if (debug >= 1)
-                log("SSO Id " + ssoId + " set; attempting reauthentication");
+            if (log.isDebugEnabled())
+                log.debug("SSO Id " + ssoId + " set; attempting " +
+                          "reauthentication");
             // Try to reauthenticate using data cached by SSO.  If this fails,
             // either the original SSO logon was of DIGEST or SSL (which
             // we can't reauthenticate ourselves because there is no
@@ -125,31 +129,32 @@ public class SSLAuthenticator
         */
 
         // Retrieve the certificate chain for this client
-        HttpServletResponse hres =
-            (HttpServletResponse) response.getResponse();
-        if (debug >= 1)
-            log(" Looking up certificates");
+        if (containerLog.isDebugEnabled())
+            containerLog.debug(" Looking up certificates");
+
         X509Certificate certs[] = (X509Certificate[])
-            request.getRequest().getAttribute(Globals.CERTIFICATES_ATTR);
+            request.getAttribute(Globals.CERTIFICATES_ATTR);
         if ((certs == null) || (certs.length < 1)) {
+            request.getCoyoteRequest().action
+                              (ActionCode.ACTION_REQ_SSL_CERTIFICATE, null);
             certs = (X509Certificate[])
-                request.getRequest().getAttribute(Globals.SSL_CERTIFICATE_ATTR);
+                request.getAttribute(Globals.CERTIFICATES_ATTR);
         }
         if ((certs == null) || (certs.length < 1)) {
-            if (debug >= 1)
-                log("  No certificates included with this request");
-            hres.sendError(HttpServletResponse.SC_BAD_REQUEST,
-                           sm.getString("authenticator.certificates"));
+            if (containerLog.isDebugEnabled())
+                containerLog.debug("  No certificates included with this request");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED,
+                               sm.getString("authenticator.certificates"));
             return (false);
         }
 
         // Authenticate the specified certificate chain
         principal = context.getRealm().authenticate(certs);
         if (principal == null) {
-            if (debug >= 1)
-                log("  Realm.authenticate() returned false");
-            hres.sendError(HttpServletResponse.SC_UNAUTHORIZED,
-                           sm.getString("authenticator.unauthorized"));
+            if (containerLog.isDebugEnabled())
+                containerLog.debug("  Realm.authenticate() returned false");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED,
+                               sm.getString("authenticator.unauthorized"));
             return (false);
         }
 

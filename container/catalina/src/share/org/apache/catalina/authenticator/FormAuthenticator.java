@@ -20,20 +20,29 @@ package org.apache.catalina.authenticator;
 
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.Principal;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Locale;
-import java.util.Map;
+
+import javax.servlet.RequestDispatcher;
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import org.apache.catalina.HttpRequest;
-import org.apache.catalina.HttpResponse;
+
+import org.apache.catalina.Globals;
 import org.apache.catalina.Realm;
 import org.apache.catalina.Session;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.deploy.LoginConfig;
-
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.coyote.ActionCode;
+import org.apache.tomcat.util.buf.ByteChunk;
+import org.apache.tomcat.util.buf.CharChunk;
+import org.apache.tomcat.util.buf.MessageBytes;
+import org.apache.tomcat.util.http.MimeHeaders;
 
 
 /**
@@ -41,12 +50,14 @@ import org.apache.catalina.deploy.LoginConfig;
  * Authentication, as described in the Servlet API Specification, Version 2.2.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Remy Maucherat
+ * @version $Id: FormAuthenticator.java 939523 2010-04-30 00:28:42Z kkolinko $
  */
 
 public class FormAuthenticator
     extends AuthenticatorBase {
-
+    
+    private static Log log = LogFactory.getLog(FormAuthenticator.class);
 
     // ----------------------------------------------------- Instance Variables
 
@@ -57,14 +68,14 @@ public class FormAuthenticator
     protected static final String info =
         "org.apache.catalina.authenticator.FormAuthenticator/1.0";
 
-
     /**
      * Character encoding to use to read the username and password parameters
      * from the request. If not set, the encoding of the request body will be
      * used.
      */
     protected String characterEncoding = null;
-    
+
+
     // ------------------------------------------------------------- Properties
 
 
@@ -73,7 +84,7 @@ public class FormAuthenticator
      */
     public String getInfo() {
 
-        return (FormAuthenticator.info);
+        return (info);
 
     }
 
@@ -92,8 +103,8 @@ public class FormAuthenticator
     public void setCharacterEncoding(String encoding) {
         characterEncoding = encoding;
     }
-    
-    
+
+
     // --------------------------------------------------------- Public Methods
 
 
@@ -110,35 +121,32 @@ public class FormAuthenticator
      *
      * @exception IOException if an input/output error occurs
      */
-    public boolean authenticate(HttpRequest request,
-                                HttpResponse response,
+    public boolean authenticate(Request request,
+                                Response response,
                                 LoginConfig config)
         throws IOException {
 
         // References to objects we will need later
-        HttpServletRequest hreq =
-          (HttpServletRequest) request.getRequest();
-        HttpServletResponse hres =
-          (HttpServletResponse) response.getResponse();
         Session session = null;
 
         // Have we already authenticated someone?
-        Principal principal = hreq.getUserPrincipal();
+        Principal principal = request.getUserPrincipal();
         String ssoId = (String) request.getNote(Constants.REQ_SSOID_NOTE);
         if (principal != null) {
-            if (debug >= 1)
-                log("Already authenticated '" +
+            if (log.isDebugEnabled())
+                log.debug("Already authenticated '" +
                     principal.getName() + "'");
             // Associate the session with any existing SSO session
             if (ssoId != null)
-                associate(ssoId, getSession(request, true));
+                associate(ssoId, request.getSessionInternal(true));
             return (true);
         }
 
         // Is there an SSO session against which we can try to reauthenticate?
         if (ssoId != null) {
-            if (debug >= 1)
-                log("SSO Id " + ssoId + " set; attempting reauthentication");
+            if (log.isDebugEnabled())
+                log.debug("SSO Id " + ssoId + " set; attempting " +
+                          "reauthentication");
             // Try to reauthenticate using data cached by SSO.  If this fails,
             // either the original SSO logon was of DIGEST or SSL (which
             // we can't reauthenticate ourselves because there is no
@@ -151,16 +159,16 @@ public class FormAuthenticator
 
         // Have we authenticated this user before but have caching disabled?
         if (!cache) {
-            session = getSession(request, true);
-            if (debug >= 1)
-                log("Checking for reauthenticate in session " + session);
+            session = request.getSessionInternal(true);
+            if (log.isDebugEnabled())
+                log.debug("Checking for reauthenticate in session " + session);
             String username =
                 (String) session.getNote(Constants.SESS_USERNAME_NOTE);
             String password =
                 (String) session.getNote(Constants.SESS_PASSWORD_NOTE);
             if ((username != null) && (password != null)) {
-                if (debug >= 1)
-                    log("Reauthenticating username '" + username + "'");
+                if (log.isDebugEnabled())
+                    log.debug("Reauthenticating username '" + username + "'");
                 principal =
                     context.getRealm().authenticate(username, password);
                 if (principal != null) {
@@ -172,17 +180,19 @@ public class FormAuthenticator
                         return (true);
                     }
                 }
-                if (debug >= 1)
-                    log("Reauthentication failed, proceed normally");
+                if (log.isDebugEnabled())
+                    log.debug("Reauthentication failed, proceed normally");
             }
         }
 
         // Is this the re-submit of the original request URI after successful
         // authentication?  If so, forward the *original* request instead.
         if (matchRequest(request)) {
-            session = getSession(request, true);
-            if (debug >= 1)
-                log("Restore request from session '" + session.getId() + "'");
+            session = request.getSessionInternal(true);
+            if (log.isDebugEnabled())
+                log.debug("Restore request from session '"
+                          + session.getIdInternal() 
+                          + "'");
             principal = (Principal)
                 session.getNote(Constants.FORM_PRINCIPAL_NOTE);
             register(request, response, principal, Constants.FORM_METHOD,
@@ -195,42 +205,24 @@ public class FormAuthenticator
                 session.removeNote(Constants.SESS_PASSWORD_NOTE);
             }
             if (restoreRequest(request, session)) {
-                if (debug >= 1)
-                    log("Proceed to restored request");
+                if (log.isDebugEnabled())
+                    log.debug("Proceed to restored request");
                 return (true);
             } else {
-                if (debug >= 1)
-                    log("Restore of original request failed");
-                hres.sendError(HttpServletResponse.SC_BAD_REQUEST);
+                if (log.isDebugEnabled())
+                    log.debug("Restore of original request failed");
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST);
                 return (false);
             }
         }
 
         // Acquire references to objects we will need to evaluate
-        String contextPath = hreq.getContextPath();
+        MessageBytes uriMB = MessageBytes.newInstance();
+        CharChunk uriCC = uriMB.getCharChunk();
+        uriCC.setLimit(-1);
+        String contextPath = request.getContextPath();
         String requestURI = request.getDecodedRequestURI();
         response.setContext(request.getContext());
-
-        // Is this a request for the login page itself?  Test here to avoid
-        // displaying it twice (from the user's perspective) -- once because
-        // of the "save and redirect" and once because of the "restore and
-        // redirect" performed below.
-        String loginURI = contextPath + config.getLoginPage();
-        if (requestURI.equals(loginURI)) {
-            if (debug >= 1)
-                log("Requesting login page normally");
-            return (true);      // Display the login page in the usual manner
-        }
-
-        // Is this a request for the error page itself?  Test here to avoid
-        // an endless loop (back to the login page) if the error page is
-        // within the protected area of our security constraint
-        String errorURI = contextPath + config.getErrorPage();
-        if (requestURI.equals(errorURI)) {
-            if (debug >= 1)
-                log("Requesting error page normally");
-            return (true);      // Display the error page in the usual manner
-        }
 
         // Is this the action request from the login page?
         boolean loginAction =
@@ -239,13 +231,18 @@ public class FormAuthenticator
 
         // No -- Save this request and redirect to the form login page
         if (!loginAction) {
-            session = getSession(request, true);
-            if (debug >= 1)
-                log("Save request in session '" + session.getId() + "'");
-            saveRequest(request, session);
-            if (debug >= 1)
-                log("Redirect to login page '" + loginURI + "'");
-            hres.sendRedirect(hres.encodeRedirectURL(loginURI));
+            session = request.getSessionInternal(true);
+            if (log.isDebugEnabled())
+                log.debug("Save request in session '" + session.getIdInternal() + "'");
+            try {
+                saveRequest(request, session);
+            } catch (IOException ioe) {
+                log.debug("Request body too big to save during authentication");
+                response.sendError(HttpServletResponse.SC_FORBIDDEN,
+                        sm.getString("authenticator.requestBodyTooBig"));
+                return (false);
+            }
+            forwardToLoginPage(request, response, config);
             return (false);
         }
 
@@ -253,33 +250,32 @@ public class FormAuthenticator
         // to the error page if they are not correct
         Realm realm = context.getRealm();
         if (characterEncoding != null) {
-            hreq.setCharacterEncoding(characterEncoding);
+            request.setCharacterEncoding(characterEncoding);
         }
-        String username = hreq.getParameter(Constants.FORM_USERNAME);
-        String password = hreq.getParameter(Constants.FORM_PASSWORD);
-        if (debug >= 1)
-            log("Authenticating username '" + username + "'");
+        String username = request.getParameter(Constants.FORM_USERNAME);
+        String password = request.getParameter(Constants.FORM_PASSWORD);
+        if (log.isDebugEnabled())
+            log.debug("Authenticating username '" + username + "'");
         principal = realm.authenticate(username, password);
         if (principal == null) {
-            if (debug >= 1)
-                log("Redirect to error page '" + errorURI + "'");
-            hres.sendRedirect(hres.encodeRedirectURL(errorURI));
+            forwardToErrorPage(request, response, config);
             return (false);
         }
 
-        if (debug >= 1)
-            log("Authentication of '" + username + "' was successful");
+        if (log.isDebugEnabled())
+            log.debug("Authentication of '" + username + "' was successful");
 
         if (session == null)
-            session = getSession(request, false);
+            session = request.getSessionInternal(false);
         if (session == null) {
-            if (debug >=1)
-                log("User took so long to log on the session expired");
-            hres.sendError(HttpServletResponse.SC_REQUEST_TIMEOUT,
-                           sm.getString("authenticator.sessionExpired"));
+            if (containerLog.isDebugEnabled())
+                containerLog.debug
+                    ("User took so long to log on the session expired");
+            response.sendError(HttpServletResponse.SC_REQUEST_TIMEOUT,
+                               sm.getString("authenticator.sessionExpired"));
             return (false);
         }
-        
+
         // Save the authenticated Principal in our session
         session.setNote(Constants.FORM_PRINCIPAL_NOTE, principal);
 
@@ -290,13 +286,13 @@ public class FormAuthenticator
         // Redirect the user to the original request URI (which will cause
         // the original request to be restored)
         requestURI = savedRequestURL(session);
-        if (debug >= 1)
-            log("Redirecting to original '" + requestURI + "'");
+        if (log.isDebugEnabled())
+            log.debug("Redirecting to original '" + requestURI + "'");
         if (requestURI == null)
-            hres.sendError(HttpServletResponse.SC_BAD_REQUEST,
-                           sm.getString("authenticator.formlogin"));
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST,
+                               sm.getString("authenticator.formlogin"));
         else
-            hres.sendRedirect(hres.encodeRedirectURL(requestURI));
+            response.sendRedirect(response.encodeRedirectURL(requestURI));
         return (false);
 
     }
@@ -306,15 +302,72 @@ public class FormAuthenticator
 
 
     /**
+     * Called to forward to the login page
+     * 
+     * @param request Request we are processing
+     * @param response Response we are creating
+     * @param config    Login configuration describing how authentication
+     *              should be performed
+     * @throws IOException  If the forward to the login page fails and the call
+     *                      to {@link HttpServletResponse#sendError(int, String)
+     *                      throws an {@link IOException}
+     */
+    protected void forwardToLoginPage(Request request, Response response,
+            LoginConfig config) throws IOException {
+        RequestDispatcher disp =
+            context.getServletContext().getRequestDispatcher
+            (config.getLoginPage());
+        try {
+            disp.forward(request.getRequest(), response.getResponse());
+            response.finishResponse();
+        } catch (Throwable t) {
+            String msg = sm.getString("formAuthenticator.forwardLoginFail");
+            log.warn(msg, t);
+            request.setAttribute(Globals.EXCEPTION_ATTR, t);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    msg);
+        }
+    }
+
+
+    /**
+     * Called to forward to the error page
+     * 
+     * @param request Request we are processing
+     * @param response Response we are creating
+     * @param config    Login configuration describing how authentication
+     *              should be performed
+     * @throws IOException  If the forward to the error page fails and the call
+     *                      to {@link HttpServletResponse#sendError(int, String)
+     *                      throws an {@link IOException}
+     */
+    protected void forwardToErrorPage(Request request, Response response,
+            LoginConfig config) throws IOException {
+        RequestDispatcher disp =
+            context.getServletContext().getRequestDispatcher
+            (config.getErrorPage());
+        try {
+            disp.forward(request.getRequest(), response.getResponse());
+        } catch (Throwable t) {
+            String msg = sm.getString("formAuthenticator.forwardErrorFail");
+            log.warn(msg, t);
+            request.setAttribute(Globals.EXCEPTION_ATTR, t);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    msg);
+        }
+    }
+
+
+    /**
      * Does this request match the saved one (so that it must be the redirect
      * we signalled after successful authentication?
      *
      * @param request The request to be verified
      */
-    protected boolean matchRequest(HttpRequest request) {
+    protected boolean matchRequest(Request request) {
 
       // Has a session been created?
-      Session session = getSession(request, false);
+      Session session = request.getSessionInternal(false);
       if (session == null)
           return (false);
 
@@ -329,8 +382,7 @@ public class FormAuthenticator
           return (false);
 
       // Does the request URI match?
-      HttpServletRequest hreq = (HttpServletRequest) request.getRequest();
-      String requestURI = hreq.getRequestURI();
+      String requestURI = request.getRequestURI();
       if (requestURI == null)
           return (false);
       return (requestURI.equals(sreq.getRequestURI()));
@@ -347,7 +399,8 @@ public class FormAuthenticator
      * @param request The request to be restored
      * @param session The session containing the saved information
      */
-    protected boolean restoreRequest(HttpRequest request, Session session) {
+    protected boolean restoreRequest(Request request, Session session)
+        throws IOException {
 
         // Retrieve and remove the SavedRequest object from our session
         SavedRequest saved = (SavedRequest)
@@ -363,33 +416,63 @@ public class FormAuthenticator
         while (cookies.hasNext()) {
             request.addCookie((Cookie) cookies.next());
         }
-        request.clearHeaders();
+
+        MimeHeaders rmh = request.getCoyoteRequest().getMimeHeaders();
+        rmh.recycle();
+        boolean cachable = "GET".equalsIgnoreCase(saved.getMethod()) ||
+                           "HEAD".equalsIgnoreCase(saved.getMethod());
         Iterator names = saved.getHeaderNames();
         while (names.hasNext()) {
             String name = (String) names.next();
-            Iterator values = saved.getHeaderValues(name);
-            while (values.hasNext()) {
-                request.addHeader(name, (String) values.next());
+            // The browser isn't expecting this conditional response now.
+            // Assuming that it can quietly recover from an unexpected 412.
+            // BZ 43687
+            if(!("If-Modified-Since".equalsIgnoreCase(name) ||
+                 (cachable && "If-None-Match".equalsIgnoreCase(name)))) {
+                Iterator values = saved.getHeaderValues(name);
+                while (values.hasNext()) {
+                    rmh.addValue(name).setString( (String)values.next() );
+                }
             }
         }
+        
         request.clearLocales();
         Iterator locales = saved.getLocales();
         while (locales.hasNext()) {
             request.addLocale((Locale) locales.next());
         }
-        request.clearParameters();
+        
+        request.getCoyoteRequest().getParameters().recycle();
+        request.getCoyoteRequest().getParameters().setQueryStringEncoding(
+                request.getConnector().getURIEncoding());
+
         if ("POST".equalsIgnoreCase(saved.getMethod())) {
-            Iterator paramNames = saved.getParameterNames();
-            while (paramNames.hasNext()) {
-                String paramName = (String) paramNames.next();
-                String paramValues[] =
-                    saved.getParameterValues(paramName);
-                request.addParameter(paramName, paramValues);
+            ByteChunk body = saved.getBody();
+            
+            if (body != null) {
+                request.getCoyoteRequest().action
+                    (ActionCode.ACTION_REQ_SET_BODY_REPLAY, body);
+    
+                // Set content type
+                MessageBytes contentType = MessageBytes.newInstance();
+                
+                // If no content type specified, use default for POST
+                String savedContentType = saved.getContentType();
+                if (savedContentType == null) {
+                    savedContentType = "application/x-www-form-urlencoded";
+                }
+
+                contentType.setString(savedContentType);
+                request.getCoyoteRequest().setContentType(contentType);
             }
         }
-        request.setMethod(saved.getMethod());
-        request.setQueryString(saved.getQueryString());
-        request.setRequestURI(saved.getRequestURI());
+        request.getCoyoteRequest().method().setString(saved.getMethod());
+
+        request.getCoyoteRequest().queryString().setString
+            (saved.getQueryString());
+
+        request.getCoyoteRequest().requestURI().setString
+            (saved.getRequestURI());
         return (true);
 
     }
@@ -400,41 +483,51 @@ public class FormAuthenticator
      *
      * @param request The request to be saved
      * @param session The session to contain the saved information
+     * @throws IOException
      */
-    private void saveRequest(HttpRequest request, Session session) {
+    protected void saveRequest(Request request, Session session)
+        throws IOException {
 
         // Create and populate a SavedRequest object for this request
-        HttpServletRequest hreq = (HttpServletRequest) request.getRequest();
         SavedRequest saved = new SavedRequest();
-        Cookie cookies[] = hreq.getCookies();
+        Cookie cookies[] = request.getCookies();
         if (cookies != null) {
             for (int i = 0; i < cookies.length; i++)
                 saved.addCookie(cookies[i]);
         }
-        Enumeration names = hreq.getHeaderNames();
+        Enumeration names = request.getHeaderNames();
         while (names.hasMoreElements()) {
             String name = (String) names.nextElement();
-            Enumeration values = hreq.getHeaders(name);
+            Enumeration values = request.getHeaders(name);
             while (values.hasMoreElements()) {
                 String value = (String) values.nextElement();
                 saved.addHeader(name, value);
             }
         }
-        Enumeration locales = hreq.getLocales();
+        Enumeration locales = request.getLocales();
         while (locales.hasMoreElements()) {
             Locale locale = (Locale) locales.nextElement();
             saved.addLocale(locale);
         }
-        Map parameters = hreq.getParameterMap();
-        Iterator paramNames = parameters.keySet().iterator();
-        while (paramNames.hasNext()) {
-            String paramName = (String) paramNames.next();
-            String paramValues[] = (String[]) parameters.get(paramName);
-            saved.addParameter(paramName, paramValues);
+
+        if ("POST".equalsIgnoreCase(request.getMethod())) {
+            ByteChunk body = new ByteChunk();
+            body.setLimit(request.getConnector().getMaxSavePostSize());
+
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            InputStream is = request.getInputStream();
+        
+            while ( (bytesRead = is.read(buffer) ) >= 0) {
+                body.append(buffer, 0, bytesRead);
+            }
+            saved.setBody(body);
+            saved.setContentType(request.getContentType());
         }
-        saved.setMethod(hreq.getMethod());
-        saved.setQueryString(hreq.getQueryString());
-        saved.setRequestURI(hreq.getRequestURI());
+
+        saved.setMethod(request.getMethod());
+        saved.setQueryString(request.getQueryString());
+        saved.setRequestURI(request.getRequestURI());
 
         // Stash the SavedRequest in our session for later use
         session.setNote(Constants.FORM_REQUEST_NOTE, saved);
@@ -448,7 +541,7 @@ public class FormAuthenticator
      *
      * @param session Our current session
      */
-    private String savedRequestURL(Session session) {
+    protected String savedRequestURL(Session session) {
 
         SavedRequest saved =
             (SavedRequest) session.getNote(Constants.FORM_REQUEST_NOTE);

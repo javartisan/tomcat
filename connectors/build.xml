@@ -111,7 +111,7 @@
       </fileset>
     </jar>
 
-    <jar file="${dist.dir}/tomcat-connectors.jar" index="true" >
+    <jar file="${dist.dir}/tomcat-connectors.jar">
       <fileset dir="${build.dir}/classes" >
         <include name="**" />
         <exclude name="org/apache/ajp/**" />
@@ -140,7 +140,7 @@
       version="true"
       windowtitle="Tomcat Connector Documentation"
       doctitle="Tomcat Connector"
-      bottom="Copyright &#169; 2003 Apache Software Foundation.  All Rights Reserved.">
+      bottom="Copyright &amp;#169; 2003-2012 Apache Software Foundation.  All Rights Reserved.">
 
       <fileset dir="util/java" includes="**/*.java"/>
       <fileset dir="coyote/src/java" includes="**/*.java">

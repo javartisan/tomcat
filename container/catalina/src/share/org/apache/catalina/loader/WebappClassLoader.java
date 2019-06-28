@@ -18,13 +18,14 @@
 
 package org.apache.catalina.loader;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FilePermission;
-import java.io.InputStream;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -35,39 +36,43 @@ import java.security.Permission;
 import java.security.PermissionCollection;
 import java.security.Policy;
 import java.security.PrivilegedAction;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.Vector;
-import java.util.jar.JarFile;
-import java.util.jar.JarEntry;
-import java.util.jar.JarInputStream;
-import java.util.jar.Manifest;
 import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 import java.util.jar.Attributes.Name;
 
-import javax.naming.directory.DirContext;
-import javax.naming.NamingException;
-import javax.naming.NamingEnumeration;
 import javax.naming.NameClassPair;
+import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
+import javax.naming.directory.DirContext;
 
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.util.URLEncoder;
-
+import org.apache.catalina.util.StringManager;
 import org.apache.naming.JndiPermission;
-import org.apache.naming.resources.ResourceAttributes;
 import org.apache.naming.resources.Resource;
+import org.apache.naming.resources.ResourceAttributes;
+import org.apache.tomcat.util.IntrospectionUtils;
 
 /**
  * Specialized web application class loader.
  * <p>
  * This class loader is a full reimplementation of the 
- * <code>URLClassLoader</code> from the JDK. It is desinged to be fully
+ * <code>URLClassLoader</code> from the JDK. It is designed to be fully
  * compatible with a normal <code>URLClassLoader</code>, although its internal
  * behavior may be completely different.
  * <p>
@@ -98,19 +103,45 @@ import org.apache.naming.resources.Resource;
  *
  * @author Remy Maucherat
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: WebappClassLoader.java 992240 2010-09-03 09:00:10Z rjung $
  */
 public class WebappClassLoader
     extends URLClassLoader
-    implements Reloader, Lifecycle {
+    implements Reloader, Lifecycle
+ {
+    protected static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( WebappClassLoader.class );
 
+    public static final boolean ENABLE_CLEAR_REFERENCES = 
+        Boolean.valueOf(System.getProperty("org.apache.catalina.loader.WebappClassLoader.ENABLE_CLEAR_REFERENCES", "true")).booleanValue();
+
+    /**
+     * @deprecated Not used
+     */
     protected class PrivilegedFindResource
         implements PrivilegedAction {
 
-        private String name;
-        private String path;
+        protected File file;
+        protected String path;
 
-        PrivilegedFindResource(String name, String path) {
+        PrivilegedFindResource(File file, String path) {
+            this.file = file;
+            this.path = path;
+        }
+
+        public Object run() {
+            return findResourceInternal(file, path);
+        }
+
+    }
+
+    protected class PrivilegedFindResourceByName
+        implements PrivilegedAction {
+
+        protected String name;
+        protected String path;
+
+        PrivilegedFindResourceByName(String name, String path) {
             this.name = name;
             this.path = path;
         }
@@ -120,6 +151,23 @@ public class WebappClassLoader
         }
 
     }
+
+    
+    protected final class PrivilegedGetClassLoader
+        implements PrivilegedAction {
+
+        public Class clazz;
+
+        public PrivilegedGetClassLoader(Class clazz){
+            this.clazz = clazz;
+        }
+
+        public Object run() {       
+            return clazz.getClassLoader();
+        }           
+    }
+
+    
 
 
     // ------------------------------------------------------- Static Variables
@@ -133,8 +181,9 @@ public class WebappClassLoader
      * but where the corresponding JAR files are required to run on
      * earlier versions.
      */
-    private static final String[] triggers = {
-        "javax.servlet.Servlet"                     // Servlet API
+    protected static final String[] triggers = {
+        "javax.servlet.Servlet",                    // Servlet API
+        "javax.servlet.jsp.JspPage"                 // JSP API
     };
 
 
@@ -142,14 +191,23 @@ public class WebappClassLoader
      * Set of package names which are not allowed to be loaded from a webapp
      * class loader without delegating first.
      */
-    private static final String[] packageTriggers = {
-        "javax",                                     // Java extensions
-        "org.xml.sax",                               // SAX 1 & 2
-        "org.w3c.dom",                               // DOM 1 & 2
-        "org.apache.xerces",                         // Xerces 1 & 2
-        "org.apache.xalan"                           // Xalan
+    protected static final String[] packageTriggers = {
     };
 
+
+    /**
+     * The string manager for this package.
+     */
+    protected static final StringManager sm =
+        StringManager.getManager(Constants.Package);
+
+    
+    /**
+     * Use anti JAR locking code, which does URL rerouting when accessing
+     * resources.
+     */
+    boolean antiJARLocking = false; 
+    
 
     // ----------------------------------------------------------- Constructors
 
@@ -173,20 +231,23 @@ public class WebappClassLoader
 
 
     /**
-     * Construct a new ClassLoader with no defined repositories and no
+     * Construct a new ClassLoader with no defined repositories and the given
      * parent ClassLoader.
+     *
+     * @param parent Our parent class loader
      */
     public WebappClassLoader(ClassLoader parent) {
 
         super(new URL[0], parent);
+                
         this.parent = getParent();
+        
         system = getSystemClassLoader();
         securityManager = System.getSecurityManager();
 
         if (securityManager != null) {
             refreshPolicy();
         }
-
     }
 
 
@@ -201,15 +262,6 @@ public class WebappClassLoader
 
 
     /**
-     * The set of optional packages (formerly standard extensions) that
-     * are available in the repositories associated with this class loader.
-     * Each object in this list is of type
-     * <code>org.apache.catalina.loader.Extension</code>.
-     */
-    protected ArrayList available = new ArrayList();
-
-
-    /**
      * The cache of ResourceEntry for classes and resources we have loaded,
      * keyed by resource name.
      */
@@ -219,13 +271,13 @@ public class WebappClassLoader
     /**
      * The list of not found resources.
      */
-    protected HashMap notFoundResources = new HashMap();
-
-
-    /**
-     * The debugging detail level of this component.
-     */
-    protected int debug = 0;
+    protected HashMap notFoundResources = new LinkedHashMap() {
+        private static final long serialVersionUID = 1L;
+        protected boolean removeEldestEntry(
+                Map.Entry eldest) {
+            return size() > 1000;
+        }
+    };
 
 
     /**
@@ -240,19 +292,25 @@ public class WebappClassLoader
 
 
     /**
+     * Last time a JAR was accessed.
+     */
+    protected long lastJarAccessed = 0L;
+
+
+    /**
      * The list of local repositories, in the order they should be searched
      * for locally loaded classes or resources.
      */
     protected String[] repositories = new String[0];
 
 
+     /**
+      * Repositories URLs, used to cache the result of getURLs.
+      */
+     protected URL[] repositoryURLs = null;
+
+
     /**
-     * Repositories URLs, used to cache the result of getURLs. 
-     */ 
-    protected URL[] repositoryURLs = null; 
-
-
-    /** 
      * Repositories translated as path in the work directory (for Jasper
      * originally), but which is used to generate fake URLs should getURLs be
      * called.
@@ -302,50 +360,41 @@ public class WebappClassLoader
 
 
     /**
-     * The set of optional packages (formerly standard extensions) that
-     * are required in the repositories associated with this class loader.
-     * Each object in this list is of type
-     * <code>org.apache.catalina.loader.Extension</code>.
-     */
-    protected ArrayList required = new ArrayList();
-
-
-    /**
      * A list of read File and Jndi Permission's required if this loader
      * is for a web application context.
      */
-    private ArrayList permissionList = new ArrayList();
+    protected ArrayList permissionList = new ArrayList();
 
 
     /**
      * Path where resources loaded from JARs will be extracted.
      */
     protected File loaderDir = null;
-
+    protected String canonicalLoaderDir = null;
 
     /**
      * The PermissionCollection for each CodeSource for a web
      * application context.
      */
-    private HashMap loaderPC = new HashMap();
+    protected HashMap loaderPC = new HashMap();
 
 
     /**
      * Instance of the SecurityManager installed.
      */
-    private SecurityManager securityManager = null;
+    protected SecurityManager securityManager = null;
 
 
     /**
      * The parent class loader.
      */
-    private ClassLoader parent = null;
+    protected ClassLoader parent = null;
 
 
     /**
      * The system class loader.
      */
-    private ClassLoader system = null;
+    protected ClassLoader system = null;
 
 
     /**
@@ -359,19 +408,17 @@ public class WebappClassLoader
      */
     protected boolean hasExternalRepositories = false;
 
+    /**
+     * need conversion for properties files
+     */
+    protected boolean needConvert = false;
+
 
     /**
      * All permission.
      */
-    private Permission allPermission = new java.security.AllPermission();
+    protected Permission allPermission = new java.security.AllPermission();
 
-
-    /**
-     * Use anti JAR locking code, which does URL rerouting when accessing
-     * resources.
-     */
-    boolean antiJARLocking = false; 
-    
 
     // ------------------------------------------------------------- Properties
 
@@ -392,28 +439,6 @@ public class WebappClassLoader
     public void setResources(DirContext resources) {
 
         this.resources = resources;
-
-    }
-
-
-    /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-
-        return (this.debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-
-        this.debug = debug;
 
     }
 
@@ -502,9 +527,9 @@ public class WebappClassLoader
 
 
     /**
-     * If there is a Java SecurityManager add a Permission.
+     * If there is a Java SecurityManager create a Permission.
      *
-     * @param permission Permission to add
+     * @param permission The permission
      */
     public void addPermission(Permission permission) {
         if ((securityManager != null) && (permission != null)) {
@@ -538,8 +563,27 @@ public class WebappClassLoader
      */
     public void setWorkDir(File workDir) {
         this.loaderDir = new File(workDir, "loader");
+        if (loaderDir == null) {
+            canonicalLoaderDir = null;
+        } else { 
+            try {
+                canonicalLoaderDir = loaderDir.getCanonicalPath();
+                if (!canonicalLoaderDir.endsWith(File.separator)) {
+                    canonicalLoaderDir += File.separator;
+                }
+            } catch (IOException ioe) {
+                canonicalLoaderDir = null;
+            }
+        }
     }
 
+     /**
+      * Utility method for use in subclasses.
+      * Must be called before Lifecycle methods to have any effect.
+      */
+     protected void setParentClassLoader(ClassLoader pcl) {
+         parent = pcl;
+     }
 
     // ------------------------------------------------------- Reloader Methods
 
@@ -569,7 +613,10 @@ public class WebappClassLoader
             hasExternalRepositories = true;
             repositoryURLs = null;
         } catch (MalformedURLException e) {
-            throw new IllegalArgumentException(e.toString());
+            IllegalArgumentException iae = new IllegalArgumentException
+                ("Invalid repository: " + repository); 
+            iae.initCause(e);
+            throw iae;
         }
 
     }
@@ -593,8 +640,8 @@ public class WebappClassLoader
         if (repository == null)
             return;
 
-        if (debug >= 1)
-            log("addRepository(" + repository + ")");
+        if (log.isDebugEnabled())
+            log.debug("addRepository(" + repository + ")");
 
         int i;
 
@@ -627,8 +674,8 @@ public class WebappClassLoader
         if (file == null)
             return;
 
-        if (debug >= 1)
-            log("addJar(" + jar + ")");
+        if (log.isDebugEnabled())
+            log.debug("addJar(" + jar + ")");
 
         int i;
 
@@ -692,174 +739,18 @@ public class WebappClassLoader
         }
         result4[jarRealFiles.length] = file;
         jarRealFiles = result4;
-
-        // Load manifest
-        Manifest manifest = jarFile.getManifest();
-        if (manifest != null) {
-            Iterator extensions = Extension.getAvailable(manifest).iterator();
-            while (extensions.hasNext()) {
-                available.add(extensions.next());
-            }
-            extensions = Extension.getRequired(manifest).iterator();
-            while (extensions.hasNext()) {
-                required.add(extensions.next());
-            }
-        }
-
     }
 
 
-    /**
-     * Return a list of "optional packages" (formerly "standard extensions")
-     * that have been declared to be available in the repositories associated
-     * with this class loader, plus any parent class loader implemented with
-     * the same class.
-     */
-    public Extension[] findAvailable() {
-
-        // Initialize the results with our local available extensions
-        ArrayList results = new ArrayList();
-        Iterator available = this.available.iterator();
-        while (available.hasNext())
-            results.add(available.next());
-
-        // Trace our parentage tree and add declared extensions when possible
-        ClassLoader loader = this;
-        while (true) {
-            loader = loader.getParent();
-            if (loader == null)
-                break;
-            Extension[] extensions;
-            if (loader instanceof WebappClassLoader) {
-                extensions = ((WebappClassLoader) loader).findAvailable();
-            } else if (loader instanceof StandardClassLoader) {
-                extensions = ((StandardClassLoader) loader).findAvailable();
-            } else { 
-                continue;
-            }
-            for (int i = 0; i < extensions.length; i++)
-                results.add(extensions[i]);
-        }
-
-        // Add the JDK/JRE extensions
-        results.addAll(addFolderList("java.ext.dirs"));
-        
-        // Return the results as an array
-        Extension extensions[] = new Extension[results.size()];
-        return ((Extension[]) results.toArray(extensions));
-
-    }
-
-
-    /**
-     * Add the JARs specified to the extension list.
-     */
-    private List addFolderList(String property) {
-
-        // get the files in the extensions directory
-        ArrayList results = new ArrayList();
-        String extensionsDir = System.getProperty(property);
-        if (extensionsDir != null) {
-            StringTokenizer extensionsTok
-                = new StringTokenizer(extensionsDir, File.pathSeparator);
-            while (extensionsTok.hasMoreTokens()) {
-                File targetDir = new File(extensionsTok.nextToken());
-                if (!targetDir.exists() || !targetDir.isDirectory()) {
-                    continue;
-                }
-                File[] files = targetDir.listFiles();
-                for (int i = 0; i < files.length; i++) {
-                    if (files[i].getName().toLowerCase().endsWith(".jar")) {
-                        try {
-                            Manifest manifest = getManifest(new FileInputStream(files[i]));
-                            if (manifest != null)  {
-                                results.addAll(Extension.getAvailable(manifest));
-                            }
-                        } catch (IOException e) {
-                            log("addFolderList failed for " + files[i], e);
-                        }
-                    }
-                }
-            }
-        }
-        return results;
-    }
-
-    
-    /**
-     * Return the Manifest from a jar file or war file
-     *
-     * @param inStream Input stream to a WAR or JAR file
-     * @return The WAR's or JAR's manifest
-     */
-    private static Manifest getManifest(InputStream inStream)
-            throws IOException {
-
-        Manifest manifest = null;
-        JarInputStream jin = null;
-
-        try {
-            jin = new JarInputStream(inStream);
-            manifest = jin.getManifest();
-            jin.close();
-            jin = null;
-        } finally {
-            if (jin != null) {
-                try {
-                    jin.close();
-                } catch (Throwable t) {
-                    // Ignore
-                }
-            }
-        }
-
-        return manifest;
-    }
-
-    
     /**
      * Return a String array of the current repositories for this class
      * loader.  If there are no repositories, a zero-length array is
-     * returned.
+     * returned.For security reason, returns a clone of the Array (since 
+     * String are immutable).
      */
     public String[] findRepositories() {
 
-        return (repositories);
-
-    }
-
-
-    /**
-     * Return a list of "optional packages" (formerly "standard extensions")
-     * that have been declared to be required in the repositories associated
-     * with this class loader, plus any parent class loader implemented with
-     * the same class.
-     */
-    public Extension[] findRequired() {
-
-        // Initialize the results with our local required extensions
-        ArrayList results = new ArrayList();
-        Iterator required = this.required.iterator();
-        while (required.hasNext())
-            results.add(required.next());
-
-        // Trace our parentage tree and add declared extensions when possible
-        ClassLoader loader = this;
-        while (true) {
-            loader = loader.getParent();
-            if (loader == null)
-                break;
-            if (!(loader instanceof WebappClassLoader))
-                continue;
-            Extension extensions[] =
-                ((WebappClassLoader) loader).findRequired();
-            for (int i = 0; i < extensions.length; i++)
-                results.add(extensions[i]);
-        }
-
-        // Return the results as an array
-        Extension extensions[] = new Extension[results.size()];
-        return ((Extension[]) results.toArray(extensions));
+        return ((String[])repositories.clone());
 
     }
 
@@ -870,8 +761,8 @@ public class WebappClassLoader
      */
     public boolean modified() {
 
-        if (debug >= 2)
-            log("modified()");
+        if (log.isDebugEnabled())
+            log.debug("modified()");
 
         // Checking for modified loaded resources
         int length = paths.length;
@@ -889,14 +780,15 @@ public class WebappClassLoader
                     ((ResourceAttributes) resources.getAttributes(paths[i]))
                     .getLastModified();
                 if (lastModified != lastModifiedDates[i]) {
-                    log("  Resource '" + paths[i]
-                        + "' was modified; Date is now: "
-                        + new java.util.Date(lastModified) + " Was: "
-                        + new java.util.Date(lastModifiedDates[i]));
+                    if( log.isDebugEnabled() ) 
+                        log.debug("  Resource '" + paths[i]
+                                  + "' was modified; Date is now: "
+                                  + new java.util.Date(lastModified) + " Was: "
+                                  + new java.util.Date(lastModifiedDates[i]));
                     return (true);
                 }
             } catch (NamingException e) {
-                log("    Resource '" + paths[i] + "' is missing");
+                log.error("    Resource '" + paths[i] + "' is missing");
                 return (true);
             }
         }
@@ -907,20 +799,18 @@ public class WebappClassLoader
         if (getJarPath() != null) {
 
             try {
-                NamingEnumeration enumeration =
-                    resources.listBindings(getJarPath());
+                NamingEnumeration enumeration = resources.listBindings(getJarPath());
                 int i = 0;
                 while (enumeration.hasMoreElements() && (i < length)) {
-                    NameClassPair ncPair =
-                        (NameClassPair) enumeration.nextElement();
+                    NameClassPair ncPair = (NameClassPair) enumeration.nextElement();
                     String name = ncPair.getName();
                     // Ignore non JARs present in the lib folder
                     if (!name.endsWith(".jar"))
                         continue;
                     if (!name.equals(jarNames[i])) {
                         // Missing JAR
-                        log("    Additional JARs have been added : '" 
-                            + name + "'");
+                        log.info("    Additional JARs have been added : '" 
+                                 + name + "'");
                         return (true);
                     }
                     i++;
@@ -933,22 +823,22 @@ public class WebappClassLoader
                         // Additional non-JAR files are allowed
                         if (name.endsWith(".jar")) {
                             // There was more JARs
-                            log("    Additional JARs have been added");
+                            log.info("    Additional JARs have been added");
                             return (true);
                         }
                     }
                 } else if (i < jarNames.length) {
                     // There was less JARs
-                    log("    Additional JARs have been added");
+                    log.info("    Additional JARs have been added");
                     return (true);
                 }
             } catch (NamingException e) {
-                if (debug > 2)
-                    log("    Failed tracking modifications of '"
+                if (log.isDebugEnabled())
+                    log.debug("    Failed tracking modifications of '"
                         + getJarPath() + "'");
             } catch (ClassCastException e) {
-                log("    Failed tracking modifications of '"
-                    + getJarPath() + "' : " + e.getMessage());
+                log.error("    Failed tracking modifications of '"
+                          + getJarPath() + "' : " + e.getMessage());
             }
 
         }
@@ -965,28 +855,16 @@ public class WebappClassLoader
     public String toString() {
 
         StringBuffer sb = new StringBuffer("WebappClassLoader\r\n");
-        sb.append("  available:\r\n");
-        Iterator available = this.available.iterator();
-        while (available.hasNext()) {
-            sb.append("    ");
-            sb.append(available.next().toString());
-            sb.append("\r\n");
-        }
         sb.append("  delegate: ");
         sb.append(delegate);
         sb.append("\r\n");
         sb.append("  repositories:\r\n");
-        for (int i = 0; i < repositories.length; i++) {
-            sb.append("    ");
-            sb.append(repositories[i]);
-            sb.append("\r\n");
-        }
-        sb.append("  required:\r\n");
-        Iterator required = this.required.iterator();
-        while (required.hasNext()) {
-            sb.append("    ");
-            sb.append(required.next().toString());
-            sb.append("\r\n");
+        if (repositories != null) {
+            for (int i = 0; i < repositories.length; i++) {
+                sb.append("    ");
+                sb.append(repositories[i]);
+                sb.append("\r\n");
+            }
         }
         if (this.parent != null) {
             sb.append("----------> Parent Classloader:\r\n");
@@ -1001,14 +879,15 @@ public class WebappClassLoader
     // ---------------------------------------------------- ClassLoader Methods
 
 
-    /**
-     * Add the specified URL to the classloader.
-     */
-    protected void addURL(URL url) { 
-        super.addURL(url); 
-        hasExternalRepositories = true; 
-        repositoryURLs = null; 
-    } 
+     /**
+      * Add the specified URL to the classloader.
+      */
+     protected void addURL(URL url) {
+         super.addURL(url);
+         hasExternalRepositories = true;
+         repositoryURLs = null;
+     }
+
 
     /**
      * Find the specified class in our local repositories, if possible.  If
@@ -1020,21 +899,26 @@ public class WebappClassLoader
      */
     public Class findClass(String name) throws ClassNotFoundException {
 
-        if (debug >= 3)
-            log("    findClass(" + name + ")");
+        if (log.isDebugEnabled())
+            log.debug("    findClass(" + name + ")");
+
+        // Cannot load anything from local repositories if class loader is stopped
+        if (!started) {
+            throw new ClassNotFoundException(name);
+        }
 
         // (1) Permission to define this class when using a SecurityManager
         if (securityManager != null) {
             int i = name.lastIndexOf('.');
             if (i >= 0) {
                 try {
-                    if (debug >= 4)
-                        log("      securityManager.checkPackageDefinition");
+                    if (log.isTraceEnabled())
+                        log.trace("      securityManager.checkPackageDefinition");
                     securityManager.checkPackageDefinition(name.substring(0,i));
                 } catch (Exception se) {
-                    if (debug >= 4)
-                        log("      -->Exception-->ClassNotFoundException", se);
-                    throw new ClassNotFoundException(name);
+                    if (log.isTraceEnabled())
+                        log.trace("      -->Exception-->ClassNotFoundException", se);
+                    throw new ClassNotFoundException(name, se);
                 }
             }
         }
@@ -1043,8 +927,8 @@ public class WebappClassLoader
         // (throws ClassNotFoundException if it is not found)
         Class clazz = null;
         try {
-            if (debug >= 4)
-                log("      findClassInternal(" + name + ")");
+            if (log.isTraceEnabled())
+                log.trace("      findClassInternal(" + name + ")");
             try {
                 clazz = findClassInternal(name);
             } catch(ClassNotFoundException cnfe) {
@@ -1052,40 +936,52 @@ public class WebappClassLoader
                     throw cnfe;
                 }
             } catch(AccessControlException ace) {
-                ace.printStackTrace();
-                throw new ClassNotFoundException(name);
+                log.warn("WebappClassLoader.findClassInternal(" + name
+                        + ") security exception: " + ace.getMessage(), ace);
+                throw new ClassNotFoundException(name, ace);
             } catch (RuntimeException e) {
-                if (debug >= 4)
-                    log("      -->RuntimeException Rethrown", e);
+                if (log.isTraceEnabled())
+                    log.trace("      -->RuntimeException Rethrown", e);
                 throw e;
             }
             if ((clazz == null) && hasExternalRepositories) {
                 try {
                     clazz = super.findClass(name);
                 } catch(AccessControlException ace) {
-                    throw new ClassNotFoundException(name);
+                    log.warn("WebappClassLoader.findClassInternal(" + name
+                            + ") security exception: " + ace.getMessage(), ace);
+                    throw new ClassNotFoundException(name, ace);
                 } catch (RuntimeException e) {
-                    if (debug >= 4)
-                        log("      -->RuntimeException Rethrown", e);
+                    if (log.isTraceEnabled())
+                        log.trace("      -->RuntimeException Rethrown", e);
                     throw e;
                 }
             }
             if (clazz == null) {
-                if (debug >= 3)
-                    log("    --> Returning ClassNotFoundException");
+                if (log.isDebugEnabled())
+                    log.debug("    --> Returning ClassNotFoundException");
                 throw new ClassNotFoundException(name);
             }
         } catch (ClassNotFoundException e) {
-            if (debug >= 3)
-                log("    --> Passing on ClassNotFoundException", e);
+            if (log.isTraceEnabled())
+                log.trace("    --> Passing on ClassNotFoundException");
             throw e;
         }
 
         // Return the class we have located
-        if (debug >= 4)
-            log("      Returning class " + clazz);
-        if ((debug >= 4) && (clazz != null))
-            log("      Loaded by " + clazz.getClassLoader());
+        if (log.isTraceEnabled())
+            log.debug("      Returning class " + clazz);
+        
+        if ((log.isTraceEnabled()) && (clazz != null)) {
+            ClassLoader cl;
+            if (securityManager != null){
+                cl = (ClassLoader) AccessController.doPrivileged(
+                        new PrivilegedGetClassLoader(clazz));
+            } else {
+                cl = clazz.getClassLoader();
+            }
+            log.debug("      Loaded by " + cl.toString());
+        }
         return (clazz);
 
     }
@@ -1100,8 +996,8 @@ public class WebappClassLoader
      */
     public URL findResource(final String name) {
 
-        if (debug >= 3)
-            log("    findResource(" + name + ")");
+        if (log.isDebugEnabled())
+            log.debug("    findResource(" + name + ")");
 
         URL url = null;
 
@@ -1109,8 +1005,8 @@ public class WebappClassLoader
         if (entry == null) {
             if (securityManager != null) {
                 PrivilegedAction dp =
-                    new PrivilegedFindResource(name, name);
-                entry = (ResourceEntry)AccessController.doPrivileged(dp);
+                    new PrivilegedFindResourceByName(name, name);
+                entry = (ResourceEntry) AccessController.doPrivileged(dp);
             } else {
                 entry = findResourceInternal(name, name);
             }
@@ -1122,11 +1018,11 @@ public class WebappClassLoader
         if ((url == null) && hasExternalRepositories)
             url = super.findResource(name);
 
-        if (debug >= 3) {
+        if (log.isDebugEnabled()) {
             if (url != null)
-                log("    --> Returning '" + url.toString() + "'");
+                log.debug("    --> Returning '" + url.toString() + "'");
             else
-                log("    --> Resource not found, returning null");
+                log.debug("    --> Resource not found, returning null");
         }
         return (url);
 
@@ -1144,8 +1040,8 @@ public class WebappClassLoader
      */
     public Enumeration findResources(String name) throws IOException {
 
-        if (debug >= 3)
-            log("    findResources(" + name + ")");
+        if (log.isDebugEnabled())
+            log.debug("    findResources(" + name + ")");
 
         Vector result = new Vector();
 
@@ -1162,7 +1058,7 @@ public class WebappClassLoader
                 // Note : Not getting an exception here means the resource was
                 // found
                 try {
-                    result.addElement(getURL(new File(files[i], name)));
+                    result.addElement(getURI(new File(files[i], name)));
                 } catch (MalformedURLException e) {
                     // Ignore
                 }
@@ -1171,15 +1067,19 @@ public class WebappClassLoader
         }
 
         // Looking at the JAR files
-        for (i = 0; i < jarFilesLength; i++) {
-            JarEntry jarEntry = jarFiles[i].getJarEntry(name);
-            if (jarEntry != null) {
-                try {
-                    String jarFakeUrl = getURL(jarRealFiles[i]).toString();
-                    jarFakeUrl = "jar:" + jarFakeUrl + "!/" + name;
-                    result.addElement(new URL(jarFakeUrl));
-                } catch (MalformedURLException e) {
-                    // Ignore
+        synchronized (jarFiles) {
+            if (openJARs()) {
+                for (i = 0; i < jarFilesLength; i++) {
+                    JarEntry jarEntry = jarFiles[i].getJarEntry(name);
+                    if (jarEntry != null) {
+                        try {
+                            String jarFakeUrl = getURI(jarRealFiles[i]).toString();
+                            jarFakeUrl = "jar:" + jarFakeUrl + "!/" + name;
+                            result.addElement(new URL(jarFakeUrl));
+                        } catch (MalformedURLException e) {
+                            // Ignore
+                        }
+                    }
                 }
             }
         }
@@ -1224,28 +1124,26 @@ public class WebappClassLoader
      */
     public URL getResource(String name) {
 
-        if (debug >= 2)
-            log("getResource(" + name + ")");
+        if (log.isDebugEnabled())
+            log.debug("getResource(" + name + ")");
         URL url = null;
 
         // (1) Delegate to parent if requested
         if (delegate) {
-            if (debug >= 3)
-                log("  Delegating to parent classloader");
+            if (log.isDebugEnabled())
+                log.debug("  Delegating to parent classloader " + parent);
             ClassLoader loader = parent;
             if (loader == null)
                 loader = system;
             url = loader.getResource(name);
             if (url != null) {
-                if (debug >= 2)
-                    log("  --> Returning '" + url.toString() + "'");
+                if (log.isDebugEnabled())
+                    log.debug("  --> Returning '" + url.toString() + "'");
                 return (url);
             }
         }
 
         // (2) Search local repositories
-        if (debug >= 3)
-            log("  Searching local repositories");
         url = findResource(name);
         if (url != null) {
             // Locating the repository for special handling in the case 
@@ -1258,14 +1156,14 @@ public class WebappClassLoader
                             && (!(name.endsWith(".class")))) {
                         // Copy binary content to the work directory if not present
                         File resourceFile = new File(loaderDir, name);
-                        url = resourceFile.toURL();
+                        url = getURI(resourceFile);
                     }
                 } catch (Exception e) {
                     // Ignore
                 }
             }
-            if (debug >= 2)
-                log("  --> Returning '" + url.toString() + "'");
+            if (log.isDebugEnabled())
+                log.debug("  --> Returning '" + url.toString() + "'");
             return (url);
         }
 
@@ -1276,15 +1174,15 @@ public class WebappClassLoader
                 loader = system;
             url = loader.getResource(name);
             if (url != null) {
-                if (debug >= 2)
-                    log("  --> Returning '" + url.toString() + "'");
+                if (log.isDebugEnabled())
+                    log.debug("  --> Returning '" + url.toString() + "'");
                 return (url);
             }
         }
 
         // (4) Resource was not found
-        if (debug >= 2)
-            log("  --> Resource not found, returning null");
+        if (log.isDebugEnabled())
+            log.debug("  --> Resource not found, returning null");
         return (null);
 
     }
@@ -1301,42 +1199,42 @@ public class WebappClassLoader
      */
     public InputStream getResourceAsStream(String name) {
 
-        if (debug >= 2)
-            log("getResourceAsStream(" + name + ")");
+        if (log.isDebugEnabled())
+            log.debug("getResourceAsStream(" + name + ")");
         InputStream stream = null;
 
         // (0) Check for a cached copy of this resource
         stream = findLoadedResource(name);
         if (stream != null) {
-            if (debug >= 2)
-                log("  --> Returning stream from cache");
+            if (log.isDebugEnabled())
+                log.debug("  --> Returning stream from cache");
             return (stream);
         }
 
         // (1) Delegate to parent if requested
         if (delegate) {
-            if (debug >= 3)
-                log("  Delegating to parent classloader");
+            if (log.isDebugEnabled())
+                log.debug("  Delegating to parent classloader " + parent);
             ClassLoader loader = parent;
             if (loader == null)
                 loader = system;
             stream = loader.getResourceAsStream(name);
             if (stream != null) {
                 // FIXME - cache???
-                if (debug >= 2)
-                    log("  --> Returning stream from parent");
+                if (log.isDebugEnabled())
+                    log.debug("  --> Returning stream from parent");
                 return (stream);
             }
         }
 
         // (2) Search local repositories
-        if (debug >= 3)
-            log("  Searching local repositories");
+        if (log.isDebugEnabled())
+            log.debug("  Searching local repositories");
         URL url = findResource(name);
         if (url != null) {
             // FIXME - cache???
-            if (debug >= 2)
-                log("  --> Returning stream from local");
+            if (log.isDebugEnabled())
+                log.debug("  --> Returning stream from local");
             stream = findLoadedResource(name);
             try {
                 if (hasExternalRepositories && (stream == null))
@@ -1350,23 +1248,23 @@ public class WebappClassLoader
 
         // (3) Delegate to parent unconditionally
         if (!delegate) {
-            if (debug >= 3)
-                log("  Delegating to parent classloader");
+            if (log.isDebugEnabled())
+                log.debug("  Delegating to parent classloader unconditionally " + parent);
             ClassLoader loader = parent;
             if (loader == null)
                 loader = system;
             stream = loader.getResourceAsStream(name);
             if (stream != null) {
                 // FIXME - cache???
-                if (debug >= 2)
-                    log("  --> Returning stream from parent");
+                if (log.isDebugEnabled())
+                    log.debug("  --> Returning stream from parent");
                 return (stream);
             }
         }
 
         // (4) Resource was not found
-        if (debug >= 2)
-            log("  --> Resource not found, returning null");
+        if (log.isDebugEnabled())
+            log.debug("  --> Resource not found, returning null");
         return (null);
 
     }
@@ -1413,25 +1311,27 @@ public class WebappClassLoader
      *
      * @exception ClassNotFoundException if the class was not found
      */
-    public Class loadClass(String name, boolean resolve)
+    public synchronized Class loadClass(String name, boolean resolve)
         throws ClassNotFoundException {
 
-        if (debug >= 2)
-            log("loadClass(" + name + ", " + resolve + ")");
+        if (log.isDebugEnabled())
+            log.debug("loadClass(" + name + ", " + resolve + ")");
         Class clazz = null;
 
-        // Don't load classes if class loader is stopped
+        // Log access to stopped classloader
         if (!started) {
-            log("Lifecycle error : CL stopped");
-            Thread.dumpStack();
-            throw new ClassNotFoundException(name);
+            try {
+                throw new IllegalStateException();
+            } catch (IllegalStateException e) {
+                log.info(sm.getString("webappClassLoader.stopped", name), e);
+            }
         }
 
         // (0) Check our previously loaded local class cache
         clazz = findLoadedClass0(name);
         if (clazz != null) {
-            if (debug >= 3)
-                log("  Returning class from cache");
+            if (log.isDebugEnabled())
+                log.debug("  Returning class from cache");
             if (resolve)
                 resolveClass(clazz);
             return (clazz);
@@ -1440,8 +1340,8 @@ public class WebappClassLoader
         // (0.1) Check our previously loaded class cache
         clazz = findLoadedClass(name);
         if (clazz != null) {
-            if (debug >= 3)
-                log("  Returning class from cache");
+            if (log.isDebugEnabled())
+                log.debug("  Returning class from cache");
             if (resolve)
                 resolveClass(clazz);
             return (clazz);
@@ -1469,10 +1369,8 @@ public class WebappClassLoader
                 } catch (SecurityException se) {
                     String error = "Security Violation, attempt to use " +
                         "Restricted Class: " + name;
-                    System.out.println(error);
-                    se.printStackTrace();
-                    log(error);
-                    throw new ClassNotFoundException(error);
+                    log.info(error, se);
+                    throw new ClassNotFoundException(error, se);
                 }
             }
         }
@@ -1481,16 +1379,16 @@ public class WebappClassLoader
 
         // (1) Delegate to our parent if requested
         if (delegateLoad) {
-            if (debug >= 3)
-                log("  Delegating to parent classloader");
+            if (log.isDebugEnabled())
+                log.debug("  Delegating to parent classloader1 " + parent);
             ClassLoader loader = parent;
             if (loader == null)
                 loader = system;
             try {
                 clazz = loader.loadClass(name);
                 if (clazz != null) {
-                    if (debug >= 3)
-                        log("  Loading class from parent");
+                    if (log.isDebugEnabled())
+                        log.debug("  Loading class from parent");
                     if (resolve)
                         resolveClass(clazz);
                     return (clazz);
@@ -1501,13 +1399,13 @@ public class WebappClassLoader
         }
 
         // (2) Search local repositories
-        if (debug >= 3)
-            log("  Searching local repositories");
+        if (log.isDebugEnabled())
+            log.debug("  Searching local repositories");
         try {
             clazz = findClass(name);
             if (clazz != null) {
-                if (debug >= 3)
-                    log("  Loading class from local repository");
+                if (log.isDebugEnabled())
+                    log.debug("  Loading class from local repository");
                 if (resolve)
                     resolveClass(clazz);
                 return (clazz);
@@ -1518,16 +1416,16 @@ public class WebappClassLoader
 
         // (3) Delegate to parent unconditionally
         if (!delegateLoad) {
-            if (debug >= 3)
-                log("  Delegating to parent classloader");
+            if (log.isDebugEnabled())
+                log.debug("  Delegating to parent classloader at end: " + parent);
             ClassLoader loader = parent;
             if (loader == null)
                 loader = system;
             try {
                 clazz = loader.loadClass(name);
                 if (clazz != null) {
-                    if (debug >= 3)
-                        log("  Loading class from parent");
+                    if (log.isDebugEnabled())
+                        log.debug("  Loading class from parent");
                     if (resolve)
                         resolveClass(clazz);
                     return (clazz);
@@ -1537,9 +1435,7 @@ public class WebappClassLoader
             }
         }
 
-        // This class was not found
         throw new ClassNotFoundException(name);
-
     }
 
 
@@ -1550,7 +1446,7 @@ public class WebappClassLoader
      * directory (if unpacked),
      * the context URL, and jar file resources.
      *
-     * @param codeSource CodeSource where the code was loaded from
+     * @param codeSource where the code was loaded from
      * @return PermissionCollection for CodeSource
      */
     protected PermissionCollection getPermissions(CodeSource codeSource) {
@@ -1582,7 +1478,7 @@ public class WebappClassLoader
     public URL[] getURLs() {
 
         if (repositoryURLs != null) {
-            return repositoryURLs;
+            return (URL[]) repositoryURLs.clone();
         }
 
         URL[] external = super.getURLs();
@@ -1597,21 +1493,22 @@ public class WebappClassLoader
             URL[] urls = new URL[length];
             for (i = 0; i < length; i++) {
                 if (i < filesLength) {
-                    urls[i] = getURL(files[i]);
+                    urls[i] = getURL(files[i], true);
                 } else if (i < filesLength + jarFilesLength) {
-                    urls[i] = getURL(jarRealFiles[i - filesLength]);
+                    urls[i] = getURL(jarRealFiles[i - filesLength], true);
                 } else {
                     urls[i] = external[i - filesLength - jarFilesLength];
                 }
             }
 
-            repositoryURLs = urls; 
-    
+            repositoryURLs = urls;
+
         } catch (MalformedURLException e) {
             repositoryURLs = new URL[0];
         }
 
-        return repositoryURLs; 
+        return (URL[]) repositoryURLs.clone();
+
     }
 
 
@@ -1653,6 +1550,15 @@ public class WebappClassLoader
     public void start() throws LifecycleException {
 
         started = true;
+        String encoding = null;
+        try {
+            encoding = System.getProperty("file.encoding");
+        } catch (Exception e) {
+            return;
+        }
+        if (encoding.indexOf("EBCDIC")!=-1) {
+            needConvert = true;
+        }
 
     }
 
@@ -1664,12 +1570,23 @@ public class WebappClassLoader
      */
     public void stop() throws LifecycleException {
 
-        started = false;
+        // Clearing references should be done before setting started to
+        // false, due to possible side effects
+        clearReferences();
 
-        int length = jarFiles.length;
+        started = false;
+        
+        int length = files.length;
+        for (int i = 0; i < length; i++) {
+            files[i] = null;
+        }
+
+        length = jarFiles.length;
         for (int i = 0; i < length; i++) {
             try {
-                jarFiles[i].close();
+                if (jarFiles[i] != null) {
+                    jarFiles[i].close();
+                }
             } catch (IOException e) {
                 // Ignore
             }
@@ -1678,18 +1595,19 @@ public class WebappClassLoader
 
         notFoundResources.clear();
         resourceEntries.clear();
-        repositories = new String[0];
+        resources = null;
+        repositories = null;
         repositoryURLs = null;
-        files = new File[0];
-        jarFiles = new JarFile[0];
-        jarRealFiles = new File[0];
+        files = null;
+        jarFiles = null;
+        jarRealFiles = null;
         jarPath = null;
-        jarNames = new String[0];
-        lastModifiedDates = new long[0];
-        paths = new String[0];
+        jarNames = null;
+        lastModifiedDates = null;
+        paths = null;
         hasExternalRepositories = false;
+        parent = null;
 
-        required.clear();
         permissionList.clear();
         loaderPC.clear();
 
@@ -1700,7 +1618,262 @@ public class WebappClassLoader
     }
 
 
+    /**
+     * Used to periodically signal to the classloader to release 
+     * JAR resources.
+     */
+    public void closeJARs(boolean force) {
+        if (jarFiles.length > 0) {
+                synchronized (jarFiles) {
+                    if (force || (System.currentTimeMillis() 
+                                  > (lastJarAccessed + 90000))) {
+                        for (int i = 0; i < jarFiles.length; i++) {
+                            try {
+                                if (jarFiles[i] != null) {
+                                    jarFiles[i].close();
+                                    jarFiles[i] = null;
+                                }
+                            } catch (IOException e) {
+                                if (log.isDebugEnabled()) {
+                                    log.debug("Failed to close JAR", e);
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
+
     // ------------------------------------------------------ Protected Methods
+
+    
+    /**
+     * Clear references.
+     */
+    protected void clearReferences() {
+
+        // Unregister any JDBC drivers loaded by this classloader
+        Enumeration drivers = DriverManager.getDrivers();
+        while (drivers.hasMoreElements()) {
+            Driver driver = (Driver) drivers.nextElement();
+            if (driver.getClass().getClassLoader() == this) {
+                try {
+                    DriverManager.deregisterDriver(driver);
+                } catch (SQLException e) {
+                    log.warn("SQL driver deregistration failed", e);
+                }
+            }
+        }
+        
+        // Null out any static or final fields from loaded classes,
+        // as a workaround for apparent garbage collection bugs
+        if (ENABLE_CLEAR_REFERENCES) {
+            java.util.Collection values =
+                ((HashMap) resourceEntries.clone()).values();
+            Iterator loadedClasses = values.iterator();
+            //
+            // walk through all loaded class to trigger initialization for
+            //    any uninitialized classes, otherwise initialization of
+            //    one class may call a previously cleared class.
+            while (loadedClasses.hasNext()) {
+                ResourceEntry entry = (ResourceEntry) loadedClasses.next();
+                if (entry.loadedClass != null) {
+                    Class clazz = entry.loadedClass;
+                    try {
+                        Field[] fields = clazz.getDeclaredFields();
+                        for (int i = 0; i < fields.length; i++) {
+                            if(Modifier.isStatic(fields[i].getModifiers())) {
+                                fields[i].get(null);
+                                break;
+                            }
+                        }
+                    } catch(Throwable t) {
+                        // Ignore
+                    }
+                }
+            }
+            loadedClasses = values.iterator();
+            while (loadedClasses.hasNext()) {
+                ResourceEntry entry = (ResourceEntry) loadedClasses.next();
+                if (entry.loadedClass != null) {
+                    Class clazz = entry.loadedClass;
+                    try {
+                        Field[] fields = clazz.getDeclaredFields();
+                        for (int i = 0; i < fields.length; i++) {
+                            Field field = fields[i];
+                            int mods = field.getModifiers();
+                            if (field.getType().isPrimitive() 
+                                    || (field.getName().indexOf("$") != -1)) {
+                                continue;
+                            }
+                            if (Modifier.isStatic(mods)) {
+                                try {
+                                    field.setAccessible(true);
+                                    if (Modifier.isFinal(mods)) {
+                                        if (!((field.getType().getName().startsWith("java."))
+                                                || (field.getType().getName().startsWith("javax.")))) {
+                                            nullInstance(field.get(null));
+                                        }
+                                    } else {
+                                        field.set(null, null);
+                                        if (log.isDebugEnabled()) {
+                                            log.debug("Set field " + field.getName() 
+                                                    + " to null in class " + clazz.getName());
+                                        }
+                                    }
+                                } catch (Throwable t) {
+                                    if (log.isDebugEnabled()) {
+                                        log.debug("Could not set field " + field.getName() 
+                                                + " to null in class " + clazz.getName(), t);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Throwable t) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Could not clean fields for class " + clazz.getName(), t);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Remove entries for this webapp from the JSP EL BeanInfo cache
+        cleanElCache();
+        
+        // Clear the IntrospectionUtils cache.
+        IntrospectionUtils.clear();
+        
+        // Clear the IntrospectionUtils cache for modeler.
+        org.apache.commons.modeler.util.IntrospectionUtils.clear();
+
+        // Clear the classloader reference in common-logging
+        org.apache.commons.logging.LogFactory.release(this);
+        
+        // Clear the classloader reference in the VM's bean introspector
+        java.beans.Introspector.flushCaches();
+
+    }
+
+
+    protected void cleanElCache() {
+        try {
+            Class managerClass =
+                Class.forName("org.apache.commons.el.BeanInfoManager");
+            Field cacheField =
+                managerClass.getDeclaredField("mBeanInfoManagerByClass");
+            cacheField.setAccessible(true);
+            Map map = (Map) cacheField.get(null);
+            
+            Set victims = new HashSet();
+                
+            for (Iterator i = map.keySet().iterator(); i.hasNext();) {
+                Class cachedClass = (Class) i.next();
+                if(loadedByThisOrChild(cachedClass)) {
+                    victims.add(cachedClass);
+                }
+            }
+            
+            map.keySet().removeAll(victims);
+            
+            } catch (Throwable t) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Could not clean EL cache", t);
+            }
+        }
+    }
+    
+    
+    protected void nullInstance(Object instance) {
+        if (instance == null) {
+            return;
+        }
+        Field[] fields = instance.getClass().getDeclaredFields();
+        for (int i = 0; i < fields.length; i++) {
+            Field field = fields[i];
+            int mods = field.getModifiers();
+            if (field.getType().isPrimitive() 
+                    || (field.getName().indexOf("$") != -1)) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                if (Modifier.isStatic(mods) && Modifier.isFinal(mods)) {
+                    // Doing something recursively is too risky
+                    continue;
+                } else {
+                    Object value = field.get(instance);
+                    if (null != value) {
+                        Class valueClass = value.getClass();
+                        if (!loadedByThisOrChild(valueClass)) {
+                            if (log.isDebugEnabled()) {
+                                log.debug("Not setting field " + field.getName() +
+                                        " to null in object of class " + 
+                                        instance.getClass().getName() +
+                                        " because the referenced object was of type " +
+                                        valueClass.getName() + 
+                                        " which was not loaded by this WebappClassLoader.");
+                            }
+                        } else {
+                            field.set(instance, null);
+                            if (log.isDebugEnabled()) {
+                                log.debug("Set field " + field.getName() 
+                                        + " to null in class " + instance.getClass().getName());
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Could not set field " + field.getName() 
+                            + " to null in object instance of class " 
+                            + instance.getClass().getName(), t);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Determine whether a class was loaded by this class loader or one of
+     * its child class loaders.
+     */
+    protected boolean loadedByThisOrChild(Class clazz)
+    {
+        boolean result = false;
+        for (ClassLoader classLoader = clazz.getClassLoader();
+                null != classLoader; classLoader = classLoader.getParent()) {
+            if (classLoader.equals(this)) {
+                result = true;
+                break;
+            }
+        }
+        return result;
+    }    
+
+
+    /**
+     * Used to periodically signal to the classloader to release JAR resources.
+     */
+    protected boolean openJARs() {
+        if (started && (jarFiles.length > 0)) {
+            lastJarAccessed = System.currentTimeMillis();
+            if (jarFiles[0] == null) {
+                for (int i = 0; i < jarFiles.length; i++) {
+                    try {
+                        jarFiles[i] = new JarFile(jarRealFiles[i]);
+                    } catch (IOException e) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Failed to open JAR", e);
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
 
 
     /**
@@ -1721,85 +1894,106 @@ public class WebappClassLoader
 
         if (securityManager != null) {
             PrivilegedAction dp =
-                new PrivilegedFindResource(name, classPath);
-            entry = (ResourceEntry)AccessController.doPrivileged(dp);
+                new PrivilegedFindResourceByName(name, classPath);
+            entry = (ResourceEntry) AccessController.doPrivileged(dp);
         } else {
             entry = findResourceInternal(name, classPath);
         }
 
-        if ((entry == null) || (entry.binaryContent == null))
+        if (entry == null)
             throw new ClassNotFoundException(name);
 
         Class clazz = entry.loadedClass;
         if (clazz != null)
             return clazz;
 
-        // Looking up the package
-        String packageName = null;
-        int pos = name.lastIndexOf('.');
-        if (pos != -1)
-            packageName = name.substring(0, pos);
-
-        Package pkg = null;
-
-        if (packageName != null) {
-
-            pkg = getPackage(packageName);
-
-            // Define the package (if null)
-            if (pkg == null) {
-                if (entry.manifest == null) {
-                    definePackage(packageName, null, null, null, null, null,
-                                  null, null);
-                } else {
-                    definePackage(packageName, entry.manifest, entry.codeBase);
-                }
-            }
-
-        }
-
-        // Create the code source object
-        CodeSource codeSource =
-            new CodeSource(entry.codeBase, entry.certificates);
-
-        if (securityManager != null) {
-
-            // Checking sealing
-            if (pkg != null) {
-                boolean sealCheck = true;
-                if (pkg.isSealed()) {
-                    sealCheck = pkg.isSealed(entry.codeBase);
-                } else {
-                    sealCheck = (entry.manifest == null)
-                        || !isPackageSealed(packageName, entry.manifest);
-                }
-                if (!sealCheck)
-                    throw new SecurityException
-                        ("Sealing violation loading " + name + " : Package "
-                         + packageName + " is sealed.");
-            }
-
-        }
-
-        if (entry.loadedClass == null) {
-            synchronized (this) {
-                if (entry.loadedClass == null) {
-                    clazz = defineClass(name, entry.binaryContent, 0,
-                                        entry.binaryContent.length, 
-                                        codeSource);
-                    entry.loadedClass = clazz;
-                } else {
-                    clazz = entry.loadedClass;
-                }
-            }
-        } else {
+        synchronized (this) {
             clazz = entry.loadedClass;
-        }
+            if (clazz != null)
+                return clazz;
 
+            if (entry.binaryContent == null)
+                throw new ClassNotFoundException(name);
+
+            // Looking up the package
+            String packageName = null;
+            int pos = name.lastIndexOf('.');
+            if (pos != -1)
+                packageName = name.substring(0, pos);
+        
+            Package pkg = null;
+        
+            if (packageName != null) {
+                pkg = getPackage(packageName);
+                // Define the package (if null)
+                if (pkg == null) {
+                    if (entry.manifest == null) {
+                        definePackage(packageName, null, null, null, null,
+                                null, null, null);
+                    } else {
+                        definePackage(packageName, entry.manifest,
+                                entry.codeBase);
+                    }
+                }
+            }
+    
+            if (securityManager != null) {
+
+                // Checking sealing
+                if (pkg != null) {
+                    boolean sealCheck = true;
+                    if (pkg.isSealed()) {
+                        sealCheck = pkg.isSealed(entry.codeBase);
+                    } else {
+                        sealCheck = (entry.manifest == null)
+                            || !isPackageSealed(packageName, entry.manifest);
+                    }
+                    if (!sealCheck)
+                        throw new SecurityException
+                            ("Sealing violation loading " + name + " : Package "
+                             + packageName + " is sealed.");
+                }
+    
+            }
+
+            try {
+                clazz = defineClass(name, entry.binaryContent, 0,
+                        entry.binaryContent.length, 
+                        new CodeSource(entry.codeBase, entry.certificates));
+            } catch (UnsupportedClassVersionError ucve) {
+                throw new UnsupportedClassVersionError(
+                        ucve.getLocalizedMessage() + " " +
+                        sm.getString("webappClassLoader.wrongVersion",
+                                name));
+            }
+            entry.loadedClass = clazz;
+            entry.binaryContent = null;
+            entry.source = null;
+            entry.codeBase = null;
+            entry.manifest = null;
+            entry.certificates = null;
+        }
+        
         return clazz;
 
     }
 
+    /**
+     * Find specified resource in local repositories.
+     *
+     * @return the loaded resource, or null if the resource isn't found
+     */
+    protected ResourceEntry findResourceInternal(File file, String path){
+        ResourceEntry entry = new ResourceEntry();
+        try {
+            entry.source = getURI(new File(file, path));
+            entry.codeBase = getURL(new File(file, path), false);
+        } catch (MalformedURLException e) {
+            return null;
+        }   
+        return entry;
+    }
+    
 
     /**
      * Find specified resource in local repositories.
@@ -1809,7 +2003,7 @@ public class WebappClassLoader
     protected ResourceEntry findResourceInternal(String name, String path) {
 
         if (!started) {
-            log("Lifecycle error : CL stopped");
+            log.info(sm.getString("webappClassLoader.stopped", name));
             return null;
         }
 
@@ -1830,6 +2024,8 @@ public class WebappClassLoader
 
         Resource resource = null;
 
+        boolean fileNeedConvert = false;
+
         for (i = 0; (entry == null) && (i < repositoriesLength); i++) {
             try {
 
@@ -1842,14 +2038,8 @@ public class WebappClassLoader
 
                 // Note : Not getting an exception here means the resource was
                 // found
+                entry = findResourceInternal(files[i], path);
 
-                entry = new ResourceEntry();
-                try {
-                    entry.source = getURL(new File(files[i], path));
-                    entry.codeBase = entry.source;
-                } catch (MalformedURLException e) {
-                    return null;
-                }
                 ResourceAttributes attributes =
                     (ResourceAttributes) resources.getAttributes(fullPath);
                 contentLength = (int) attributes.getContentLength();
@@ -1857,10 +2047,17 @@ public class WebappClassLoader
 
                 if (resource != null) {
 
+
                     try {
                         binaryStream = resource.streamContent();
                     } catch (IOException e) {
                         return null;
+                    }
+
+                    if (needConvert) {
+                        if (path.endsWith(".properties")) {
+                            fileNeedConvert = true;
+                        }
                     }
 
                     // Register the full path for modification checking
@@ -1897,120 +2094,155 @@ public class WebappClassLoader
 
         JarEntry jarEntry = null;
 
-        for (i = 0; (entry == null) && (i < jarFilesLength); i++) {
+        synchronized (jarFiles) {
 
-            jarEntry = jarFiles[i].getJarEntry(path);
-
-            if (jarEntry != null) {
-
-                entry = new ResourceEntry();
-                try {
-                    entry.codeBase = getURL(jarRealFiles[i]);
-                    String jarFakeUrl = entry.codeBase.toString();
-                    jarFakeUrl = "jar:" + jarFakeUrl + "!/" + path;
-                    entry.source = new URL(jarFakeUrl);
-                } catch (MalformedURLException e) {
+            try {
+                if (!openJARs()) {
                     return null;
                 }
-                contentLength = (int) jarEntry.getSize();
-                try {
-                    entry.manifest = jarFiles[i].getManifest();
-                    binaryStream = jarFiles[i].getInputStream(jarEntry);
-                } catch (IOException e) {
-                    return null;
-                }
-
-                // Extract resources contained in JAR to the workdir
-                if (antiJARLocking && !(path.endsWith(".class"))) {
-                    byte[] buf = new byte[1024];
-                    File resourceFile = new File
-                        (loaderDir, jarEntry.getName());
-                    if (!resourceFile.exists()) {
-                        Enumeration entries = jarFiles[i].entries();
-                        while (entries.hasMoreElements()) {
-                            JarEntry jarEntry2 = 
-                                (JarEntry) entries.nextElement();
-                            if (!(jarEntry2.isDirectory()) 
-                                && (!jarEntry2.getName().endsWith
-                                    (".class"))) {
-                                resourceFile = new File
-                                    (loaderDir, jarEntry2.getName());
-                                resourceFile.getParentFile().mkdirs();
-                                FileOutputStream os = null;
-                                InputStream is = null;
-                                try {
-                                    is = jarFiles[i].getInputStream
-                                        (jarEntry2);
-                                    os = new FileOutputStream
-                                        (resourceFile);
-                                    while (true) {
-                                        int n = is.read(buf);
-                                        if (n <= 0) {
-                                            break;
+                for (i = 0; (entry == null) && (i < jarFilesLength); i++) {
+    
+                    jarEntry = jarFiles[i].getJarEntry(path);
+    
+                    if (jarEntry != null) {
+    
+                        entry = new ResourceEntry();
+                        try {
+                            entry.codeBase = getURL(jarRealFiles[i], false);
+                            String jarFakeUrl = getURI(jarRealFiles[i]).toString();
+                            jarFakeUrl = "jar:" + jarFakeUrl + "!/" + path;
+                            entry.source = new URL(jarFakeUrl);
+                            entry.lastModified = jarRealFiles[i].lastModified();
+                        } catch (MalformedURLException e) {
+                            return null;
+                        }
+                        contentLength = (int) jarEntry.getSize();
+                        try {
+                            entry.manifest = jarFiles[i].getManifest();
+                            binaryStream = jarFiles[i].getInputStream(jarEntry);
+                        } catch (IOException e) {
+                            return null;
+                        }
+    
+                        // Extract resources contained in JAR to the workdir
+                        if (antiJARLocking && !(path.endsWith(".class"))) {
+                            byte[] buf = new byte[1024];
+                            File resourceFile = new File
+                                (loaderDir, jarEntry.getName());
+                            if (!resourceFile.exists()) {
+                                Enumeration entries = jarFiles[i].entries();
+                                while (entries.hasMoreElements()) {
+                                    JarEntry jarEntry2 = 
+                                        (JarEntry) entries.nextElement();
+                                    if (!(jarEntry2.isDirectory()) 
+                                        && (!jarEntry2.getName().endsWith
+                                            (".class"))) {
+                                        resourceFile = new File
+                                            (loaderDir, jarEntry2.getName());
+                                        try {
+                                            if (!resourceFile.getCanonicalPath().startsWith(
+                                                    canonicalLoaderDir)) {
+                                                throw new IllegalArgumentException(
+                                                        sm.getString("webappClassLoader.illegalJarPath",
+                                                                jarEntry2.getName()));
+                                            }
+                                        } catch (IOException ioe) {
+                                            IllegalArgumentException iae =
+                                                new IllegalArgumentException(
+                                                    sm.getString("webappClassLoader.validationErrorJarPath",
+                                                            jarEntry2.getName()));
+                                            iae.initCause(ioe);
+                                            throw iae;
+                                        }                                 
+                                        resourceFile.getParentFile().mkdirs();
+                                        FileOutputStream os = null;
+                                        InputStream is = null;
+                                        try {
+                                            is = jarFiles[i].getInputStream
+                                                (jarEntry2);
+                                            os = new FileOutputStream
+                                                (resourceFile);
+                                            while (true) {
+                                                int n = is.read(buf);
+                                                if (n <= 0) {
+                                                    break;
+                                                }
+                                                os.write(buf, 0, n);
+                                            }
+                                        } catch (IOException e) {
+                                            // Ignore
+                                        } finally {
+                                            try {
+                                                if (is != null) {
+                                                    is.close();
+                                                }
+                                            } catch (IOException e) {
+                                            }
+                                            try {
+                                                if (os != null) {
+                                                    os.close();
+                                                }
+                                            } catch (IOException e) {
+                                            }
                                         }
-                                        os.write(buf, 0, n);
-                                    }
-                                } catch (IOException e) {
-                                    // Ignore
-                                } finally {
-                                    try {
-                                        if (is != null) {
-                                            is.close();
-                                        }
-                                    } catch (IOException e) {
-                                    }
-                                    try {
-                                        if (os != null) {
-                                            os.close();
-                                        }
-                                    } catch (IOException e) {
                                     }
                                 }
                             }
                         }
+    
                     }
+    
+                }
+    
+                if (entry == null) {
+                    synchronized (notFoundResources) {
+                        notFoundResources.put(name, name);
+                    }
+                    return null;
+                }
+    
+                if (binaryStream != null) {
+    
+                    byte[] binaryContent = new byte[contentLength];
+    
+                    int pos = 0;
+                    try {
+    
+                        while (true) {
+                            int n = binaryStream.read(binaryContent, pos,
+                                                      binaryContent.length - pos);
+                            if (n <= 0)
+                                break;
+                            pos += n;
+                        }
+                    } catch (IOException e) {
+                        log.error(sm.getString("webappClassLoader.readError", name), e);
+                        return null;
+                    }
+                    if (fileNeedConvert) {
+                        String str = new String(binaryContent,0,pos);
+                        try {
+                            binaryContent = str.getBytes("UTF-8");
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    }
+                    entry.binaryContent = binaryContent;
+    
+                    // The certificates are only available after the JarEntry 
+                    // associated input stream has been fully read
+                    if (jarEntry != null) {
+                        entry.certificates = jarEntry.getCertificates();
+                    }
+    
+                }
+            } finally {
+                if (binaryStream != null) {
+                    try {
+                        binaryStream.close();
+                    } catch (IOException e) { /* Ignore */}
                 }
             }
-
-        }
-
-        if (entry == null) {
-            synchronized (notFoundResources) {
-                notFoundResources.put(name, name);
-            }
-            return null;
-        }
-
-        if (binaryStream != null) {
-
-            byte[] binaryContent = new byte[contentLength];
-
-            try {
-                int pos = 0;
-                while (true) {
-                    int n = binaryStream.read(binaryContent, pos,
-                                              binaryContent.length - pos);
-                    if (n <= 0)
-                        break;
-                    pos += n;
-                }
-                binaryStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-                return null;
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null;
-            }
-
-            entry.binaryContent = binaryContent;
-
-            // The certificates are only available after the JarEntry 
-            // associated input stream has been fully read
-            if (jarEntry != null) {
-                entry.certificates = jarEntry.getCertificates();
-            }
-
         }
 
         // Add the entry in the local resource repository
@@ -2165,11 +2397,11 @@ public class WebappClassLoader
      * Check the specified JAR file, and return <code>true</code> if it does
      * not contain any of the trigger classes.
      *
-     * @param jarFile The JAR file to be checked
+     * @param jarfile The JAR file to be checked
      *
      * @exception IOException if an input/output error occurs
      */
-    private boolean validateJarFile(File jarfile)
+    protected boolean validateJarFile(File jarfile)
         throws IOException {
 
         if (triggers == null)
@@ -2189,11 +2421,11 @@ public class WebappClassLoader
             if (clazz == null)
                 continue;
             String name = triggers[i].replace('.', '/') + ".class";
-            if (debug >= 2)
-                log(" Checking for " + name);
+            if (log.isDebugEnabled())
+                log.debug(" Checking for " + name);
             JarEntry jarEntry = jarFile.getJarEntry(name);
             if (jarEntry != null) {
-                log("validateJarFile(" + jarfile + 
+                log.info("validateJarFile(" + jarfile + 
                     ") - jar not loaded. See Servlet Spec 2.3, "
                     + "section 9.7.2. Offending class: " + name);
                 jarFile.close();
@@ -2209,7 +2441,7 @@ public class WebappClassLoader
     /**
      * Get URL.
      */
-    protected URL getURL(File file)
+    protected URL getURL(File file, boolean encoded)
         throws MalformedURLException {
 
         File realFile = file;
@@ -2218,50 +2450,25 @@ public class WebappClassLoader
         } catch (IOException e) {
             // Ignore
         }
-
-        //return new URL("file:" + realFile.getPath());
-        URLEncoder urlEncoder = new URLEncoder();
-        urlEncoder.addSafeCharacter(',');
-        urlEncoder.addSafeCharacter(':');
-        urlEncoder.addSafeCharacter('-');
-        urlEncoder.addSafeCharacter('_');
-        urlEncoder.addSafeCharacter('.');
-        urlEncoder.addSafeCharacter('*');
-        urlEncoder.addSafeCharacter('/');
-        urlEncoder.addSafeCharacter('!');
-        urlEncoder.addSafeCharacter('~');
-        urlEncoder.addSafeCharacter('\'');
-        urlEncoder.addSafeCharacter('(');
-        urlEncoder.addSafeCharacter(')');
-
-        return new URL(urlEncoder.encode(realFile.toURL().toString()));
-    }
-
-
-    /**
-     * Log a debugging output message.
-     *
-     * @param message Message to be logged
-     */
-    private void log(String message) {
-
-        System.out.println("WebappClassLoader: " + message);
+        if(encoded) {
+            return getURI(realFile);
+        } else {
+            return realFile.toURL();
+        }
 
     }
 
 
     /**
-     * Log a debugging output message with an exception.
-     *
-     * @param message Message to be logged
-     * @param throwable Exception to be logged
+     * Get URL.
      */
-    private void log(String message, Throwable throwable) {
+    protected URL getURI(File file)
+        throws MalformedURLException {
 
-        System.out.println("WebappClassLoader: " + message);
-        throwable.printStackTrace(System.out);
+        return file.toURI().toURL();
 
     }
+
 
     /**
      * Delete the specified directory, including all of its contents and
@@ -2286,6 +2493,7 @@ public class WebappClassLoader
         dir.delete();
 
     }
+
 
 }
 

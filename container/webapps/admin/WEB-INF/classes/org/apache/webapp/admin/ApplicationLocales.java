@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
-
 import org.apache.struts.Globals;
 import org.apache.struts.action.ActionServlet;
 import org.apache.struts.util.MessageResources;
@@ -34,7 +33,7 @@ import org.apache.struts.util.MessageResources;
  *
  * @author Patrick Luby
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationLocales.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class ApplicationLocales {
@@ -53,7 +52,7 @@ public final class ApplicationLocales {
         super();
         Locale list[] = Locale.getAvailableLocales();
         MessageResources resources = (MessageResources)
-            servlet.getServletContext().getAttribute(Globals.MESSAGES_KEY);
+                servlet.getServletContext().getAttribute(Globals.MESSAGES_KEY);
         if (resources == null)
             return;
         String config = resources.getConfig();
@@ -61,14 +60,19 @@ public final class ApplicationLocales {
             return;
 
         for (int i = 0; i < list.length; i++) {
-            ResourceBundle bundle =
-                ResourceBundle.getBundle(config, list[i]);
-            if (bundle == null)
+            try {
+                ResourceBundle bundle =
+                    ResourceBundle.getBundle(config, list[i]);
+                if (bundle == null)
+                    continue;
+                if (list[i].equals(bundle.getLocale())) {
+                    localeLabels.add(list[i].getDisplayName());
+                    localeValues.add(list[i].toString());
+                    supportedLocales.add(list[i]);
+                }
+            } catch( Exception ex ) {
+                servlet.log("Missing locale " + list[i] );
                 continue;
-            if (list[i].equals(bundle.getLocale())) {
-                localeLabels.add(list[i].getDisplayName());
-                localeValues.add(list[i].toString());
-                supportedLocales.add(list[i]);
             }
         }
 

@@ -20,10 +20,11 @@ package org.apache.catalina.users;
 
 
 import java.util.Hashtable;
-import javax.naming.Name;
+
 import javax.naming.Context;
-import javax.naming.Reference;
+import javax.naming.Name;
 import javax.naming.RefAddr;
+import javax.naming.Reference;
 import javax.naming.spi.ObjectFactory;
 
 
@@ -44,7 +45,7 @@ import javax.naming.spi.ObjectFactory;
  * </ul>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MemoryUserDatabaseFactory.java 939529 2010-04-30 00:51:34Z kkolinko $
  * @since 4.1
  */
 
@@ -91,6 +92,11 @@ public class MemoryUserDatabaseFactory implements ObjectFactory {
         ra = ref.get("pathname");
         if (ra != null) {
             database.setPathname(ra.getContent().toString());
+        }
+
+        ra = ref.get("readonly");
+        if (ra != null) {
+            database.setReadonly(Boolean.valueOf(ra.getContent().toString()).booleanValue());
         }
 
         // Return the configured database instance

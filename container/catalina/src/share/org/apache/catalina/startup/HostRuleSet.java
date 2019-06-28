@@ -19,8 +19,8 @@
 package org.apache.catalina.startup;
 
 
-import org.apache.commons.digester.Digester;
-import org.apache.commons.digester.RuleSetBase;
+import org.apache.tomcat.util.digester.Digester;
+import org.apache.tomcat.util.digester.RuleSetBase;
 
 
 /**
@@ -30,7 +30,7 @@ import org.apache.commons.digester.RuleSetBase;
  * be added via instances of <code>ContextRuleSet</code>.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: HostRuleSet.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class HostRuleSet extends RuleSetBase {
@@ -94,11 +94,10 @@ public class HostRuleSet extends RuleSetBase {
                                  "className");
         digester.addSetProperties(prefix + "Host");
         digester.addRule(prefix + "Host",
-                         new CopyParentClassLoaderRule(digester));
+                         new CopyParentClassLoaderRule());
         digester.addRule(prefix + "Host",
                          new LifecycleListenerRule
-                         (digester,
-                          "org.apache.catalina.startup.HostConfig",
+                         ("org.apache.catalina.startup.HostConfig",
                           "hostConfigClass"));
         digester.addSetNext(prefix + "Host",
                             "addChild",
@@ -107,13 +106,15 @@ public class HostRuleSet extends RuleSetBase {
         digester.addCallMethod(prefix + "Host/Alias",
                                "addAlias", 0);
 
+        //Cluster configuration start
         digester.addObjectCreate(prefix + "Host/Cluster",
                                  null, // MUST be specified in the element
                                  "className");
         digester.addSetProperties(prefix + "Host/Cluster");
         digester.addSetNext(prefix + "Host/Cluster",
-                            "addCluster",
+                            "setCluster",
                             "org.apache.catalina.Cluster");
+        //Cluster configuration end
 
         digester.addObjectCreate(prefix + "Host/Listener",
                                  null, // MUST be specified in the element
@@ -122,14 +123,6 @@ public class HostRuleSet extends RuleSetBase {
         digester.addSetNext(prefix + "Host/Listener",
                             "addLifecycleListener",
                             "org.apache.catalina.LifecycleListener");
-
-        digester.addObjectCreate(prefix + "Host/Logger",
-                                 null, // MUST be specified in the element
-                                 "className");
-        digester.addSetProperties(prefix + "Host/Logger");
-        digester.addSetNext(prefix + "Host/Logger",
-                            "setLogger",
-                            "org.apache.catalina.Logger");
 
         digester.addObjectCreate(prefix + "Host/Realm",
                                  null, // MUST be specified in the element

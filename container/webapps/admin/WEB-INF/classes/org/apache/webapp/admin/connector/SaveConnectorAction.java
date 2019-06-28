@@ -27,13 +27,11 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
@@ -47,7 +45,7 @@ import org.apache.webapp.admin.TreeControlNode;
  * <em>Edit Connector</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveConnectorAction.java 992411 2010-09-03 18:42:48Z jim $
  */
 
 public final class SaveConnectorAction extends Action {
@@ -69,11 +67,6 @@ public final class SaveConnectorAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
     // --------------------------------------------------------- Public Methods
     
     
@@ -100,10 +93,8 @@ public final class SaveConnectorAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -118,6 +109,7 @@ public final class SaveConnectorAction extends Action {
         String adminAction = cform.getAdminAction();
         String cObjectName = cform.getObjectName();
         String connectorType = cform.getConnectorType();
+        ObjectName coname = null;
 
         // Perform a "Create Connector" transaction (if requested)
         if ("Create".equals(adminAction)) {
@@ -126,22 +118,31 @@ public final class SaveConnectorAction extends Action {
             Object values[] = null;
 
             try {
-   
+                // get service name which is same as domain
                 String serviceName = cform.getServiceName();
+                ObjectName soname = new ObjectName(serviceName);
+                String domain = soname.getDomain();
+                StringBuffer sb = new StringBuffer(domain);
+                StringBuffer searchSB = new StringBuffer("*");
+                sb.append(TomcatTreeBuilder.CONNECTOR_TYPE);
+                searchSB.append(TomcatTreeBuilder.CONNECTOR_TYPE);
+                sb.append(",port=" + cform.getPortText());
+                searchSB.append(",port=" + cform.getPortText());
+                
+                ObjectName search = new ObjectName(searchSB.toString()+",*");
                 
                 String address = cform.getAddress();
-                if (address.compareTo("") == 0) {
+                if ((address!=null) && (address.length()>0) && 
+                        (!address.equalsIgnoreCase(" "))) {
+                    sb.append(",address=" + address);
+                } else {
                     address = null;
                 }
-                
-                ObjectName oname =
-                    new ObjectName(TomcatTreeBuilder.CONNECTOR_TYPE +
-                                   ",service=" + serviceName +
-                                   ",port=" + cform.getPortText() +
-                                   ",address=" + address);
+                ObjectName oname = new ObjectName(sb.toString());
                                                 
-                // Ensure that the requested connector name is unique
-                if (mBServer.isRegistered(oname)) {
+                // Ensure that the requested connector name and port is unique
+                if (mBServer.isRegistered(oname) ||
+                    (!mBServer.queryNames(search, null).isEmpty())) {
                     ActionMessages errors = new ActionMessages();
                     errors.add("connectorName",
                                new ActionMessage("error.connectorName.exists"));
@@ -150,22 +151,21 @@ public final class SaveConnectorAction extends Action {
                 }
 
                 // Look up our MBeanFactory MBean
-                ObjectName fname =
-                    new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+                ObjectName fname = TomcatTreeBuilder.getMBeanFactory();
 
                 // Create a new Connector object
                 values = new Object[3];                
-                values[0] = // parent 
-                    TomcatTreeBuilder.SERVICE_TYPE + ",name=" + serviceName;
+                values[0] = serviceName;  //service parent object name
                 values[1] = address;
                 values[2] = new Integer(cform.getPortText());
 
                 if ("HTTP".equalsIgnoreCase(connectorType)) {
-                        operation = "createHttpConnector"; // HTTP
-                } else if ("HTTPS".equalsIgnoreCase(connectorType)) { 
-                        operation = "createHttpsConnector";   // HTTPS
+                    operation = "createHttpConnector"; // HTTP
+                } else if ("HTTPS-JSSE".equalsIgnoreCase(connectorType) ||
+                        "HTTPS-APR".equalsIgnoreCase(connectorType)) { 
+                    operation = "createHttpsConnector";   // HTTPS
                 } else {
-                        operation = "createAjpConnector";   // AJP(HTTP)                  
+                    operation = "createAjpConnector";   // AJP(HTTP)                  
                 }
                 
                 cObjectName = (String)
@@ -176,14 +176,14 @@ public final class SaveConnectorAction extends Action {
                 TreeControl control = (TreeControl)
                     session.getAttribute("treeControlTest");
                 if (control != null) {
-                    String parentName = 
-                          TomcatTreeBuilder.SERVICE_TYPE + ",name=" + serviceName;
+                    String parentName = serviceName;
                     TreeControlNode parentNode = control.findNode(parentName);
                     if (parentNode != null) {
-                        String nodeLabel =
-                           "Connector (" + cform.getPortText() + ")";
+                        String nodeLabel = resources.getMessage(locale, 
+                            "server.service.treeBuilder.connector") + " (" + 
+                            cform.getPortText() + ")";
                         String encodedName =
-                            URLEncoder.encode(cObjectName);
+                            URLEncoder.encode(cObjectName,TomcatTreeBuilder.URL_ENCODING);
                         TreeControlNode childNode =
                             new TreeControlNode(cObjectName,
                                                 "Connector.gif",
@@ -191,7 +191,7 @@ public final class SaveConnectorAction extends Action {
                                                 "EditConnector.do?select=" +
                                                 encodedName,
                                                 "content",
-                                                true);
+                                                true, domain);
                         // FIXME--the node should be next to the rest of 
                         // the Connector nodes..
                         parentNode.addChild(childNode);
@@ -224,38 +224,50 @@ public final class SaveConnectorAction extends Action {
         String attribute = null;
         try {
 
-            ObjectName coname = new ObjectName(cObjectName);
+            coname = new ObjectName(cObjectName);
 
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(cform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(debug)));
-            
             attribute = "acceptCount";
-            int acceptCount = 10;
+            int acceptCount = 60000;
             try {
                 acceptCount = Integer.parseInt(cform.getAcceptCountText());
             } catch (Throwable t) {
-                acceptCount = 10;
+                acceptCount = 60000;
             }
             mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(acceptCount)));
-            
+                                  new Attribute("acceptCount", new Integer(acceptCount)));    
+            attribute = "compression";  
+            String compression = cform.getCompression();
+            if ((compression != null) && (compression.length()>0)) { 
+                mBServer.setAttribute(coname,
+                                      new Attribute("compression", compression));
+            }        
+            attribute = "connectionLinger";
+            int connectionLinger = -1;
+            try {
+                connectionLinger = Integer.parseInt(cform.getConnLingerText());
+            } catch (Throwable t) {
+                connectionLinger = 0;
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute("connectionLinger", new Integer(connectionLinger))); 
             attribute = "connectionTimeout";
-            int connectionTimeout = 60000;
+            int connectionTimeout = 0;
             try {
                 connectionTimeout = Integer.parseInt(cform.getConnTimeOutText());
             } catch (Throwable t) {
-                connectionTimeout = 60000;
+                connectionTimeout = 0;
             }
             mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(connectionTimeout)));
-            
+                                  new Attribute("connectionTimeout", new Integer(connectionTimeout)));            
+            attribute = "connectionUploadTimeout";
+            int connectionUploadTimeout = 0;
+            try {
+                connectionUploadTimeout = Integer.parseInt(cform.getConnUploadTimeOutText());
+            } catch (Throwable t) {
+                connectionUploadTimeout = 0;
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute("connectionUploadTimeout", new Integer(connectionUploadTimeout)));        
             attribute = "bufferSize";
             int bufferSize = 2048;
             try {
@@ -264,151 +276,106 @@ public final class SaveConnectorAction extends Action {
                 bufferSize = 2048;
             }
             mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(bufferSize)));            
-
+                                  new Attribute("bufferSize", new Integer(bufferSize)));    
+            attribute = "disableUploadTimeout";
+            mBServer.setAttribute(coname,
+                                  new Attribute("disableUploadTimeout", new Boolean(cform.getDisableUploadTimeout())));                        
             attribute = "enableLookups";
             mBServer.setAttribute(coname,
-                    new Attribute(attribute,
-                                  new Boolean(cform.getEnableLookups())));                        
+                                  new Attribute("enableLookups", new Boolean(cform.getEnableLookups())));                        
 
             attribute = "redirectPort";
-            int redirectPort = 443;
+            int redirectPort = 0;
             try {
                 redirectPort = Integer.parseInt(cform.getRedirectPortText());
             } catch (Throwable t) {
-                redirectPort = 443;
+                redirectPort = 0;
             }
             mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(redirectPort))); 
+                                  new Attribute("redirectPort", new Integer(redirectPort))); 
+       
+            attribute = "maxKeepAliveRequests";
+            int maxKeepAliveRequests = 100;
+            try {
+                maxKeepAliveRequests = Integer.parseInt(cform.getMaxKeepAliveText());
+            } catch (Throwable t) {
+                maxKeepAliveRequests = 100;
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute("maxKeepAliveRequests", new Integer(maxKeepAliveRequests))); 
+            attribute = "maxSpareThreads";
+            int maxSpare = 50;
+            try {
+                maxSpare = Integer.parseInt(cform.getMaxSpare());
+            } catch (Throwable t) {
+                maxSpare = 50;
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute(attribute, (new Integer(maxSpare)).toString())); 
+            attribute = "maxThreads";
+            int maxThreads = 200;
+            try {
+                maxThreads = Integer.parseInt(cform.getMaxThreads());
+            } catch (Throwable t) {
+                maxThreads = 200;
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute(attribute, (new Integer(maxThreads)).toString())); 
+			
+            attribute = "minSpareThreads";
+            int minSpare = 4;
+            try {
+                minSpare = Integer.parseInt(cform.getMinSpare());
+            } catch (Throwable t) {
+                minSpare = 4;
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute(attribute, (new Integer(minSpare)).toString())); 
 
-            attribute = "minProcessors";
-            int minProcessors = 4;
+            attribute = "threadPriority";
+            int threadPriority = Thread.NORM_PRIORITY;
             try {
-                minProcessors = Integer.parseInt(cform.getMinProcessorsText());
+                threadPriority = Integer.parseInt(cform.getThreadPriority());
             } catch (Throwable t) {
-                minProcessors = 4;
+                threadPriority = Thread.NORM_PRIORITY;
             }
             mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(minProcessors))); 
+                                  new Attribute(attribute, (new Integer(threadPriority))));
+				  
+            attribute = "secure";
+            mBServer.setAttribute(coname,
+                                  new Attribute("secure", new Boolean(cform.getSecure())));    
+            attribute = "tcpNoDelay";
+            mBServer.setAttribute(coname,
+                                  new Attribute("tcpNoDelay", new Boolean(cform.getTcpNoDelay())));    
+            
+            attribute = "xpoweredBy";
+            mBServer.setAttribute(coname,
+                                  new Attribute("xpoweredBy", new Boolean(cform.getXpoweredBy())));                        
 
-            attribute = "maxProcessors";
-            int maxProcessors = 200;
-            try {
-                maxProcessors = Integer.parseInt(cform.getMaxProcessorsText());
-            } catch (Throwable t) {
-                maxProcessors = 200;
-            }
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(maxProcessors)));
-            
-            attribute = "maxSpareProcessors";
-            int maxSpareProcessors = 50;
-            try {
-                maxSpareProcessors =
-                    Integer.parseInt(cform.getMaxSpareProcessorsText());
-            } catch (Throwable t) {
-                maxSpareProcessors = 50;
-            }
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(maxSpareProcessors)));
-            
             attribute = "URIEncoding";
             String uriEnc = cform.getURIEncodingText();
             if ((uriEnc != null) && (uriEnc.length()==0)) {
                 uriEnc = null;
             }
-            mBServer.setAttribute(coname, new Attribute(attribute, uriEnc));
-            
+            mBServer.setAttribute(coname,
+                                  new Attribute(attribute, uriEnc));            
+
             attribute = "useBodyEncodingForURI";
             mBServer.setAttribute(coname,
-                    new Attribute(attribute,
-                            new Boolean(cform.getUseBodyEncodingForURIText())));
-            
+                                  new Attribute(attribute, new Boolean(cform.getUseBodyEncodingForURIText())));
+
             attribute = "allowTrace";
             mBServer.setAttribute(coname,
-                    new Attribute(attribute,
-                            new Boolean(cform.getAllowTraceText())));
-      
-            attribute = "compressableMimeType";              
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, cform.getCompressableMimeType()));            
+                                  new Attribute(attribute, new Boolean(cform.getAllowTraceText())));
 
-            attribute = "compression";              
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, cform.getCompression()));            
-
-            attribute = "connectionLinger";
-            int connectionLinger = -1;
-            try {
-                connectionLinger = Integer.parseInt(cform.getConnLingerText());
-            } catch (Throwable t) {
-                connectionLinger = -1;
-            }
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(connectionLinger)));
-            
-            attribute = "disableUploadTimeout";
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute,
-                            new Boolean(cform.getDisableUploadTimeout())));
-      
-            attribute = "maxHttpHeaderSize";
-            int maxHttpHeaderSize = 4096;
-            try {
-                maxHttpHeaderSize =
-                    Integer.parseInt(cform.getMaxHttpHeaderSizeText());
-            } catch (Throwable t) {
-                maxHttpHeaderSize = 4096;
-            }
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(maxHttpHeaderSize)));
-
-            attribute = "maxKeepAliveRequests";
-            int maxKeepAliveRequests = 100;
-            try {
-                maxKeepAliveRequests =
-                    Integer.parseInt(cform.getMaxKeepAliveReqsText());
-            } catch (Throwable t) {
-                maxKeepAliveRequests = 100;
-            }
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Integer(maxKeepAliveRequests)));
-            
-            attribute = "noCompressionUserAgents";              
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, cform.getNoCompressionUA()));            
-
-            attribute = "restrictedUserAgents";              
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, cform.getRestrictedUA()));            
-
-            attribute = "server";              
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, cform.getServer()));            
-
-            attribute = "strategy";              
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, cform.getStrategy()));            
-
-            attribute = "tcpNoDelay";
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute,
-                            new Boolean(cform.getTcpNoDelay())));
-      
-            if (("AJP".equalsIgnoreCase(connectorType))) {
-                // tomcatAuthentication exists only for AJP connector
-                attribute = "tomcatAuthentication";
-                mBServer.setAttribute(coname,
-                        new Attribute(attribute,
-                                new Boolean(cform.getTomcatAuthentication())));
-            } else {
-                // proxy name, port, socket buffer and threadPriority do not exist
-                // for AJP connector
+            // proxy name and port do not exist for AJP connector
+            if (!("AJP".equalsIgnoreCase(connectorType))) {
                 attribute = "proxyName";  
                 String proxyName = cform.getProxyName();
                 if ((proxyName != null) && (proxyName.length()>0)) { 
                     mBServer.setAttribute(coname,
-                                  new Attribute(attribute, proxyName));
+                                  new Attribute("proxyName", proxyName));
                 }
                 
                 attribute = "proxyPort";
@@ -419,75 +386,149 @@ public final class SaveConnectorAction extends Action {
                     proxyPort = 0;
                 }
                 mBServer.setAttribute(coname,
-                              new Attribute(attribute, new Integer(proxyPort))); 
-
-                attribute = "socketBuffer";
-                int socketBuffer = 9000;
-                try {
-                    socketBuffer = Integer.parseInt(cform.getSocketBufferText());
-                } catch (Throwable t) {
-                    socketBuffer = 9000;
-                }
-                mBServer.setAttribute(coname,
-                        new Attribute(attribute, new Integer(socketBuffer)));
-                
-                attribute = "threadPriority";              
-                mBServer.setAttribute(coname,
-                        new Attribute(attribute, cform.getThreadPriorityText()));            
-
+                              new Attribute("proxyPort", new Integer(proxyPort))); 
             }
             
-            // Secure
-            attribute = "secure";
-            mBServer.setAttribute(coname,
-                    new Attribute(attribute, new Boolean(cform.getSecure())));
-            
-            // HTTPS specific properties
-            if("HTTPS".equalsIgnoreCase(connectorType)) {
-                attribute = "clientAuth";              
-                mBServer.setAttribute(coname,
-                        new Attribute(attribute, 
-                                cform.getClientAuthentication()));            
-                
-                attribute = "keystoreFile";
-                String keyFile = cform.getKeyStoreFileName();
-                if ((keyFile != null) && (keyFile.length()>0)) 
-                    mBServer.setAttribute(coname,
-                              new Attribute(attribute, keyFile));            
-                
-                attribute = "keystorePass";
-                String keyPass = cform.getKeyStorePassword();
-                if ((keyPass != null) && (keyPass.length()>0)) 
-                    mBServer.setAttribute(coname,
-                              new Attribute(attribute, keyPass));                 
-                // request.setAttribute("warning", "connector.keyPass.warning");               
-
-                attribute = "algorithm";
+            // HTTPS-JSSE specific properties
+            if("HTTPS-JSSE".equalsIgnoreCase(connectorType)) {
                 String algorithm = cform.getAlgorithm();
                 if ((algorithm != null) && (algorithm.length()>0)) 
                     mBServer.setAttribute(coname,
-                              new Attribute(attribute, algorithm));
+                              new Attribute("algorithm", algorithm));  
                 
-                attribute = "ciphers";
+                mBServer.setAttribute(coname,
+                              new Attribute("clientAuth", 
+                                             cform.getClientAuthentication()));   
+                
                 String ciphers = cform.getCiphers();
                 if ((ciphers != null) && (ciphers.length()>0)) 
-                mBServer.setAttribute(coname,
-                        new Attribute(attribute, ciphers));
-
-                attribute = "keystoreType";
-                String keystoreType = cform.getKeyStoreType();
-                if ((keystoreType != null) && (keystoreType.length()>0)) 
                     mBServer.setAttribute(coname,
-                              new Attribute(attribute, keystoreType));
+                              new Attribute("ciphers", ciphers));           
                 
-                attribute = "sslProtocol";
+                String keyFile = cform.getKeyStoreFileName();
+                if ((keyFile != null) && (keyFile.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("keystoreFile", keyFile));            
+                
+                String keyPass = cform.getKeyStorePassword();
+                if ((keyPass != null) && (keyPass.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("keystorePass", keyPass));                 
+                // request.setAttribute("warning", "connector.keyPass.warning");  
+                
+                String keyType = cform.getKeyStoreType();
+                if ((keyType != null) && (keyType.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("keystoreType", keyType));   
+                
+                String trustFile = cform.getTrustStoreFileName();
+                if ((trustFile != null) && (trustFile.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("truststoreFile", trustFile));            
+                
+                String trustPass = cform.getTrustStorePassword();
+                if ((trustPass != null) && (trustPass.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("truststorePass", trustPass));                 
+                
+                String trustType = cform.getTrustStoreType();
+                if ((trustType != null) && (trustType.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("truststoreType", trustType));   
+                
                 String sslProtocol = cform.getSslProtocol();
                 if ((sslProtocol != null) && (sslProtocol.length()>0)) 
                     mBServer.setAttribute(coname,
-                              new Attribute(attribute, sslProtocol));
+                              new Attribute("sslProtocol", sslProtocol));                    
+             }
+
+            // HTTPS-APR specific properties
+            if("HTTPS-APR".equalsIgnoreCase(connectorType)) {
+                String sSLEngine = cform.getSSLEngine();
+                if ((sSLEngine != null) && (sSLEngine.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLEngine", sSLEngine));  
                 
-            }
- 
+                String sSLProtocol = cform.getSSLProtocol();
+                if ((sSLProtocol != null) && (sSLProtocol.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLProtocol", sSLProtocol));           
+                
+                String sSLCipherSuite = cform.getSSLCipherSuite();
+                if ((sSLCipherSuite != null) && (sSLCipherSuite.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCipherSuite", sSLCipherSuite));            
+                
+                mBServer.setAttribute(coname,
+                              new Attribute("SSLCertificateFile", 
+                                             cform.getSSLCertificateFile()));   
+                
+                String sSLCertificateKeyFile = cform.getSSLCertificateKeyFile();
+                if ((sSLCertificateKeyFile != null) &&
+                        (sSLCertificateKeyFile.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCertificateKeyFile",
+                                      sSLCertificateKeyFile));                 
+                
+                String sSLPassword = cform.getSSLPassword();
+                if ((sSLPassword != null) && (sSLPassword.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLPassword", sSLPassword));   
+                
+                String sSLVerifyClient = cform.getSSLVerifyClient();
+                if ((sSLVerifyClient != null) && (sSLVerifyClient.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLVerifyClient", sSLVerifyClient));            
+                
+                String sSLVerifyDepthText = cform.getSSLVerifyDepthText();
+                if ((sSLVerifyDepthText != null) &&
+                        (sSLVerifyDepthText.length()>0))
+                    try {
+                        mBServer.setAttribute(coname,
+                                new Attribute("SSLVerifyDepthText",
+                                        Integer.getInteger(sSLVerifyDepthText)));
+                    } catch (NumberFormatException e) {
+                        mBServer.setAttribute(coname,
+                                new Attribute("SSLVerifyDepthText",
+                                        new Integer(10)));
+                    }
+                
+                String sSLCACertificateFile = cform.getSSLCACertificateFile();
+                if ((sSLCACertificateFile != null) &&
+                        (sSLCACertificateFile.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCACertificateFile",
+                                      sSLCACertificateFile));   
+                
+                String sSLCACertificatePath = cform.getSSLCACertificatePath();
+                if ((sSLCACertificatePath != null) &&
+                        (sSLCACertificatePath.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCACertificatePath",
+                                      sSLCACertificatePath));                    
+                
+                String sSLCertificateChainFile =
+                    cform.getSSLCertificateChainFile();
+                if ((sSLCertificateChainFile != null) &&
+                        (sSLCertificateChainFile.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCertificateChainFile",
+                                      sSLCertificateChainFile));                    
+                
+                String sSLCARevocationFile = cform.getSSLCARevocationFile();
+                if ((sSLCARevocationFile != null) &&
+                        (sSLCARevocationFile.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCARevocationFile",
+                                      sSLCARevocationFile));                    
+                
+                String sSLCARevocationPath = cform.getSSLCARevocationPath();
+                if ((sSLCARevocationPath != null) && (sSLCARevocationPath.length()>0)) 
+                    mBServer.setAttribute(coname,
+                              new Attribute("SSLCARevocationPath",
+                                      sSLCARevocationPath));                    
+             }
+
         } catch (Exception e) {
 
             getServlet().log
@@ -499,7 +540,6 @@ public final class SaveConnectorAction extends Action {
                                       attribute));
             return (null);
         }
-        
         // Forward to the success reporting page
         session.removeAttribute(mapping.getAttribute());
         return (mapping.findForward("Save Successful"));

@@ -20,10 +20,14 @@ package org.apache.catalina.realm;
 
 
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+
 import javax.naming.Context;
-import org.apache.catalina.LifecycleException;
+
 import org.apache.catalina.Group;
+import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Role;
 import org.apache.catalina.ServerFactory;
 import org.apache.catalina.User;
@@ -33,14 +37,14 @@ import org.apache.catalina.util.StringManager;
 
 
 /**
- * <p>Implementation of {@link org.apache.catalina.Realm} that is based on an
- * implementation of {@link UserDatabase} made available through the global JNDI
- * resources configured for this instance of Catalina.  Set the
- * <code>resourceName</code> parameter to the global JNDI resources name for the
- * configured instance of <code>UserDatabase</code> that we should consult.</p>
+ * <p>Implementation of {@link org.apache.catalina.Realm} that is based on an implementation of
+ * {@link UserDatabase} made available through the global JNDI resources
+ * configured for this instance of Catalina.  Set the <code>resourceName</code>
+ * parameter to the global JNDI resources name for the configured instance
+ * of <code>UserDatabase</code> that we should consult.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: UserDatabaseRealm.java 939529 2010-04-30 00:51:34Z kkolinko $
  * @since 4.1
  */
 
@@ -126,6 +130,7 @@ public class UserDatabaseRealm
 
     // --------------------------------------------------------- Public Methods
 
+
     /**
      * Return <code>true</code> if the specified Principal has the specified
      * security role, within the context of this Realm; otherwise return
@@ -137,6 +142,12 @@ public class UserDatabaseRealm
      * @param role Security role to be checked
      */
     public boolean hasRole(Principal principal, String role) {
+        if( principal instanceof GenericPrincipal) {
+            GenericPrincipal gp = (GenericPrincipal)principal;
+            if(gp.getUserPrincipal() instanceof User) {
+                principal = gp.getUserPrincipal();
+            }
+        }
         if(! (principal instanceof User) ) {
             //Play nice with SSO and mixed Realms
             return super.hasRole(principal, role);
@@ -163,7 +174,7 @@ public class UserDatabaseRealm
         }
         return false;
     }
-
+		
     // ------------------------------------------------------ Protected Methods
 
 
@@ -172,7 +183,7 @@ public class UserDatabaseRealm
      */
     protected String getName() {
 
-        return (UserDatabaseRealm.name);
+        return (name);
 
     }
 
@@ -185,9 +196,9 @@ public class UserDatabaseRealm
         User user = database.findUser(username);
 
         if (user == null) {
-            return (null);
-        }
-        
+            return null;
+        } 
+
         return (user.getPassword());
 
     }
@@ -198,8 +209,27 @@ public class UserDatabaseRealm
      */
     protected Principal getPrincipal(String username) {
 
-        return (database.findUser(username));
+        User user = database.findUser(username);
+        if(user == null) {
+            return null;
+        }
 
+        List roles = new ArrayList();
+        Iterator uroles = user.getRoles();
+        while(uroles.hasNext()) {
+            Role role = (Role)uroles.next();
+            roles.add(role.getName());
+        }
+        Iterator groups = user.getGroups();
+        while(groups.hasNext()) {
+            Group group = (Group)groups.next();
+            uroles = group.getRoles();
+            while(uroles.hasNext()) {
+                Role role = (Role)uroles.next();
+                roles.add(role.getName());
+            }
+        }
+        return new GenericPrincipal(this, username, user.getPassword(), roles, user);
     }
 
 
@@ -214,22 +244,23 @@ public class UserDatabaseRealm
      */
     public synchronized void start() throws LifecycleException {
 
+        // Perform normal superclass initialization
+        super.start();
+
         try {
             StandardServer server = (StandardServer) ServerFactory.getServer();
             Context context = server.getGlobalNamingContext();
             database = (UserDatabase) context.lookup(resourceName);
         } catch (Throwable e) {
-            e.printStackTrace();
-            log(sm.getString("userDatabaseRealm.lookup", resourceName), e);
+            containerLog.error(sm.getString("userDatabaseRealm.lookup",
+                                            resourceName),
+                               e);
             database = null;
         }
         if (database == null) {
             throw new LifecycleException
                 (sm.getString("userDatabaseRealm.noDatabase", resourceName));
         }
-
-        // Perform normal superclass initialization
-        super.start();
 
     }
 

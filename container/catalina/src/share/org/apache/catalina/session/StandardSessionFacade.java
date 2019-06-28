@@ -20,6 +20,7 @@ package org.apache.catalina.session;
 
 
 import java.util.Enumeration;
+
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionContext;
@@ -29,7 +30,7 @@ import javax.servlet.http.HttpSessionContext;
  * Facade for the StandardSession object.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardSessionFacade.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class StandardSessionFacade

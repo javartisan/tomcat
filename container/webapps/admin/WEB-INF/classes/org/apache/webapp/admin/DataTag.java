@@ -34,7 +34,7 @@ import javax.servlet.jsp.tagext.Tag;
  * <strong>FIXME</strong> - Internationalize the exception messages!
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $
+ * @version $Revision: 479043 $
  */
 
 public class DataTag extends BodyTagSupport {

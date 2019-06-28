@@ -25,7 +25,7 @@ import java.io.IOException;
  * Encapsultes the contents of a resource.
  * 
  * @author <a href="mailto:remm@apache.org">Remy Maucherat</a>
- * @version $Revision: 466595 $
+ * @version $Revision: 466608 $
  */
 public class Resource {
     

@@ -24,12 +24,11 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
-import org.apache.struts.util.MessageResources;
+import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.LabelValueBean;
 import org.apache.webapp.admin.Lists;
 
@@ -37,15 +36,10 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Add Realm</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AddRealmAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class AddRealmAction extends Action {
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
     // the list for types of realms
     private ArrayList types = null;
@@ -75,12 +69,8 @@ public class AddRealmAction extends Action {
 
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
 
         // Fill in the form values for display and editing
-
         String realmTypes[] = new String[5];
         realmTypes[0] = "UserDatabaseRealm";
         realmTypes[1] = "JNDIRealm";
@@ -92,16 +82,18 @@ public class AddRealmAction extends Action {
         String type = request.getParameter("type");
         if (type == null)
             type = "UserDatabaseRealm";    // default type is UserDatabaseRealm
-
+        
         types = new ArrayList();
         // the first element in the select list should be the type selected
         types.add(new LabelValueBean(type,
-                "AddRealm.do?parent=" + URLEncoder.encode(parent)
+                "AddRealm.do?parent=" + 
+                URLEncoder.encode(parent,TomcatTreeBuilder.URL_ENCODING)
                 + "&type=" + type));
         for (int i=0; i< realmTypes.length; i++) {
             if (!type.equalsIgnoreCase(realmTypes[i])) {
                 types.add(new LabelValueBean(realmTypes[i],
-                "AddRealm.do?parent=" + URLEncoder.encode(parent)
+                "AddRealm.do?parent=" + 
+                URLEncoder.encode(parent,TomcatTreeBuilder.URL_ENCODING)
                 + "&type=" + realmTypes[i]));
             }
         }
@@ -132,9 +124,7 @@ public class AddRealmAction extends Action {
         String realmType = "UserDatabaseRealm";
         realmFm.setNodeLabel("Realm (" + realmType + ")");
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvl("0");
         realmFm.setResource("");
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
         realmFm.setRealmTypeVals(types);
     }
 
@@ -148,7 +138,6 @@ public class AddRealmAction extends Action {
         String realmType = "JNDIRealm";
         realmFm.setNodeLabel("Realm (" + realmType + ")");
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvl("0");
         realmFm.setDigest("");
         realmFm.setRoleBase("");
         realmFm.setUserSubtree("false");
@@ -158,14 +147,12 @@ public class AddRealmAction extends Action {
         realmFm.setRoleName("");
         realmFm.setRoleBase("");
         realmFm.setContextFactory("");
-        realmFm.setUserBase("");
         realmFm.setUserPattern("");
         realmFm.setUserSearch("");
         realmFm.setUserPassword("");
         realmFm.setConnectionName("");
         realmFm.setConnectionPassword("");
         realmFm.setConnectionURL("");
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
         realmFm.setSearchVals(Lists.getBooleanValues());
         realmFm.setRealmTypeVals(types);
     }
@@ -180,9 +167,7 @@ public class AddRealmAction extends Action {
         String realmType = "MemoryRealm";
         realmFm.setNodeLabel("Realm (" + realmType + ")");
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvl("0");
         realmFm.setPathName("");
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
         realmFm.setRealmTypeVals(types);
     }
 
@@ -196,7 +181,6 @@ public class AddRealmAction extends Action {
         String realmType = "JDBCRealm";
         realmFm.setNodeLabel("Realm (" + realmType + ")");
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvl("0");
         realmFm.setDigest("");
         realmFm.setDriver("");
         realmFm.setRoleNameCol("");
@@ -206,11 +190,11 @@ public class AddRealmAction extends Action {
         realmFm.setConnectionName("");
         realmFm.setConnectionPassword("");
         realmFm.setConnectionURL("");
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
         realmFm.setRealmTypeVals(types);
     }
-
+    
     private void createDataSourceRealm(HttpSession session, String parent) {
+
         DataSourceRealmForm realmFm = new DataSourceRealmForm();
         session.setAttribute("dataSourceRealmForm", realmFm);
         realmFm.setAdminAction("Create");
@@ -219,7 +203,6 @@ public class AddRealmAction extends Action {
         String realmType = "DataSourceRealm";
         realmFm.setNodeLabel("Realm (" + realmType + ")");
         realmFm.setRealmType(realmType);
-        realmFm.setDebugLvl("0");
         realmFm.setDataSourceName("");
         realmFm.setDigest("");
         realmFm.setLocalDataSource("false");
@@ -228,7 +211,6 @@ public class AddRealmAction extends Action {
         realmFm.setUserNameCol("");
         realmFm.setUserRoleTable("");
         realmFm.setUserTable("");
-        realmFm.setDebugLvlVals(Lists.getDebugLevels());
         realmFm.setRealmTypeVals(types);
         realmFm.setBooleanVals(Lists.getBooleanValues());
     }

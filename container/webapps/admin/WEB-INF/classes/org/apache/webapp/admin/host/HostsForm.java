@@ -27,7 +27,7 @@ import org.apache.struts.action.ActionMapping;
  * Form bean for deleting hosts.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: HostsForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class HostsForm extends ActionForm {

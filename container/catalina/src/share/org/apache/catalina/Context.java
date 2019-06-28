@@ -20,12 +20,10 @@ package org.apache.catalina;
 
 
 import javax.servlet.ServletContext;
+
+import org.apache.tomcat.util.http.mapper.Mapper;
+
 import org.apache.catalina.deploy.ApplicationParameter;
-import org.apache.catalina.deploy.ContextEjb;
-import org.apache.catalina.deploy.ContextEnvironment;
-import org.apache.catalina.deploy.ContextLocalEjb;
-import org.apache.catalina.deploy.ContextResource;
-import org.apache.catalina.deploy.ContextResourceLink;
 import org.apache.catalina.deploy.ErrorPage;
 import org.apache.catalina.deploy.FilterDef;
 import org.apache.catalina.deploy.FilterMap;
@@ -52,7 +50,7 @@ import org.apache.catalina.util.CharsetMapper;
  * <p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Context.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Context extends Container {
@@ -71,24 +69,45 @@ public interface Context extends Container {
 
 
     /**
-     * Return the set of initialized application listener objects,
+     * Return the set of initialized application event listener objects,
      * in the order they were specified in the web application deployment
      * descriptor, for this application.
      *
      * @exception IllegalStateException if this method is called before
      *  this application has started, or after it has been stopped
      */
-    public Object[] getApplicationListeners();
+    public Object[] getApplicationEventListeners();
 
 
     /**
-     * Store the set of initialized application listener objects,
+     * Store the set of initialized application event listener objects,
      * in the order they were specified in the web application deployment
      * descriptor, for this application.
      *
      * @param listeners The set of instantiated listener objects.
      */
-    public void setApplicationListeners(Object listeners[]);
+    public void setApplicationEventListeners(Object listeners[]);
+
+
+    /**
+     * Return the set of initialized application lifecycle listener objects,
+     * in the order they were specified in the web application deployment
+     * descriptor, for this application.
+     *
+     * @exception IllegalStateException if this method is called before
+     *  this application has started, or after it has been stopped
+     */
+    public Object[] getApplicationLifecycleListeners();
+
+
+    /**
+     * Store the set of initialized application lifecycle listener objects,
+     * in the order they were specified in the web application deployment
+     * descriptor, for this application.
+     *
+     * @param listeners The set of instantiated listener objects.
+     */
+    public void setApplicationLifecycleListeners(Object listeners[]);
 
 
     /**
@@ -120,6 +139,20 @@ public interface Context extends Container {
 
 
     /**
+     * Return the path to a file to save this Context information.
+     */
+    public String getConfigFile();
+
+
+    /**
+     * Set the path to a file to save this Context information.
+     *
+     * @param configFile The path to a file to save this Context information.
+     */
+    public void setConfigFile(String configFile);
+
+
+    /**
      * Return the "correctly configured" flag for this Context.
      */
     public boolean getConfigured();
@@ -148,13 +181,42 @@ public interface Context extends Container {
      */
     public void setCookies(boolean cookies);
 
+    /**
+     * Gets the value of the use HttpOnly cookies for session cookies flag.
+     * 
+     * @return <code>true</code> if the HttpOnly flag should be set on session
+     *         cookies
+     */
+    public boolean getUseHttpOnly();
 
+
+    /**
+     * Sets the use HttpOnly cookies for session cookies flag.
+     * 
+     * @param useHttpOnly   Set to <code>true</code> to use HttpOnly cookies
+     *                          for session cookies
+     */
+    public void setUseHttpOnly(boolean useHttpOnly);
+    
     /**
      * Return the "allow crossing servlet contexts" flag.
      */
     public boolean getCrossContext();
 
 
+    
+    /**
+     * Return the alternate Deployment Descriptor name.
+     */
+    public String getAltDDName();
+    
+    
+    /**
+     * Set an alternate Deployment Descriptor name.
+     */
+    public void setAltDDName(String altDDName) ;
+    
+    
     /**
      * Set the "allow crossing servlet contexts" flag.
      *
@@ -208,6 +270,12 @@ public interface Context extends Container {
 
 
     /**
+     * Return the URL encoded context path, using UTF-8.
+     */
+    public String getEncodedPath();
+
+
+    /**
      * Return the login configuration descriptor for this web application.
      */
     public LoginConfig getLoginConfig();
@@ -222,6 +290,12 @@ public interface Context extends Container {
 
 
     /**
+     * Get the request dispatcher mapper.
+     */
+    public Mapper getMapper();
+
+
+    /**
      * Return the naming resources associated with this web application.
      */
     public NamingResources getNamingResources();
@@ -229,7 +303,7 @@ public interface Context extends Container {
 
     /**
      * Set the naming resources for this web application.
-     * 
+     *
      * @param namingResources The new naming resources
      */
     public void setNamingResources(NamingResources namingResources);
@@ -301,7 +375,7 @@ public interface Context extends Container {
 
     /**
      * Set the privileged flag for this web application.
-     * 
+     *
      * @param privileged The new privileged flag
      */
     public void setPrivileged(boolean privileged);
@@ -327,6 +401,22 @@ public interface Context extends Container {
      * @param timeout The new default session timeout
      */
     public void setSessionTimeout(int timeout);
+
+
+    /**
+     * Return the value of the swallowOutput flag.
+     */
+    public boolean getSwallowOutput();
+
+
+    /**
+     * Set the value of the swallowOutput flag. If set to true, the system.out
+     * and system.err will be redirected to the logger during a servlet
+     * execution.
+     *
+     * @param swallowOutput The new value
+     */
+    public void setSwallowOutput(boolean swallowOutput);
 
 
     /**
@@ -372,22 +462,6 @@ public interface Context extends Container {
 
 
     /**
-     * Add an EJB resource reference for this web application.
-     *
-     * @param ejb New EJB resource reference
-     */
-    public void addEjb(ContextEjb ejb);
-
-
-    /**
-     * Add an environment entry for this web application.
-     *
-     * @param environment New environment entry
-     */
-    public void addEnvironment(ContextEnvironment environment);
-
-
-    /**
      * Add an error page for the specified error or Java exception.
      *
      * @param errorPage The error page definition to be added
@@ -421,11 +495,24 @@ public interface Context extends Container {
 
 
     /**
-     * Add a local EJB resource reference for this web application.
+     * Add the given URL pattern as a jsp-property-group.  This maps
+     * resources that match the given pattern so they will be passed
+     * to the JSP container.  Though there are other elements in the
+     * property group, we only care about the URL pattern here.  The
+     * JSP container will parse the rest.
      *
-     * @param ejb New local EJB resource reference
+     * @param pattern URL pattern to be mapped 
      */
-    public void addLocalEjb(ContextLocalEjb ejb);
+    public void addJspMapping(String pattern);
+
+
+    /**
+     * Add a Locale Encoding Mapping (see Sec 5.4 of Servlet spec 2.4)
+     *
+     * @param locale locale to map an encoding for
+     * @param encoding encoding to be used for a give locale
+     */
+    public void addLocaleEncodingMappingParameter(String locale, String encoding);
 
 
     /**
@@ -446,31 +533,6 @@ public interface Context extends Container {
      * @param value Value of the new  parameter
      */
     public void addParameter(String name, String value);
-
-
-    /**
-     * Add a resource reference for this web application.
-     *
-     * @param resource New resource reference
-     */
-    public void addResource(ContextResource resource);
-
-
-    /**
-     * Add a resource environment reference for this web application.
-     *
-     * @param name The resource environment reference name
-     * @param type The resource environment reference type
-     */
-    public void addResourceEnvRef(String name, String type);
-
-
-    /**
-     * Add a resource link for this web application.
-     *
-     * @param resourceLink New resource link
-     */
-    public void addResourceLink(ContextResourceLink resourceLink);
 
 
     /**
@@ -508,6 +570,15 @@ public interface Context extends Container {
      */
     public void addTaglib(String uri, String location);
 
+    
+    /**
+     * Add a resource which will be watched for reloading by the host auto
+     * deployer. Note: this will not be used in embedded mode.
+     * 
+     * @param name Path to the resource, relative to docBase
+     */
+    public void addWatchedResource(String name);
+    
 
     /**
      * Add a new welcome file to the set recognized by this Context.
@@ -565,39 +636,6 @@ public interface Context extends Container {
 
 
     /**
-     * Return the EJB resource reference with the specified name, if any;
-     * otherwise, return <code>null</code>.
-     *
-     * @param name Name of the desired EJB resource reference
-     */
-    public ContextEjb findEjb(String name);
-
-
-    /**
-     * Return the defined EJB resource references for this application.
-     * If there are none, a zero-length array is returned.
-     */
-    public ContextEjb[] findEjbs();
-
-
-    /**
-     * Return the environment entry with the specified name, if any;
-     * otherwise, return <code>null</code>.
-     *
-     * @param name Name of the desired environment entry
-     */
-    public ContextEnvironment findEnvironment(String name);
-
-
-    /**
-     * Return the set of defined environment entries for this web
-     * application.  If none have been defined, a zero-length array
-     * is returned.
-     */
-    public ContextEnvironment[] findEnvironments();
-
-
-    /**
      * Return the error page entry for the specified HTTP error code,
      * if any; otherwise return <code>null</code>.
      *
@@ -652,22 +690,6 @@ public interface Context extends Container {
 
 
     /**
-     * Return the local EJB resource reference with the specified name, if any;
-     * otherwise, return <code>null</code>.
-     *
-     * @param name Name of the desired EJB resource reference
-     */
-    public ContextLocalEjb findLocalEjb(String name);
-
-
-    /**
-     * Return the defined local EJB resource references for this application.
-     * If there are none, a zero-length array is returned.
-     */
-    public ContextLocalEjb[] findLocalEjbs();
-
-
-    /**
      * Return the MIME type to which the specified extension is mapped,
      * if any; otherwise return <code>null</code>.
      *
@@ -698,55 +720,6 @@ public interface Context extends Container {
      * array is returned.
      */
     public String[] findParameters();
-
-
-    /**
-     * Return the resource reference with the specified name, if any;
-     * otherwise return <code>null</code>.
-     *
-     * @param name Name of the desired resource reference
-     */
-    public ContextResource findResource(String name);
-
-
-    /**
-     * Return the resource environment reference type for the specified
-     * name, if any; otherwise return <code>null</code>.
-     *
-     * @param name Name of the desired resource environment reference
-     */
-    public String findResourceEnvRef(String name);
-
-
-    /**
-     * Return the set of resource environment reference names for this
-     * web application.  If none have been specified, a zero-length
-     * array is returned.
-     */
-    public String[] findResourceEnvRefs();
-
-
-    /**
-     * Return the resource link with the specified name, if any;
-     * otherwise return <code>null</code>.
-     *
-     * @param name Name of the desired resource link
-     */
-    public ContextResourceLink findResourceLink(String name);
-
-
-    /**
-     * Return the defined resource links for this application.  If
-     * none have been defined, a zero-length array is returned.
-     */
-    public ContextResourceLink[] findResourceLinks();
-
-
-    /**
-     * Return the defined resource references for this application.  If
-     * none have been defined, a zero-length array is returned.
-     */
-    public ContextResource[] findResources();
 
 
     /**
@@ -826,6 +799,13 @@ public interface Context extends Container {
 
 
     /**
+     * Return the set of watched resources for this Context. If none are 
+     * defined, a zero length array will be returned.
+     */
+    public String[] findWatchedResources();
+    
+
+    /**
      * Return <code>true</code> if the specified welcome file is defined
      * for this Context; otherwise return <code>false</code>.
      *
@@ -833,7 +813,7 @@ public interface Context extends Container {
      */
     public boolean findWelcomeFile(String name);
 
-
+    
     /**
      * Return the set of welcome files defined for this Context.  If none are
      * defined, a zero-length array is returned.
@@ -891,22 +871,6 @@ public interface Context extends Container {
 
 
     /**
-     * Remove any EJB resource reference with the specified name.
-     *
-     * @param name Name of the EJB resource reference to remove
-     */
-    public void removeEjb(String name);
-
-
-    /**
-     * Remove any environment entry with the specified name.
-     *
-     * @param name Name of the environment entry to remove
-     */
-    public void removeEnvironment(String name);
-
-
-    /**
      * Remove the error page for the specified error code or
      * Java language exception, if it exists; otherwise, no action is taken.
      *
@@ -942,14 +906,6 @@ public interface Context extends Container {
 
 
     /**
-     * Remove any local EJB resource reference with the specified name.
-     *
-     * @param name Name of the EJB resource reference to remove
-     */
-    public void removeLocalEjb(String name);
-
-
-    /**
      * Remove the MIME mapping for the specified extension, if it exists;
      * otherwise, no action is taken.
      *
@@ -965,30 +921,6 @@ public interface Context extends Container {
      * @param name Name of the parameter to remove
      */
     public void removeParameter(String name);
-
-
-    /**
-     * Remove any resource reference with the specified name.
-     *
-     * @param name Name of the resource reference to remove
-     */
-    public void removeResource(String name);
-
-
-    /**
-     * Remove any resource environment reference with the specified name.
-     *
-     * @param name Name of the resource environment reference to remove
-     */
-    public void removeResourceEnvRef(String name);
-
-
-    /**
-     * Remove any resource link with the specified name.
-     *
-     * @param name Name of the resource link to remove
-     */
-    public void removeResourceLink(String name);
 
 
     /**
@@ -1023,6 +955,15 @@ public interface Context extends Container {
      */
     public void removeTaglib(String uri);
 
+    
+    /**
+     * Remove the specified watched resource name from the list associated
+     * with this Context.
+     * 
+     * @param name Name of the watched resource to be removed
+     */
+    public void removeWatchedResource(String name);
+    
 
     /**
      * Remove the specified welcome file name from the list recognized
@@ -1051,4 +992,72 @@ public interface Context extends Container {
     public void removeWrapperListener(String listener);
 
 
+    /**
+     * Get the server.xml <context> attribute's xmlNamespaceAware.
+     * @return true if namespace awarenes is enabled.
+     *
+     */
+    public boolean getXmlNamespaceAware();
+
+
+    /**
+     * Get the server.xml <context> attribute's xmlValidation.
+     * @return true if validation is enabled.
+     *
+     */
+    public boolean getXmlValidation();
+
+
+    /**
+     * Set the validation feature of the XML parser used when
+     * parsing xml instances.
+     * @param xmlValidation true to enable xml instance validation
+     */
+    public void setXmlValidation(boolean xmlValidation);
+
+
+   /**
+     * Set the namespace aware feature of the XML parser used when
+     * parsing xml instances.
+     * @param xmlNamespaceAware true to enable namespace awareness
+     */
+    public void setXmlNamespaceAware(boolean xmlNamespaceAware);
+    /**
+     * Get the server.xml <context> attribute's xmlValidation.
+     * @return true if validation is enabled.
+     */
+     
+
+    /**
+     * Set the validation feature of the XML parser used when
+     * parsing tlds files. 
+     * @param tldValidation true to enable xml instance validation
+     */
+    public void setTldValidation(boolean tldValidation);
+
+
+    /**
+     * Get the server.xml <context> attribute's webXmlValidation.
+     * @return true if validation is enabled.
+     *
+     */
+    public boolean getTldValidation();
+
+
+    /**
+     * Get the server.xml &lt;host&gt; attribute's xmlNamespaceAware.
+     * @return true if namespace awarenes is enabled.
+     */
+    public boolean getTldNamespaceAware();
+
+
+    /**
+     * Set the namespace aware feature of the XML parser used when
+     * parsing xml instances.
+     * @param tldNamespaceAware true to enable namespace awareness
+     */
+    public void setTldNamespaceAware(boolean tldNamespaceAware);
+
+
 }
+

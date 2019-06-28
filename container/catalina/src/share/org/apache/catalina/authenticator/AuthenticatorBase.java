@@ -20,40 +20,38 @@ package org.apache.catalina.authenticator;
 
 
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Principal;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Random;
+
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
+
 import org.apache.catalina.Authenticator;
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
-import org.apache.catalina.HttpRequest;
-import org.apache.catalina.HttpResponse;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Logger;
 import org.apache.catalina.Manager;
 import org.apache.catalina.Pipeline;
 import org.apache.catalina.Realm;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
 import org.apache.catalina.Session;
 import org.apache.catalina.Valve;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.deploy.LoginConfig;
 import org.apache.catalina.deploy.SecurityConstraint;
+import org.apache.catalina.util.DateTool;
 import org.apache.catalina.util.LifecycleSupport;
 import org.apache.catalina.util.StringManager;
 import org.apache.catalina.valves.ValveBase;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 
 /**
@@ -73,13 +71,14 @@ import org.apache.catalina.valves.ValveBase;
  * requests.  Requests of any other type will simply be passed through.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 684900 $ $Date: 2008-08-11 21:16:02 +0100 (Mon, 11 Aug 2008) $
+ * @version $Id: AuthenticatorBase.java 992373 2010-09-03 16:56:30Z markt $
  */
 
 
 public abstract class AuthenticatorBase
     extends ValveBase
     implements Authenticator, Lifecycle {
+    private static Log log = LogFactory.getLog(AuthenticatorBase.class);
 
 
     // ----------------------------------------------------- Instance Variables
@@ -100,6 +99,11 @@ public abstract class AuthenticatorBase
 
 
     /**
+     * Default authentication realm name.
+     */
+    protected static final String REALM_NAME = "Authentication required";
+
+    /**
      * The message digest algorithm to be used when generating session
      * identifiers.  This must be an algorithm supported by the
      * <code>java.security.MessageDigest</code> class on your platform.
@@ -115,15 +119,15 @@ public abstract class AuthenticatorBase
 
 
     /**
+     * Should the session ID, if any, be changed upon a successful
+     * authentication to prevent a session fixation attack?
+     */
+    protected boolean changeSessionIdOnAuthentication = false;
+    
+    /**
      * The Context to which this Valve is attached.
      */
     protected Context context = null;
-
-
-    /**
-     * The debugging detail level for this component.
-     */
-    protected int debug = 0;
 
 
     /**
@@ -152,6 +156,12 @@ public abstract class AuthenticatorBase
      */
     protected boolean disableProxyCaching = true;
 
+    /**
+     * Flag to determine if we disable proxy caching with headers incompatible
+     * with IE 
+     */
+    protected boolean securePagesWithPragma = true;
+    
     /**
      * The lifecycle event support for this component.
      */
@@ -189,6 +199,14 @@ public abstract class AuthenticatorBase
      * Has this component been started?
      */
     protected boolean started = false;
+
+
+    /**
+     * "Expires" header always set to Date(1), so generate once only
+     */
+    private static final String DATE_ONE =
+        (new SimpleDateFormat(DateTool.HTTP_RESPONSE_DATE_HEADER,
+                              Locale.US)).format(new Date(1));
 
 
     // ------------------------------------------------------------- Properties
@@ -261,28 +279,6 @@ public abstract class AuthenticatorBase
 
         super.setContainer(container);
         this.context = (Context) container;
-
-    }
-
-
-    /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-
-        return (this.debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-
-        this.debug = debug;
 
     }
 
@@ -362,6 +358,50 @@ public abstract class AuthenticatorBase
     public void setDisableProxyCaching(boolean nocache) {
         disableProxyCaching = nocache;
     }
+    
+    /**
+     * Return the flag that states, if proxy caching is disabled, what headers
+     * we add to disable the caching.
+     */
+    public boolean getSecurePagesWithPragma() {
+        return securePagesWithPragma;
+    }
+
+    /**
+     * Set the value of the flag that states what headers we add to disable
+     * proxy caching.
+     * @param securePagesWithPragma <code>true</code> if we add headers which 
+     * are incompatible with downloading office documents in IE under SSL but
+     * which fix a caching problem in Mozilla.
+     */
+    public void setSecurePagesWithPragma(boolean securePagesWithPragma) {
+        this.securePagesWithPragma = securePagesWithPragma;
+    }    
+
+    /**
+     * Return the flag that states if we should change the session ID of an
+     * existing session upon successful authentication.
+     * 
+     * @return <code>true</code> to change session ID upon successful
+     *         authentication, <code>false</code> to do not perform the change.
+     */
+    public boolean getChangeSessionIdOnAuthentication() {
+        return changeSessionIdOnAuthentication;
+    }
+
+    /**
+     * Set the value of the flag that states if we should change the session ID
+     * of an existing session upon successful authentication.
+     * 
+     * @param changeSessionIdOnAuthentication
+     *            <code>true</code> to change session ID upon successful
+     *            authentication, <code>false</code> to do not perform the
+     *            change.
+     */
+    public void setChangeSessionIdOnAuthentication(
+            boolean changeSessionIdOnAuthentication) {
+        this.changeSessionIdOnAuthentication = changeSessionIdOnAuthentication;
+    }
 
     // --------------------------------------------------------- Public Methods
 
@@ -372,52 +412,33 @@ public abstract class AuthenticatorBase
      *
      * @param request Request to be processed
      * @param response Response to be processed
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if thrown by a processing element
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        // If this is not an HTTP request, do nothing
-        if (!(request instanceof HttpRequest) ||
-            !(response instanceof HttpResponse)) {
-            context.invokeNext(request, response);
-            return;
-        }
-        if (!(request.getRequest() instanceof HttpServletRequest) ||
-            !(response.getResponse() instanceof HttpServletResponse)) {
-            context.invokeNext(request, response);
-            return;
-        }
-        HttpRequest hrequest = (HttpRequest) request;
-        HttpResponse hresponse = (HttpResponse) response;
-
-        if (debug >= 1)
-            log("Security checking request " +
-                ((HttpServletRequest) request.getRequest()).getMethod() + " " +
-                ((HttpServletRequest) request.getRequest()).getRequestURI());
+        if (log.isDebugEnabled())
+            log.debug("Security checking request " +
+                request.getMethod() + " " + request.getRequestURI());
         LoginConfig config = this.context.getLoginConfig();
 
         // Have we got a cached authenticated Principal to record?
         if (cache) {
-            Principal principal =
-                ((HttpServletRequest) request.getRequest()).getUserPrincipal();
+            Principal principal = request.getUserPrincipal();
             if (principal == null) {
-                Session session = getSession(hrequest);
+                Session session = request.getSessionInternal(false);
                 if (session != null) {
                     principal = session.getPrincipal();
                     if (principal != null) {
-                        if (debug >= 1)
-                            log("We have cached auth type " +
+                        if (log.isDebugEnabled())
+                            log.debug("We have cached auth type " +
                                 session.getAuthType() +
                                 " for principal " +
                                 session.getPrincipal());
-                        hrequest.setAuthType(session.getAuthType());
-                        hrequest.setUserPrincipal(principal);
+                        request.setAuthType(session.getAuthType());
+                        request.setUserPrincipal(principal);
                     }
                 }
             }
@@ -426,83 +447,120 @@ public abstract class AuthenticatorBase
         // Special handling for form-based logins to deal with the case
         // where the login form (and therefore the "j_security_check" URI
         // to which it submits) might be outside the secured area
-        String requestURI = hrequest.getDecodedRequestURI();
         String contextPath = this.context.getPath();
+        String requestURI = request.getDecodedRequestURI();
         if (requestURI.startsWith(contextPath) &&
             requestURI.endsWith(Constants.FORM_ACTION)) {
-            if (!authenticate(hrequest, hresponse, config)) {
-                if (debug >= 1)
-                    log(" Failed authenticate() test");
+            if (!authenticate(request, response, config)) {
+                if (log.isDebugEnabled())
+                    log.debug(" Failed authenticate() test ??" + requestURI );
                 return;
             }
         }
 
+        Realm realm = this.context.getRealm();
         // Is this request URI subject to a security constraint?
-        SecurityConstraint constraint = findConstraint(hrequest);
-        if ((constraint == null) /* &&
+        SecurityConstraint [] constraints
+            = realm.findSecurityConstraints(request, this.context);
+       
+        if ((constraints == null) /* &&
             (!Constants.FORM_METHOD.equals(config.getAuthMethod())) */ ) {
-            if (debug >= 1)
-                log(" Not subject to any constraint");
-            context.invokeNext(request, response);
+            if (log.isDebugEnabled())
+                log.debug(" Not subject to any constraint");
+            getNext().invoke(request, response);
             return;
         }
-        if ((debug >= 1) && (constraint != null))
-            log(" Subject to constraint " + constraint);
 
         // Make sure that constrained resources are not cached by web proxies
         // or browsers as caching can provide a security hole
-        HttpServletRequest hsrequest = (HttpServletRequest)hrequest.getRequest();
         if (disableProxyCaching && 
-            !hsrequest.isSecure() &&
-            !"POST".equalsIgnoreCase(hsrequest.getMethod())) {
-            HttpServletResponse sresponse = 
-                (HttpServletResponse) response.getResponse();
-            sresponse.setHeader("Pragma", "No-cache");
-            sresponse.setHeader("Cache-Control", "no-cache");
-            sresponse.setDateHeader("Expires", 1);
+            // FIXME: Disabled for Mozilla FORM support over SSL 
+            // (improper caching issue)
+            //!request.isSecure() &&
+            !"POST".equalsIgnoreCase(request.getMethod())) {
+            if (securePagesWithPragma) {
+                // FIXME: These cause problems with downloading office docs
+                // from IE under SSL and may not be needed for newer Mozilla
+                // clients.
+                response.setHeader("Pragma", "No-cache");
+                response.setHeader("Cache-Control", "no-cache");
+            } else {
+                response.setHeader("Cache-Control", "private");
+            }
+            response.setHeader("Expires", DATE_ONE);
         }
 
+        int i;
         // Enforce any user data constraint for this security constraint
-        if (debug >= 1)
-            log(" Calling checkUserData()");
-        if (!checkUserData(hrequest, hresponse, constraint)) {
-            if (debug >= 1)
-                log(" Failed checkUserData() test");
-            // ASSERT: Authenticator already set the appropriate
-            // HTTP status code, so we do not have to do anything special
+        if (log.isDebugEnabled()) {
+            log.debug(" Calling hasUserDataPermission()");
+        }
+        if (!realm.hasUserDataPermission(request, response,
+                                         constraints)) {
+            if (log.isDebugEnabled()) {
+                log.debug(" Failed hasUserDataPermission() test");
+            }
+            /*
+             * ASSERT: Authenticator already set the appropriate
+             * HTTP status code, so we do not have to do anything special
+             */
             return;
         }
 
-        // Authenticate based upon the specified login configuration
-        if (constraint.getAuthConstraint()) {
-            if (debug >= 1)
-                log(" Calling authenticate()");
-            if (!authenticate(hrequest, hresponse, config)) {
-                if (debug >= 1)
-                    log(" Failed authenticate() test");
-                // ASSERT: Authenticator already set the appropriate
-                // HTTP status code, so we do not have to do anything special
-                return;
+        // Since authenticate modifies the response on failure,
+        // we have to check for allow-from-all first.
+        boolean authRequired = true;
+        for(i=0; i < constraints.length && authRequired; i++) {
+            if(!constraints[i].getAuthConstraint()) {
+                authRequired = false;
+            } else if(!constraints[i].getAllRoles()) {
+                String [] roles = constraints[i].findAuthRoles();
+                if(roles == null || roles.length == 0) {
+                    authRequired = false;
+                }
             }
         }
-
-        // Perform access control based on the specified role(s)
-        if (constraint.getAuthConstraint()) {
-            if (debug >= 1)
-                log(" Calling accessControl()");
-            if (!accessControl(hrequest, hresponse, constraint)) {
-                if (debug >= 1)
-                    log(" Failed accessControl() test");
-                // ASSERT: AccessControl method has already set the appropriate
-                // HTTP status code, so we do not have to do anything special
-                return;
+             
+        if(authRequired) {  
+            if (log.isDebugEnabled()) {
+                log.debug(" Calling authenticate()");
             }
+            if (!authenticate(request, response, config)) {
+                if (log.isDebugEnabled()) {
+                    log.debug(" Failed authenticate() test");
+                }
+                /*
+                 * ASSERT: Authenticator already set the appropriate
+                 * HTTP status code, so we do not have to do anything
+                 * special
+                 */
+                return;
+            } 
+            
         }
-
+    
+        if (log.isDebugEnabled()) {
+            log.debug(" Calling accessControl()");
+        }
+        if (!realm.hasResourcePermission(request, response,
+                                         constraints,
+                                         this.context)) {
+            if (log.isDebugEnabled()) {
+                log.debug(" Failed accessControl() test");
+            }
+            /*
+             * ASSERT: AccessControl method has already set the
+             * appropriate HTTP status code, so we do not have to do
+             * anything special
+             */
+            return;
+        }
+    
         // Any and all specified constraints have been satisfied
-        if (debug >= 1)
-            log(" Successfully passed all security constraints");
-        context.invokeNext(request, response);
+        if (log.isDebugEnabled()) {
+            log.debug(" Successfully passed all security constraints");
+        }
+        getNext().invoke(request, response);
 
     }
 
@@ -510,94 +568,6 @@ public abstract class AuthenticatorBase
     // ------------------------------------------------------ Protected Methods
 
 
-    /**
-     * Perform access control based on the specified authorization constraint.
-     * Return <code>true</code> if this constraint is satisfied and processing
-     * should continue, or <code>false</code> otherwise.
-     *
-     * @param request Request we are processing
-     * @param response Response we are creating
-     * @param constraint Security constraint we are enforcing
-     *
-     * @exception IOException if an input/output error occurs
-     */
-    protected boolean accessControl(HttpRequest request,
-                                    HttpResponse response,
-                                    SecurityConstraint constraint)
-        throws IOException {
-
-        if (constraint == null)
-            return (true);
-
-        // Specifically allow access to the form login and form error pages
-        // and the "j_security_check" action
-        LoginConfig config = context.getLoginConfig();
-        if ((config != null) &&
-            (Constants.FORM_METHOD.equals(config.getAuthMethod()))) {
-            String requestURI = request.getDecodedRequestURI();
-            String loginPage = context.getPath() + config.getLoginPage();
-            if (loginPage.equals(requestURI)) {
-                if (debug >= 1)
-                    log(" Allow access to login page " + loginPage);
-                return (true);
-            }
-            String errorPage = context.getPath() + config.getErrorPage();
-            if (errorPage.equals(requestURI)) {
-                if (debug >= 1)
-                    log(" Allow access to error page " + errorPage);
-                return (true);
-            }
-            if (requestURI.endsWith(Constants.FORM_ACTION)) {
-                if (debug >= 1)
-                    log(" Allow access to username/password submission");
-                return (true);
-            }
-        }
-
-        // Check each role included in this constraint
-        String roles[];
-        if (constraint.getAllRoles()) {
-            // * means all roles defined in web.xml
-            roles = context.findSecurityRoles();
-        } else {
-            roles = constraint.findAuthRoles();
-        }
-        
-        if (roles == null)
-            roles = new String[0];
-
-        if ((roles.length == 0) && (constraint.getAuthConstraint())) {
-            ((HttpServletResponse) response.getResponse()).sendError
-                (HttpServletResponse.SC_FORBIDDEN,
-                 sm.getString("authenticator.forbidden"));
-            return (false); // No listed roles means no access at all
-        }
-        
-        // Which user principal have we already authenticated?
-        Principal principal =
-            ((HttpServletRequest) request.getRequest()).getUserPrincipal();
-        if (principal == null) {
-            if (debug >= 2)
-                log("  No user authenticated, cannot grant access");
-            ((HttpServletResponse) response.getResponse()).sendError
-                (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-                 sm.getString("authenticator.notAuthenticated"));
-            return (false);
-        }
-
-        Realm realm = context.getRealm();
-        for (int i = 0; i < roles.length; i++) {
-            if (realm.hasRole(principal, roles[i]))
-                return (true);
-        }
-
-        // Return a "Forbidden" message denying access to this resource
-        ((HttpServletResponse) response.getResponse()).sendError
-            (HttpServletResponse.SC_FORBIDDEN,
-             sm.getString("authenticator.forbidden"));
-        return (false);
-
-    }
 
 
     /**
@@ -629,143 +599,10 @@ public abstract class AuthenticatorBase
      *
      * @exception IOException if an input/output error occurs
      */
-    protected abstract boolean authenticate(HttpRequest request,
-                                            HttpResponse response,
+    protected abstract boolean authenticate(Request request,
+                                            Response response,
                                             LoginConfig config)
         throws IOException;
-
-
-    /**
-     * Enforce any user data constraint required by the security constraint
-     * guarding this request URI.  Return <code>true</code> if this constraint
-     * was not violated and processing should continue, or <code>false</code>
-     * if we have created a response already.
-     *
-     * @param request Request we are processing
-     * @param response Response we are creating
-     * @param constraint Security constraint being checked
-     *
-     * @exception IOException if an input/output error occurs
-     */
-    protected boolean checkUserData(HttpRequest request,
-                                    HttpResponse response,
-                                    SecurityConstraint constraint)
-        throws IOException {
-
-        // Is there a relevant user data constraint?
-        if (constraint == null) {
-            if (debug >= 2)
-                log("  No applicable security constraint defined");
-            return (true);
-        }
-        String userConstraint = constraint.getUserConstraint();
-        if (userConstraint == null) {
-            if (debug >= 2)
-                log("  No applicable user data constraint defined");
-            return (true);
-        }
-        if (userConstraint.equals(Constants.NONE_TRANSPORT)) {
-            if (debug >= 2)
-                log("  User data constraint has no restrictions");
-            return (true);
-        }
-
-        // Validate the request against the user data constraint
-        if (request.getRequest().isSecure()) {
-            if (debug >= 2)
-                log("  User data constraint already satisfied");
-            return (true);
-        }
-
-        // Initialize variables we need to determine the appropriate action
-        HttpServletRequest hrequest =
-            (HttpServletRequest) request.getRequest();
-        HttpServletResponse hresponse =
-            (HttpServletResponse) response.getResponse();
-        int redirectPort = request.getConnector().getRedirectPort();
-
-        // Is redirecting disabled?
-        if (redirectPort <= 0) {
-            if (debug >= 2)
-                log("  SSL redirect is disabled");
-            hresponse.sendError
-                (HttpServletResponse.SC_FORBIDDEN,
-                 hrequest.getRequestURI());
-            return (false);
-        }
-
-        // Redirect to the corresponding SSL port
-        String protocol = "https";
-        String host = hrequest.getServerName();
-        StringBuffer file = new StringBuffer(hrequest.getRequestURI());
-        String requestedSessionId = hrequest.getRequestedSessionId();
-        if ((requestedSessionId != null) &&
-            hrequest.isRequestedSessionIdFromURL()) {
-            file.append(";jsessionid=");
-            file.append(requestedSessionId);
-        }
-        String queryString = hrequest.getQueryString();
-        if (queryString != null) {
-            file.append('?');
-            file.append(queryString);
-        }
-        URL url = null;
-        try {
-            url = new URL(protocol, host, redirectPort, file.toString());
-            if (debug >= 2)
-                log("  Redirecting to " + url.toString());
-            hresponse.sendRedirect(url.toString());
-            return (false);
-        } catch (MalformedURLException e) {
-            if (debug >= 2)
-                log("  Cannot create new URL", e);
-            hresponse.sendError
-                (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-                 hrequest.getRequestURI());
-            return (false);
-        }
-
-    }
-
-
-    /**
-     * Return the SecurityConstraint configured to guard the request URI for
-     * this request, or <code>null</code> if there is no such constraint.
-     *
-     * @param request Request we are processing
-     */
-    protected SecurityConstraint findConstraint(HttpRequest request) {
-
-        // Are there any defined security constraints?
-        SecurityConstraint constraints[] = context.findConstraints();
-        if ((constraints == null) || (constraints.length == 0)) {
-            if (debug >= 2)
-                log("  No applicable constraints defined");
-            return (null);
-        }
-
-        // Check each defined security constraint
-        HttpServletRequest hreq = (HttpServletRequest) request.getRequest();
-        String uri = request.getDecodedRequestURI();
-        String contextPath = hreq.getContextPath();
-        if (contextPath.length() > 0)
-            uri = uri.substring(contextPath.length());
-        String method = hreq.getMethod();
-        for (int i = 0; i < constraints.length; i++) {
-            if (debug >= 2)
-                log("  Checking constraint '" + constraints[i] +
-                    "' against " + method + " " + uri + " --> " +
-                    constraints[i].included(uri, method));
-            if (constraints[i].included(uri, method))
-                return (constraints[i]);
-        }
-
-        // No applicable security constraint was found
-        if (debug >= 2)
-            log("  No applicable constraint located");
-        return (null);
-
-    }
 
 
     /**
@@ -851,87 +688,6 @@ public abstract class AuthenticatorBase
 
 
     /**
-     * Return the internal Session that is associated with this HttpRequest,
-     * or <code>null</code> if there is no such Session.
-     *
-     * @param request The HttpRequest we are processing
-     */
-    protected Session getSession(HttpRequest request) {
-
-        return (getSession(request, false));
-
-    }
-
-
-    /**
-     * Return the internal Session that is associated with this HttpRequest,
-     * possibly creating a new one if necessary, or <code>null</code> if
-     * there is no such session and we did not create one.
-     *
-     * @param request The HttpRequest we are processing
-     * @param create Should we create a session if needed?
-     */
-    protected Session getSession(HttpRequest request, boolean create) {
-
-        HttpServletRequest hreq =
-            (HttpServletRequest) request.getRequest();
-        HttpSession hses = hreq.getSession(create);
-        if (hses == null)
-            return (null);
-        Manager manager = context.getManager();
-        if (manager == null)
-            return (null);
-        else {
-            try {
-                return (manager.findSession(hses.getId()));
-            } catch (IOException e) {
-                return (null);
-            }
-        }
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     */
-    protected void log(String message) {
-
-        Logger logger = context.getLogger();
-        if (logger != null)
-            logger.log("Authenticator[" + context.getPath() + "]: " +
-                       message);
-        else
-            System.out.println("Authenticator[" + context.getPath() +
-                               "]: " + message);
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
-     */
-    protected void log(String message, Throwable throwable) {
-
-        Logger logger = context.getLogger();
-        if (logger != null)
-            logger.log("Authenticator[" + context.getPath() + "]: " +
-                       message, throwable);
-        else {
-            System.out.println("Authenticator[" + context.getPath() +
-                               "]: " + message);
-            throwable.printStackTrace(System.out);
-        }
-
-    }
-
-
-    /**
      * Attempts reauthentication to the <code>Realm</code> using
      * the credentials included in argument <code>entry</code>.
      *
@@ -939,37 +695,28 @@ public abstract class AuthenticatorBase
      *              caller is associated
      * @param request   the request that needs to be authenticated
      */
-    protected boolean reauthenticateFromSSO(String ssoId, HttpRequest request) {
+    protected boolean reauthenticateFromSSO(String ssoId, Request request) {
 
         if (sso == null || ssoId == null)
             return false;
 
         boolean reauthenticated = false;
 
-        SingleSignOnEntry entry = sso.lookup(ssoId);
-        if (entry != null && entry.getCanReauthenticate()) {
-            Principal reauthPrincipal = null;
-            Container parent = getContainer();
-            if (parent != null) {
-                Realm realm = getContainer().getRealm();
-                String username = entry.getUsername();
-                if (realm != null && username != null) {
-                    reauthPrincipal =
-                        realm.authenticate(username, entry.getPassword());
-                }
+        Container parent = getContainer();
+        if (parent != null) {
+            Realm realm = parent.getRealm();
+            if (realm != null) {
+                reauthenticated = sso.reauthenticate(ssoId, realm, request);
             }
+        }
 
-            if (reauthPrincipal != null) {
-                associate(ssoId, getSession(request, true));
-                request.setAuthType(entry.getAuthType());
-                request.setUserPrincipal(reauthPrincipal);
+        if (reauthenticated) {
+            associate(ssoId, request.getSessionInternal(true));
 
-                reauthenticated = true;
-                if (debug >= 1) {
-                    log(" Reauthenticated cached principal '" +
-                        entry.getPrincipal().getName() + "' with auth type '" +
-                        entry.getAuthType() + "'");
-                }
+            if (log.isDebugEnabled()) {
+                log.debug(" Reauthenticated cached principal '" +
+                          request.getUserPrincipal().getName() +
+                          "' with auth type '" +  request.getAuthType() + "'");
             }
         }
 
@@ -990,21 +737,31 @@ public abstract class AuthenticatorBase
      * @param username Username used to authenticate (if any)
      * @param password Password used to authenticate (if any)
      */
-    protected void register(HttpRequest request, HttpResponse response,
+    protected void register(Request request, Response response,
                             Principal principal, String authType,
                             String username, String password) {
 
-        if (debug >= 1)
-            log("Authenticated '" + principal.getName() + "' with type '"
+        if (log.isDebugEnabled()) {
+            // Bugzilla 39255: http://issues.apache.org/bugzilla/show_bug.cgi?id=39255
+            String name = (principal == null) ? "none" : principal.getName();
+            log.debug("Authenticated '" + name + "' with type '"
                 + authType + "'");
+        }
 
         // Cache the authentication information in our request
         request.setAuthType(authType);
         request.setUserPrincipal(principal);
+
+        Session session = request.getSessionInternal(false);
         
-        Session session = getSession(request, false);
+        if (session != null && changeSessionIdOnAuthentication) {
+            Manager manager = request.getContext().getManager();
+            manager.changeSessionId(session);
+            request.changeSessionId(session.getId());
+        }
+
         // Cache the authentication information in our session, if any
-        if (cache) {            
+        if (cache) {
             if (session != null) {
                 session.setAuthType(authType);
                 session.setPrincipal(principal);
@@ -1029,14 +786,21 @@ public abstract class AuthenticatorBase
         String ssoId = (String) request.getNote(Constants.REQ_SSOID_NOTE);
         if (ssoId == null) {
             // Construct a cookie to be returned to the client
-            HttpServletResponse hres =
-                (HttpServletResponse) response.getResponse();
             ssoId = generateSessionId();
             Cookie cookie = new Cookie(Constants.SINGLE_SIGN_ON_COOKIE, ssoId);
             cookie.setMaxAge(-1);
             cookie.setPath("/");
-            cookie.setSecure(true);
-            hres.addCookie(cookie);
+            
+            // Bugzilla 41217
+            cookie.setSecure(request.isSecure());
+            
+            // Bugzilla 34724
+            String ssoDomain = sso.getCookieDomain();
+            if(ssoDomain != null) {
+                cookie.setDomain(ssoDomain);
+            }
+
+            response.addCookieInternal(cookie, context.getUseHttpOnly());
 
             // Register this principal with our SSO valve
             sso.register(ssoId, principal, authType, username, password);
@@ -1054,7 +818,7 @@ public abstract class AuthenticatorBase
         // above for this request and the user never revisits the context, the
         // SSO entry will never be cleared if we don't associate the session
         if (session == null)
-            session = getSession(request, true);
+            session = request.getSessionInternal(true);
         sso.associate(ssoId, session);
 
     }
@@ -1113,19 +877,6 @@ public abstract class AuthenticatorBase
             throw new LifecycleException
                 (sm.getString("authenticator.alreadyStarted"));
         lifecycle.fireLifecycleEvent(START_EVENT, null);
-        if ("org.apache.catalina.core.StandardContext".equals
-            (context.getClass().getName())) {
-            try {
-                Class paramTypes[] = new Class[0];
-                Object paramValues[] = new Object[0];
-                Method method =
-                    context.getClass().getMethod("getDebug", paramTypes);
-                Integer result = (Integer) method.invoke(context, paramValues);
-                setDebug(result.intValue());
-            } catch (Exception e) {
-                log("Exception getting debug value", e);
-            }
-        }
         started = true;
 
         // Look up the SingleSignOn implementation in our request processing
@@ -1146,11 +897,11 @@ public abstract class AuthenticatorBase
             if (sso == null)
                 parent = parent.getParent();
         }
-        if (debug >= 1) {
+        if (log.isDebugEnabled()) {
             if (sso != null)
-                log("Found SingleSignOn Valve at " + sso);
+                log.debug("Found SingleSignOn Valve at " + sso);
             else
-                log("No SingleSignOn Valve is present");
+                log.debug("No SingleSignOn Valve is present");
         }
 
     }

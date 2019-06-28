@@ -103,7 +103,7 @@ public class AjpAprProcessor implements ActionHook {
         outputBuffer = ByteBuffer.allocateDirect(packetSize * 2);
 
         // Cause loading of HexUtils
-        int foo = HexUtils.DEC[0];
+        HexUtils.getDec('0');
 
         // Cause loading of HttpMessages
         HttpMessages.getMessage(200);
@@ -404,11 +404,13 @@ public class AjpAprProcessor implements ActionHook {
                     }
                     continue;
                 } else if(type != Constants.JK_AJP13_FORWARD_REQUEST) {
-                    // Usually the servlet didn't read the previous request body
-                    if(log.isDebugEnabled()) {
-                        log.debug("Unexpected message: "+type);
+                    // Unexpected packet type. Unread body packets should have
+                    // been swallowed in finish().
+                    if (log.isDebugEnabled()) {
+                        log.debug("Unexpected message: " + type);
                     }
-                    continue;
+                    error = true;
+                    break;
                 }
 
                 keptAlive = true;
@@ -568,19 +570,28 @@ public class AjpAprProcessor implements ActionHook {
                     new ByteArrayInputStream(certData.getBytes(),
                             certData.getStart(),
                             certData.getLength());
-                // Fill the first element.
+                // Fill the  elements.
                 try {
                     CertificateFactory cf =
                         CertificateFactory.getInstance("X.509");
-                    X509Certificate cert = (X509Certificate)
-                    cf.generateCertificate(bais);
-                    jsseCerts = new X509Certificate[1];
-                    jsseCerts[0] = cert;
-                    request.setAttribute(AprEndpoint.CERTIFICATE_KEY, jsseCerts);
+                    while(bais.available() > 0) {
+                        X509Certificate cert = (X509Certificate)
+                            cf.generateCertificate(bais);
+                        if(jsseCerts == null) {
+                            jsseCerts = new X509Certificate[1];
+                            jsseCerts[0] = cert;
+                        } else {
+                            X509Certificate [] temp = new X509Certificate[jsseCerts.length+1];
+                            System.arraycopy(jsseCerts,0,temp,0,jsseCerts.length);
+                            temp[jsseCerts.length] = cert;
+                            jsseCerts = temp;
+                        }
+                    }
                 } catch (java.security.cert.CertificateException e) {
                     log.error(sm.getString("ajpprocessor.certs.fail"), e);
                     return;
                 }
+                request.setAttribute(AprEndpoint.CERTIFICATE_KEY, jsseCerts);
             }
 
         } else if (actionCode == ActionCode.ACTION_REQ_HOST_ATTRIBUTE) {
@@ -924,7 +935,7 @@ public class AjpAprProcessor implements ActionHook {
             int port = 0;
             int mult = 1;
             for (int i = valueL - 1; i > colonPos; i--) {
-                int charValue = HexUtils.DEC[(int) valueB[i + valueS]];
+                int charValue = HexUtils.getDec(valueB[i + valueS]);
                 if (charValue == -1) {
                     // Invalid character
                     error = true;
@@ -957,13 +968,12 @@ public class AjpAprProcessor implements ActionHook {
         // HTTP header contents
         responseHeaderMessage.appendInt(response.getStatus());
         String message = null;
-        if (org.apache.coyote.Constants.USE_CUSTOM_STATUS_MSG_IN_HEADER) {
+        if (Constants.USE_CUSTOM_STATUS_MSG_IN_HEADER &&
+                HttpMessages.isSafeInHttpHeader(response.getMessage())) {
             message = response.getMessage();
         } 
         if (message == null){
             message = HttpMessages.getMessage(response.getStatus());
-        } else {
-            message = message.replace('\n', ' ').replace('\r', ' ');
         }
         if (message == null) {
             // mod_jk + httpd 2.x fails with a null status message - bug 45026
@@ -1025,6 +1035,11 @@ public class AjpAprProcessor implements ActionHook {
 
         finished = true;
 
+        // Swallow the unread body packet if present
+        if (first && request.getContentLengthLong() > 0) {
+            receive();
+        }
+        
         // Add the end message
         if (outputBuffer.position() + endMessageArray.length > outputBuffer.capacity()) {
             flush();
@@ -1121,7 +1136,7 @@ public class AjpAprProcessor implements ActionHook {
             return false;
         }
 
-        bodyMessage.getBytes(bodyBytes);
+        bodyMessage.getBodyBytes(bodyBytes);
         empty = false;
         return true;
     }

@@ -26,13 +26,19 @@ package org.apache.catalina;
  * provide a consistent mechanism to start and stop the component.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Lifecycle.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Lifecycle {
 
 
     // ----------------------------------------------------- Manifest Constants
+
+
+    /**
+     * The LifecycleEvent type for the "component init" event.
+     */
+    public static final String INIT_EVENT = "init";
 
 
     /**
@@ -69,6 +75,18 @@ public interface Lifecycle {
      * The LifecycleEvent type for the "component after stop" event.
      */
     public static final String AFTER_STOP_EVENT = "after_stop";
+
+
+    /**
+     * The LifecycleEvent type for the "component destroy" event.
+     */
+    public static final String DESTROY_EVENT = "destroy";
+
+
+    /**
+     * The LifecycleEvent type for the "periodic" event.
+     */
+    public static final String PERIODIC_EVENT = "periodic";
 
 
     // --------------------------------------------------------- Public Methods

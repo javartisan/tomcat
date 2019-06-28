@@ -19,11 +19,14 @@
 package org.apache.catalina.authenticator;
 
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
-import java.util.ArrayList;
+
 import javax.servlet.http.Cookie;
+
+import org.apache.tomcat.util.buf.ByteChunk;
 
 
 /**
@@ -34,14 +37,9 @@ import javax.servlet.http.Cookie;
  * <b>IMPLEMENTATION NOTE</b> - It is assumed that this object is accessed
  * only from the context of a single thread, so no synchronization around
  * internal collection classes is performed.
- * <p>
- * <b>FIXME</b> - Currently, this object has no mechanism to save or
- * restore the data content of the request, although it does save
- * request parameters so that a POST transaction can be faithfully
- * duplicated.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SavedRequest.java 939523 2010-04-30 00:28:42Z kkolinko $
  */
 
 public final class SavedRequest {
@@ -167,5 +165,31 @@ public final class SavedRequest {
         this.requestURI = requestURI;
     }
 
+    
+    /**
+     * The body of this request.
+     */
+    private ByteChunk body = null;
+    
+    public ByteChunk getBody() {
+        return (this.body);
+    }
 
+    public void setBody(ByteChunk body) {
+        this.body = body;
+    }
+    
+    
+    /**
+     * The content type of the request, used if this is a POST.
+     */
+    private String contentType = null;
+    
+    public String getContentType() {
+        return (this.contentType);
+    }
+    
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
 }

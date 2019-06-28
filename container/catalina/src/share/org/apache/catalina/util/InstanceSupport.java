@@ -33,7 +33,7 @@ import org.apache.catalina.Wrapper;
  * registered InstanceListeners.
  *
  * @author Craig R. McClanahan
- * @version $Id: InstanceSupport.java 466595 2006-10-21 22:24:41Z markt $
+ * @version $Id: InstanceSupport.java 466608 2006-10-21 23:10:15Z markt $
  */
 
 public final class InstanceSupport {
@@ -46,7 +46,7 @@ public final class InstanceSupport {
      * Construct a new InstanceSupport object associated with the specified
      * Instance component.
      *
-     * @param wrapper The Instance component that will be the source
+     * @param wrapper The component that will be the source
      *  of events that we fire
      */
     public InstanceSupport(Wrapper wrapper) {

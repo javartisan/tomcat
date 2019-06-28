@@ -218,7 +218,8 @@
                deprecation="${compile.deprecation}"
                debug="${compile.debug}"
                optimize="${optimize}"
-               verbose="off" >
+               verbose="off"
+               encoding="ISO-8859-1">
             <include name="org/apache/jk/**"/>
             <include name="org/apache/coyote/ajp/**" />
             <exclude name="org/apache/coyote/ajp/*Apr*" unless="jdk.1.4.present" />
@@ -235,13 +236,11 @@
 	    </classpath>
 	</javac>
 	<jar jarfile="${tomcat-jkconfig.jar}"
-             index="true"
 	     basedir="${jk.build}/classes" 
              manifest="conf/jkconfig.manifest">
             <include name="org/apache/jk/config/**" />
         </jar>
 	<jar jarfile="${tomcat-jk2.jar}"
-             index="true"
              manifest="conf/tomcat-jk2.manifest"
 	     basedir="${jk.build}/classes" >
             <include name="org/apache/jk/**" />
@@ -250,7 +249,6 @@
         </jar>
 	
 	<jar jarfile="${tomcat-jni.jar}"
-             index="true"
 	     basedir="${jk.build}/classes" 
              manifest="conf/jk2.manifest" >
             <include name="org/apache/jk/apr/**" />
@@ -265,7 +263,8 @@
                deprecation="${compile.deprecation}"
                debug="${compile.debug}"
                optimize="${optimize}"
-               verbose="off" >
+               verbose="off"
+               encoding="ISO-8859-1">
             <include name="org/apache/coyote/ajp/**"/>
             <include name="org/apache/jk/config/**"/>
 	    <classpath>
@@ -275,7 +274,6 @@
 	    </classpath>
 	</javac>
 	<jar jarfile="${tomcat-jkconfig.jar}"
-             index="true"
 	     basedir="${jk.build}/classes" 
              manifest="conf/jkconfig.manifest">
             <include name="org/apache/jk/config/**" />
@@ -288,7 +286,8 @@
                deprecation="${compile.deprecation}"
                debug="${compile.debug}"
                optimize="${optimize}"
-               verbose="off" >
+               verbose="off"
+               encoding="ISO-8859-1">
             <include name="org/apache/ajp/**" />
             <exclude name="org/apache/ajp/tomcat33/**" />
 	    <classpath>
@@ -300,13 +299,11 @@
 	</javac>
 
 	<jar jarfile="${tomcat-jk.jar}"
-             index="true"
 	     basedir="${jk.build}/classes">
             <include name="org/apache/ajp/**" />
         </jar>
 	
 	<jar jarfile="${tomcat-jkshm.jar}"
-             index="true"
 	     basedir="${jk.build}/classes" 
              manifest="conf/shm.manifest">
             <include name="org/apache/ajp/common/Shm.class" />
@@ -319,7 +316,8 @@
                deprecation="${compile.deprecation}"
                debug="${compile.debug}"
                optimize="${optimize}"
-               verbose="off" >
+               verbose="off"
+               encoding="ISO-8859-1">
             <include name="org/apache/ajp/**" />
             <exclude name="org/apache/ajp/tomcat4/**" />
 	    <classpath>
@@ -331,7 +329,6 @@
 	</javac>
 
 	<jar jarfile="${tomcat-jk.jar}"
-             index="true"
 	     basedir="${jk.build}/classes">
             <include name="org/apache/ajp/**" />
         </jar>
@@ -350,12 +347,12 @@
 	       debug="${compile.debug}"
                deprecation="${compile.deprecation}"
 	       optimize="${optimize}"
-	       verbose="off" >
+           verbose="off"
+           encoding="ISO-8859-1">
 	</javac>
 	<copy todir="${jk.build}/classes/META-INF" 
               file="jkant/ant.tasks"/>
 	<jar jarfile="${jk.build}/lib/jkant.jar"
-             index="true"
 	     basedir="${jk.build}/classes" >
             <include name="org/apache/jk/ant/**" />
             <include name="META-INF/ant.tasks" />
@@ -439,7 +436,7 @@
                  version="true"
                  windowtitle="Jk Connector Documentation"
                  doctitle="Jk Connector"
-                 bottom="Copyright &#169; 2001-2009 Apache Software Foundation.  All Rights Reserved."
+                 bottom="Copyright &amp;#169; 2001-2012 Apache Software Foundation.  All Rights Reserved."
 	/>
     </target>
 

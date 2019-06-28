@@ -18,16 +18,17 @@
 
 package org.apache.naming.resources;
 
-import java.util.Vector;
 import java.util.Enumeration;
-import javax.naming.NamingException;
+import java.util.Vector;
+
 import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
 
 /**
  * Naming enumeration implementation.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RecyclableNamingEnumeration.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class RecyclableNamingEnumeration 
@@ -104,7 +105,7 @@ public class RecyclableNamingEnumeration
      * Recycle.
      */
     void recycle() {
-        enumeration = entries.elements();
+    	enumeration = entries.elements();
     }
 
 

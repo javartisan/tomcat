@@ -33,7 +33,7 @@ import java.security.BasicPermission;
  * </p>
  *
  * @author Glenn Nielsen
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: JndiPermission.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public final class JndiPermission extends BasicPermission {
@@ -43,7 +43,7 @@ public final class JndiPermission extends BasicPermission {
     /**
      * Creates a new JndiPermission with no actions
      *
-     * @param name JNDI resource path name
+     * @param name - JNDI resource path name
      */
     public JndiPermission(String name) {
         super(name);
@@ -52,8 +52,8 @@ public final class JndiPermission extends BasicPermission {
     /**
      * Creates a new JndiPermission with actions
      *
-     * @param name JNDI resource path name
-     * @param actions JNDI actions (none defined)
+     * @param name - JNDI resource path name
+     * @param actions - JNDI actions (none defined)
      */
     public JndiPermission(String name, String actions) {
         super(name,actions);

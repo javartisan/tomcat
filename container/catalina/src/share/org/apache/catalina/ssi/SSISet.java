@@ -19,46 +19,47 @@ package org.apache.catalina.ssi;
 
 
 import java.io.PrintWriter;
-
 /**
  * Implements the Server-side #set command
- *
- * @author Paul Speed 
+ * 
+ * @author Paul Speed
  * @author Dan Sandberg
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author David Becker
+ * @version $Id: SSISet.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 public class SSISet implements SSICommand {
     /**
      * @see SSICommand
      */
-    public void process( SSIMediator ssiMediator,
-			 String commandName,
-			 String[] paramNames,
-			 String[] paramValues,
-			 PrintWriter writer) throws SSIStopProcessingException {
-
-	String errorMessage = ssiMediator.getConfigErrMsg();
-	String variableName = null;
-	for ( int i=0; i < paramNames.length; i++ ) {
-	    String paramName = paramNames[i];
-	    String paramValue = paramValues[i];
-
-	    if ( paramName.equalsIgnoreCase("var") ) {
-		variableName = paramValue;
-	    } else if ( paramName.equalsIgnoreCase("value") ) {
-		if ( variableName != null ) {
-		    String substitutedValue = ssiMediator.substituteVariables( paramValue );
-		    ssiMediator.setVariableValue( variableName, substitutedValue );
-		} else {
-		    ssiMediator.log("#set--no variable specified");
-		    writer.write( errorMessage );
-		    throw new SSIStopProcessingException();
-		}
-	    } else {
-		ssiMediator.log("#set--Invalid attribute: " + paramName );
-		writer.write( errorMessage );
-		throw new SSIStopProcessingException();
-	    }
-	}
+    public long process(SSIMediator ssiMediator, String commandName,
+            String[] paramNames, String[] paramValues, PrintWriter writer)
+            throws SSIStopProcessingException {
+        long lastModified = 0;
+        String errorMessage = ssiMediator.getConfigErrMsg();
+        String variableName = null;
+        for (int i = 0; i < paramNames.length; i++) {
+            String paramName = paramNames[i];
+            String paramValue = paramValues[i];
+            if (paramName.equalsIgnoreCase("var")) {
+                variableName = paramValue;
+            } else if (paramName.equalsIgnoreCase("value")) {
+                if (variableName != null) {
+                    String substitutedValue = ssiMediator
+                            .substituteVariables(paramValue);
+                    ssiMediator.setVariableValue(variableName,
+                            substitutedValue);
+                    lastModified = System.currentTimeMillis();
+                } else {
+                    ssiMediator.log("#set--no variable specified");
+                    writer.write(errorMessage);
+                    throw new SSIStopProcessingException();
+                }
+            } else {
+                ssiMediator.log("#set--Invalid attribute: " + paramName);
+                writer.write(errorMessage);
+                throw new SSIStopProcessingException();
+            }
+        }
+        return lastModified;
     }
 }

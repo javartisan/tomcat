@@ -24,8 +24,8 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.StringTokenizer;
-import org.apache.regexp.RE;
-import org.apache.regexp.RESyntaxException;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 
@@ -78,6 +78,12 @@ public class Http11Processor implements Processor, ActionHook {
     protected static StringManager sm =
         StringManager.getManager(Constants.Package);
 
+    /*
+     * Tracks how many internal filters are in the filter library so they
+     * are skipped when looking for pluggable filters. 
+     */
+    private int pluggableFilterIndex = Integer.MAX_VALUE;
+
 
     // ----------------------------------------------------------- Constructors
 
@@ -105,7 +111,7 @@ public class Http11Processor implements Processor, ActionHook {
         initializeFilters();
 
         // Cause loading of HexUtils
-        int foo = HexUtils.DEC[0];
+        HexUtils.getDec('0');
 
     }
 
@@ -189,7 +195,7 @@ public class Http11Processor implements Processor, ActionHook {
     /**
      * List of restricted user agents.
      */
-    protected RE[] restrictedUserAgents = null;
+    protected Pattern[] restrictedUserAgents = null;
 
 
     /**
@@ -286,7 +292,7 @@ public class Http11Processor implements Processor, ActionHook {
     /**
      * List of user agents to not use gzip with
      */
-    protected RE noCompressionUserAgents[] = null;
+    protected Pattern noCompressionUserAgents[] = null;
 
     /**
      * List of MIMES which could be gzipped
@@ -387,10 +393,10 @@ public class Http11Processor implements Processor, ActionHook {
      */
     public void addNoCompressionUserAgent(String userAgent) {
         try {
-            RE nRule = new RE(userAgent);
+            Pattern nRule = Pattern.compile(userAgent);
             noCompressionUserAgents =
                 addREArray(noCompressionUserAgents, nRule);
-        } catch (RESyntaxException pse) {
+        } catch (PatternSyntaxException pse) {
             log.error(sm.getString("http11processor.regexp.error", userAgent), pse);
         }
     }
@@ -401,7 +407,7 @@ public class Http11Processor implements Processor, ActionHook {
      * a large number of connectors, where it would be better to have all of
      * them referenced a single array).
      */
-    public void setNoCompressionUserAgents(RE[] noCompressionUserAgents) {
+    public void setNoCompressionUserAgents(Pattern[] noCompressionUserAgents) {
         this.noCompressionUserAgents = noCompressionUserAgents;
     }
 
@@ -525,14 +531,14 @@ public class Http11Processor implements Processor, ActionHook {
      * @param rArray the REArray
      * @param value Obj
      */
-    private RE[] addREArray(RE rArray[], RE value) {
-        RE[] result = null;
+    private Pattern[] addREArray(Pattern rArray[], Pattern value) {
+        Pattern[] result = null;
         if (rArray == null) {
-            result = new RE[1];
+            result = new Pattern[1];
             result[0] = value;
         }
         else {
-            result = new RE[rArray.length + 1];
+            result = new Pattern[rArray.length + 1];
             for (int i = 0; i < rArray.length; i++)
                 result[i] = rArray[i];
             result[rArray.length] = value;
@@ -584,9 +590,9 @@ public class Http11Processor implements Processor, ActionHook {
      */
     public void addRestrictedUserAgent(String userAgent) {
         try {
-            RE nRule = new RE(userAgent);
+            Pattern nRule = Pattern.compile(userAgent);
             restrictedUserAgents = addREArray(restrictedUserAgents, nRule);
-        } catch (RESyntaxException pse) {
+        } catch (PatternSyntaxException pse) {
             log.error(sm.getString("http11processor.regexp.error", userAgent), pse);
         }
     }
@@ -597,7 +603,7 @@ public class Http11Processor implements Processor, ActionHook {
      * a large number of connectors, where it would be better to have all of
      * them referenced a single array).
      */
-    public void setRestrictedUserAgents(RE[] restrictedUserAgents) {
+    public void setRestrictedUserAgents(Pattern[] restrictedUserAgents) {
         this.restrictedUserAgents = restrictedUserAgents;
     }
 
@@ -833,6 +839,8 @@ public class Http11Processor implements Processor, ActionHook {
                 if (!disableUploadTimeout) {
                     socket.setSoTimeout(timeout);
                 }
+                // Set this every time in case limit has been changed via JMX
+                request.getMimeHeaders().setLimit(endpoint.getMaxHeaderCount());
                 inputBuffer.parseHeaders();
             } catch (IOException e) {
                 error = true;
@@ -1251,7 +1259,7 @@ public class Http11Processor implements Processor, ActionHook {
             if(userAgentValueMB != null) {
                 String userAgentValue = userAgentValueMB.toString();
                 for (int i = 0; i < restrictedUserAgents.length; i++) {
-                    if (restrictedUserAgents[i].match(userAgentValue)) {
+                    if (restrictedUserAgents[i].matcher(userAgentValue).matches()) {
                         http11 = false;
                         keepAlive = false;
                         break;
@@ -1414,7 +1422,7 @@ public class Http11Processor implements Processor, ActionHook {
             int port = 0;
             int mult = 1;
             for (int i = valueL - 1; i > colonPos; i--) {
-                int charValue = HexUtils.DEC[(int) valueB[i + valueS]];
+                int charValue = HexUtils.getDec(valueB[i + valueS]);
                 if (charValue == -1) {
                     // Invalid character
                     error = true;
@@ -1473,7 +1481,7 @@ public class Http11Processor implements Processor, ActionHook {
 
                 // If one Regexp rule match, disable compression
                 for (int i = 0; i < noCompressionUserAgents.length; i++)
-                    if (noCompressionUserAgents[i].match(userAgentValue))
+                    if (noCompressionUserAgents[i].matcher(userAgentValue).matches())
                         return false;
             }
         }
@@ -1562,7 +1570,7 @@ public class Http11Processor implements Processor, ActionHook {
                 (outputFilters[Constants.IDENTITY_FILTER]);
             contentDelimitation = true;
         } else {
-            if (entityBody && http11 && keepAlive) {
+            if (entityBody && http11) {
                 outputBuffer.addActiveFilter
                     (outputFilters[Constants.CHUNKED_FILTER]);
                 contentDelimitation = true;
@@ -1617,8 +1625,10 @@ public class Http11Processor implements Processor, ActionHook {
 
         // Add server header
         if (server != null) {
+            // Always overrides anything the app might set
             headers.setValue("Server").setString(server);
-        } else {
+        } else if (headers.getValue("Server") == null) {
+            // If app didn't set the header, use the default
             outputBuffer.write(Constants.SERVER_BYTES);
         }
 
@@ -1655,6 +1665,8 @@ public class Http11Processor implements Processor, ActionHook {
         //inputBuffer.addFilter(new GzipInputFilter());
         outputBuffer.addFilter(new GzipOutputFilter());
 
+        pluggableFilterIndex = inputBuffer.filterLibrary.length;
+
     }
 
 
@@ -1673,7 +1685,7 @@ public class Http11Processor implements Processor, ActionHook {
                 (inputFilters[Constants.CHUNKED_FILTER]);
             contentDelimitation = true;
         } else {
-            for (int i = 2; i < inputFilters.length; i++) {
+            for (int i = pluggableFilterIndex; i < inputFilters.length; i++) {
                 if (inputFilters[i].getEncodingName()
                     .toString().equals(encodingName)) {
                     inputBuffer.addActiveFilter(inputFilters[i]);

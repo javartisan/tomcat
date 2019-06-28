@@ -15,13 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * This class is based on a class originally written by Jason Hunter
- * <jhunter@acm.org> as part of the book "Java Servlet Programming"
- * (O'Reilly).  See http://www.servlets.com/book for more information.
- * Used by Sun Microsystems with permission.
- */
-
 package org.apache.catalina.util;
 
 
@@ -40,7 +33,7 @@ import java.util.Properties;
  * your own version for a particular web application.
  *
  * @author Craig R. McClanahan
- * @version $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $ $Version$
+ * @version $Id: CharsetMapper.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public class CharsetMapper {
@@ -63,9 +56,7 @@ public class CharsetMapper {
      * Construct a new CharsetMapper using the default properties resource.
      */
     public CharsetMapper() {
-
         this(DEFAULT_RESOURCE);
-
     }
 
 
@@ -78,7 +69,6 @@ public class CharsetMapper {
      *  resource could not be loaded for any reason.
      */
     public CharsetMapper(String name) {
-
         try {
             InputStream stream =
               this.getClass().getResourceAsStream(name);
@@ -87,8 +77,6 @@ public class CharsetMapper {
         } catch (Throwable t) {
             throw new IllegalArgumentException(t.toString());
         }
-
-
     }
 
 
@@ -102,8 +90,6 @@ public class CharsetMapper {
     private Properties map = new Properties();
 
 
-
-
     // ------------------------------------------------------- Public Methods
 
 
@@ -115,18 +101,31 @@ public class CharsetMapper {
      * @param locale The locale for which to calculate a character set
      */
     public String getCharset(Locale locale) {
-
-        String charset = null;
-
-        // First, try a full name match (language and country)
-        charset = map.getProperty(locale.toString());
-        if (charset != null)
-            return (charset);
-
-        // Second, try to match just the language
-        charset = map.getProperty(locale.getLanguage());
+        // Match full language_country_variant first, then language_country, 
+        // then language only
+        String charset = map.getProperty(locale.toString());
+        if (charset == null) {
+            charset = map.getProperty(locale.getLanguage() + "_" 
+                    + locale.getCountry());
+            if (charset == null) {
+                charset = map.getProperty(locale.getLanguage());
+            }
+        }
         return (charset);
+    }
 
+    
+    /**
+     * The deployment descriptor can have a
+     * locale-encoding-mapping-list element which describes the
+     * webapp's desired mapping from locale to charset.  This method
+     * gets called when processing the web.xml file for a context
+     *
+     * @param locale The locale for a character set
+     * @param charset The charset to be associated with the locale
+     */
+    public void addCharsetMappingFromDeploymentDescriptor(String locale, String charset) {
+        map.put(locale, charset);
     }
 
 

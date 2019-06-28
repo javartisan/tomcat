@@ -23,11 +23,17 @@ package org.apache.catalina;
  * Global constants that are applicable to multiple packages within Catalina.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Globals.java 1221282 2011-12-20 14:34:48Z jim $
  */
 
 public final class Globals {
 
+    /**
+     * The servlet context attribute under which we store the alternate
+     * deployment descriptor for this web application 
+     */
+    public static final String ALT_DD_ATTR = 
+        "org.apache.catalina.deploy.alt_dd";
 
     /**
      * The request attribute under which we store the array of X509Certificate
@@ -36,11 +42,6 @@ public final class Globals {
      */
     public static final String CERTIFICATES_ATTR =
         "javax.servlet.request.X509Certificate";
-
-    /**
-     * SSL Certificate Request Attributite.
-     */
-    public static final String SSL_CERTIFICATE_ATTR = "org.apache.coyote.request.X509Certificate";
 
     /**
      * The request attribute under which we store the name of the cipher suite
@@ -58,6 +59,17 @@ public final class Globals {
     public static final String CLASS_LOADER_ATTR =
         "org.apache.catalina.classloader";
 
+    /**
+     * Request dispatcher state.
+     */
+    public static final String DISPATCHER_TYPE_ATTR = 
+        "org.apache.catalina.core.DISPATCHER_TYPE";
+
+    /**
+     * Request dispatcher path.
+     */
+    public static final String DISPATCHER_REQUEST_PATH_ATTR = 
+        "org.apache.catalina.core.DISPATCHER_REQUEST_PATH";
 
     /**
      * The JNDI directory context which is associated with the context. This
@@ -74,14 +86,6 @@ public final class Globals {
      */
     public static final String CLASS_PATH_ATTR =
         "org.apache.catalina.jsp_classpath";
-
-
-    /**
-     * The request attribute under which the original context path is stored
-     * on an included dispatcher request.
-     */
-    public static final String CONTEXT_PATH_ATTR =
-        "javax.servlet.include.context_path";
 
 
     /**
@@ -141,6 +145,13 @@ public final class Globals {
     public static final String KEY_SIZE_ATTR =
         "javax.servlet.request.key_size";
 
+    /**
+     * The request attribute under which we store the session id being used
+     * for this SSL connection (as an object of type java.lang.String).
+     */
+    public static final String SSL_SESSION_ID_ATTR =
+        "javax.servlet.request.ssl_session";
+
 
     /**
      * The servlet context attribute under which the managed bean Registry
@@ -167,27 +178,83 @@ public final class Globals {
 
 
     /**
-     * The request attribute under which the original path info is stored
-     * on an included dispatcher request.
+     * The request attribute under which the request URI of the included
+     * servlet is stored on an included dispatcher request.
      */
-    public static final String PATH_INFO_ATTR =
+    public static final String INCLUDE_REQUEST_URI_ATTR =
+        "javax.servlet.include.request_uri";
+
+
+    /**
+     * The request attribute under which the context path of the included
+     * servlet is stored on an included dispatcher request.
+     */
+    public static final String INCLUDE_CONTEXT_PATH_ATTR =
+        "javax.servlet.include.context_path";
+
+
+    /**
+     * The request attribute under which the path info of the included
+     * servlet is stored on an included dispatcher request.
+     */
+    public static final String INCLUDE_PATH_INFO_ATTR =
         "javax.servlet.include.path_info";
 
 
     /**
-     * The request attribute under which the original query string is stored
-     * on an included dispatcher request.
+     * The request attribute under which the servlet path of the included
+     * servlet is stored on an included dispatcher request.
      */
-    public static final String QUERY_STRING_ATTR =
+    public static final String INCLUDE_SERVLET_PATH_ATTR =
+        "javax.servlet.include.servlet_path";
+
+
+    /**
+     * The request attribute under which the query string of the included
+     * servlet is stored on an included dispatcher request.
+     */
+    public static final String INCLUDE_QUERY_STRING_ATTR =
         "javax.servlet.include.query_string";
 
 
     /**
      * The request attribute under which the original request URI is stored
-     * on an included dispatcher request.
+     * on an forwarded dispatcher request.
      */
-    public static final String REQUEST_URI_ATTR =
-        "javax.servlet.include.request_uri";
+    public static final String FORWARD_REQUEST_URI_ATTR =
+        "javax.servlet.forward.request_uri";
+    
+    
+    /**
+     * The request attribute under which the original context path is stored
+     * on an forwarded dispatcher request.
+     */
+    public static final String FORWARD_CONTEXT_PATH_ATTR =
+        "javax.servlet.forward.context_path";
+
+
+    /**
+     * The request attribute under which the original path info is stored
+     * on an forwarded dispatcher request.
+     */
+    public static final String FORWARD_PATH_INFO_ATTR =
+        "javax.servlet.forward.path_info";
+
+
+    /**
+     * The request attribute under which the original servlet path is stored
+     * on an forwarded dispatcher request.
+     */
+    public static final String FORWARD_SERVLET_PATH_ATTR =
+        "javax.servlet.forward.servlet_path";
+
+
+    /**
+     * The request attribute under which the original query string is stored
+     * on an forwarded dispatcher request.
+     */
+    public static final String FORWARD_QUERY_STRING_ATTR =
+        "javax.servlet.forward.query_string";
 
 
     /**
@@ -197,38 +264,34 @@ public final class Globals {
     public static final String SERVLET_NAME_ATTR =
         "javax.servlet.error.servlet_name";
 
-
-    /**
-     * The request attribute under which the original servlet path is stored
-     * on an included dispatcher request.
-     */
-    public static final String SERVLET_PATH_ATTR =
-        "javax.servlet.include.servlet_path";
-
-
+    
     /**
      * The name of the cookie used to pass the session identifier back
      * and forth with the client.
      */
-    public static final String SESSION_COOKIE_NAME = "JSESSIONID";
+    public static final String SESSION_COOKIE_NAME =
+        System.getProperty("org.apache.catalina.SESSION_COOKIE_NAME",
+                "JSESSIONID");
 
 
     /**
      * The name of the path parameter used to pass the session identifier
      * back and forth with the client.
      */
-    public static final String SESSION_PARAMETER_NAME = "jsessionid";
+    public static final String SESSION_PARAMETER_NAME =
+        System.getProperty("org.apache.catalina.SESSION_PARAMETER_NAME",
+                "jsessionid");
 
 
-   /**
-    * The servlet context attribute under which we store a flag used 
-    * to mark this request as having been processed by the SSIServlet. 
-    * We do this because of the pathInfo mangling happening when using 
-    * the CGIServlet in conjunction with the SSI servlet. (value stored 
-    * as an object of type String)
-    */
-    public static final String SSI_FLAG_ATTR = 
-        "org.apache.catalina.ssi.SSIServlet";
+    /**
+     * The servlet context attribute under which we store a flag used
+     * to mark this request as having been processed by the SSIServlet.
+     * We do this because of the pathInfo mangling happening when using
+     * the CGIServlet in conjunction with the SSI servlet. (value stored
+     * as an object of type String)
+     */
+     public static final String SSI_FLAG_ATTR =
+         "org.apache.catalina.ssi.SSIServlet";
 
 
     /**
@@ -239,6 +302,13 @@ public final class Globals {
         "javax.servlet.error.status_code";
 
 
+    /**
+     * The subject under which the AccessControlContext is running.
+     */
+    public static final String SUBJECT_ATTR =
+        "javax.security.auth.subject";
+
+    
     /**
      * The servlet context attribute under which we record the set of
      * welcome files (as an object of type String[]) for this application.
@@ -254,6 +324,25 @@ public final class Globals {
      */
     public static final String WORK_DIR_ATTR =
         "javax.servlet.context.tempdir";
+
+
+    /**
+     * The request attribute that is set to <code>Boolean.TRUE</code> if some request
+     * parameters have been ignored during request parameters parsing. It can
+     * happen, for example, if there is a limit on the total count of parseable
+     * parameters, or if parameter cannot be decoded, or any other error
+     * happened during parameter parsing.
+     */
+    public static final String PARAMETER_PARSE_FAILED_ATTR =
+        "org.apache.catalina.parameter_parse_failed";
+
+
+    /**
+     * The master flag which controls strict servlet specification 
+     * compliance.
+     */
+    public static final boolean STRICT_SERVLET_COMPLIANCE =
+        Boolean.valueOf(System.getProperty("org.apache.catalina.STRICT_SERVLET_COMPLIANCE", "false")).booleanValue();
 
 
 }

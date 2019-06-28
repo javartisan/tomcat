@@ -38,14 +38,16 @@ import org.apache.catalina.util.StringManager;
 * See the JDBCRealm.howto for more details on how to set up the database and
 * for configuration options.
 *
-* <p><strong>TODO</strong> - Support connection pooling (including message
-* format objects) so that <code>authenticate()</code> does not have to be
-* synchronized and would fix the ugly connection logic. </p>
+* <p>For a <b>Realm</b> implementation that supports connection pooling and
+* doesn't require synchronisation of <code>authenticate()</code>,
+* <code>getPassword()</code>, <code>roles()</code> and
+* <code>getPrincipal()</code> or the ugly connection logic use the
+* <code>DataSourceRealm</code>.</p>
 *
 * @author Craig R. McClanahan
 * @author Carson McDonald
 * @author Ignacio Ortega
-* @version $Revision: 781382 $ $Date: 2009-06-03 15:02:06 +0100 (Wed, 03 Jun 2009) $
+* @version $Id: JDBCRealm.java 939529 2010-04-30 00:51:34Z kkolinko $
 */
 
 public class JDBCRealm
@@ -355,7 +357,7 @@ public class JDBCRealm
             } catch (SQLException e) {
 
                 // Log the problem for posterity
-                log(sm.getString("jdbcRealm.exception"), e);
+                containerLog.error(sm.getString("jdbcRealm.exception"), e);
 
                 // Close the connection so that it gets reopened next time
                 if (dbConnection != null)
@@ -410,12 +412,13 @@ public class JDBCRealm
         }
 
         if (validated) {
-            if (debug >= 2)
-                log(sm.getString("jdbcRealm.authenticateSuccess", username));
+            if (containerLog.isTraceEnabled())
+                containerLog.trace(sm.getString("jdbcRealm.authenticateSuccess",
+                                                username));
         } else {
-            if (debug >=2)
-                log(sm.getString("jdbcRealm.authenticateFailure",
- username));
+            if (containerLog.isTraceEnabled())
+                containerLog.trace(sm.getString("jdbcRealm.authenticateFailure",
+                                                username));
             return (null);
         }
 
@@ -423,6 +426,7 @@ public class JDBCRealm
         
         // Create and return a suitable Principal for this user
         return (new GenericPrincipal(this, username, credentials, roles));
+
     }
 
 
@@ -458,7 +462,7 @@ public class JDBCRealm
         try {
             dbConnection.close();
         } catch (SQLException e) {
-            log(sm.getString("jdbcRealm.close"), e); // Just log it here
+            containerLog.warn(sm.getString("jdbcRealm.close"), e); // Just log it here
         } finally {
            this.dbConnection = null;
         }
@@ -487,6 +491,11 @@ public class JDBCRealm
             sb.append(" WHERE ");
             sb.append(userNameCol);
             sb.append(" = ?");
+
+            if(containerLog.isDebugEnabled()) {
+                containerLog.debug("credentials query: " + sb.toString());
+            }
+
             preparedCredentials =
                 dbConnection.prepareStatement(sb.toString());
         }
@@ -506,7 +515,7 @@ public class JDBCRealm
      */
     protected String getName() {
 
-        return (JDBCRealm.name);
+        return (name);
 
     }
 
@@ -514,55 +523,77 @@ public class JDBCRealm
     /**
      * Return the password associated with the given principal's user name.
      */
-    protected String getPassword(String username) {
+    protected synchronized String getPassword(String username) {
 
         // Look up the user's credentials
         String dbCredentials = null;
         PreparedStatement stmt = null;
         ResultSet rs = null;
 
-        try {
-            stmt = credentials(dbConnection, username);
-            rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                dbCredentials = rs.getString(1);
-            }
-            rs.close();
-            rs = null;
-            if (dbCredentials == null) {
-                return (null);
-            }
-
-            dbCredentials = dbCredentials.trim();
-            return dbCredentials;
-            
-        } catch(SQLException e){
-            log(sm.getString("jdbcRealm.getPassword.exception", username));
-        } finally {
-            if (rs!=null) {
-                try {
-                    rs.close();
-                } catch(SQLException e) {
-                    log(sm.getString("jdbcRealm.abnormalCloseResultSet"));
-                }
-            }
+        // Number of tries is the numebr of attempts to connect to the database
+        // during this login attempt (if we need to open the database)
+        // This needs rewritten wuth better pooling support, the existing code
+        // needs signature changes since the Prepared statements needs cached
+        // with the connections.
+        // The code below will try twice if there is a SQLException so the
+        // connection may try to be opened again. On normal conditions (including
+        // invalid login - the above is only used once.
+        int numberOfTries = 2;
+        while (numberOfTries>0) {
             try {
-                dbConnection.commit();
+                
+                // Ensure that we have an open database connection
+                open();
+                
+                try {
+                    stmt = credentials(dbConnection, username);
+                    rs = stmt.executeQuery();
+                    
+                    if (rs.next()) {
+                        dbCredentials = rs.getString(1);
+                    }
+                    rs.close();
+                    rs = null;
+                    if (dbCredentials == null) {
+                        return (null);
+                    }
+                    
+                    dbCredentials = dbCredentials.trim();
+                    return dbCredentials;
+                    
+                } finally {
+                    if (rs!=null) {
+                        try {
+                            rs.close();
+                        } catch(SQLException e) {
+                            containerLog.warn(sm.getString("jdbcRealm.abnormalCloseResultSet"));
+                        }
+                    }
+                    dbConnection.commit();
+                }
+                
             } catch (SQLException e) {
-                log(sm.getString("jdbcRealm.getPassword.exception", username));
+                
+                // Log the problem for posterity
+                containerLog.error(sm.getString("jdbcRealm.exception"), e);
+                
+                // Close the connection so that it gets reopened next time
+                if (dbConnection != null)
+                    close(dbConnection);
+                
             }
+            
+            numberOfTries--;
         }
         
         return (null);
-
     }
 
 
     /**
      * Return the Principal associated with the given user name.
      */
-    protected Principal getPrincipal(String username) {
+    protected synchronized Principal getPrincipal(String username) {
 
         return (new GenericPrincipal(this,
                                      username,
@@ -580,39 +611,62 @@ public class JDBCRealm
         PreparedStatement stmt = null;
         ResultSet rs = null;
 
-        try {
-            // Accumulate the user's roles
-            ArrayList roleList = new ArrayList();
-            stmt = roles(dbConnection, username);
-            rs = stmt.executeQuery();
-            while (rs.next()) {
-                String role = rs.getString(1);
-                if (null!=role) {
-                    roleList.add(role.trim());
-                }
-            }
-            rs.close();
-            rs = null;
-            
-            return (roleList);
-            
-        } catch(SQLException e){
-            log(sm.getString("jdbcRealm.getRoles.exception", username));
-        } finally {
-            if (rs!=null) {
-                try {
-                    rs.close();
-                } catch(SQLException e) {
-                    log(sm.getString("jdbcRealm.abnormalCloseResultSet"));
-                }
-            }
+        // Number of tries is the numebr of attempts to connect to the database
+        // during this login attempt (if we need to open the database)
+        // This needs rewritten wuth better pooling support, the existing code
+        // needs signature changes since the Prepared statements needs cached
+        // with the connections.
+        // The code below will try twice if there is a SQLException so the
+        // connection may try to be opened again. On normal conditions (including
+        // invalid login - the above is only used once.
+        int numberOfTries = 2;
+        while (numberOfTries>0) {
             try {
-                dbConnection.commit();
+                
+                // Ensure that we have an open database connection
+                open();
+                
+                try {
+                    // Accumulate the user's roles
+                    ArrayList roleList = new ArrayList();
+                    stmt = roles(dbConnection, username);
+                    rs = stmt.executeQuery();
+                    while (rs.next()) {
+                        String role = rs.getString(1);
+                        if (null!=role) {
+                            roleList.add(role.trim());
+                        }
+                    }
+                    rs.close();
+                    rs = null;
+                    
+                    return (roleList);
+                    
+                } finally {
+                    if (rs!=null) {
+                        try {
+                            rs.close();
+                        } catch(SQLException e) {
+                            containerLog.warn(sm.getString("jdbcRealm.abnormalCloseResultSet"));
+                        }
+                    }
+                    dbConnection.commit();
+                }
+                
             } catch (SQLException e) {
-                log(sm.getString("jdbcRealm.getRoles.exception", username));
+                
+                // Log the problem for posterity
+                containerLog.error(sm.getString("jdbcRealm.exception"), e);
+                
+                // Close the connection so that it gets reopened next time
+                if (dbConnection != null)
+                    close(dbConnection);
+                
             }
+            
+            numberOfTries--;
         }
-
+        
         return (null);
         
     }
@@ -674,7 +728,8 @@ public class JDBCRealm
      *
      * @exception SQLException if a database error occurs
      */
-    protected PreparedStatement roles(Connection dbConnection, String username)
+    protected synchronized PreparedStatement roles(Connection dbConnection,
+            String username)
         throws SQLException {
 
         if (preparedRoles == null) {
@@ -707,16 +762,16 @@ public class JDBCRealm
      */
     public void start() throws LifecycleException {
 
+        // Perform normal superclass initialization
+        super.start();
+
         // Validate that we can open our connection - but let tomcat
         // startup in case the database is temporarily unavailable
         try {
             open();
         } catch (SQLException e) {
-            log(sm.getString("jdbcRealm.open"), e);
+            containerLog.error(sm.getString("jdbcRealm.open"), e);
         }
-
-        // Perform normal superclass initialization
-        super.start();
 
     }
 
@@ -739,4 +794,3 @@ public class JDBCRealm
 
 
 }
-

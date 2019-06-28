@@ -355,7 +355,7 @@ public class ServerCookie implements Serializable {
         if (isHttpOnly) {
             buf.append("; HttpOnly");
         }
-        headerBuf.append(buf.toString());
+        headerBuf.append(buf);
     }
 
     /**

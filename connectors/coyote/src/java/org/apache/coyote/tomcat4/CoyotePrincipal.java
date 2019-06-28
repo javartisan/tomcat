@@ -24,7 +24,7 @@ import java.security.Principal;
  * is used to represent principals authenticated at the protocol handler level.
  *
  * @author Remy Maucherat
- * @version $Revision: 466585 $ $Date: 2006-10-21 23:16:34 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: CoyotePrincipal.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public class CoyotePrincipal 

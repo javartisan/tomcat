@@ -24,6 +24,10 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.naming.directory.DirContext;
 
+import org.apache.commons.logging.Log;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+
 
 /**
  * A <b>Container</b> is an object that can execute requests received from
@@ -74,7 +78,7 @@ import javax.naming.directory.DirContext;
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Container.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Container {
@@ -157,15 +161,7 @@ public interface Container {
      * no associated Logger, return the Logger associated with our parent
      * Container (if any); otherwise return <code>null</code>.
      */
-    public Logger getLogger();
-
-
-    /**
-     * Set the Logger with which this Container is associated.
-     *
-     * @param logger The newly associated Logger
-     */
-    public void setLogger(Logger logger);
+    public Log getLogger();
 
 
     /**
@@ -185,6 +181,24 @@ public interface Container {
 
 
     /**
+     * Return an object which may be utilized for mapping to this component.
+     */
+    public Object getMappingObject();
+
+    
+    /**
+     * Return the JMX name associated with this container.
+     */
+    public String getObjectName();    
+
+    /**
+     * Return the Pipeline object that manages the Valves associated with
+     * this Container.
+     */
+    public Pipeline getPipeline();
+
+
+    /**
      * Return the Cluster with which this Container is associated.  If there is
      * no associated Cluster, return the Cluster associated with our parent
      * Container (if any); otherwise return <code>null</code>.
@@ -195,9 +209,31 @@ public interface Container {
     /**
      * Set the Cluster with which this Container is associated.
      *
-     * @param cluster The Cluster to be added
+     * @param cluster the Cluster with which this Container is associated.
      */
     public void setCluster(Cluster cluster);
+
+
+    /**
+     * Get the delay between the invocation of the backgroundProcess method on
+     * this container and its children. Child containers will not be invoked
+     * if their delay value is not negative (which would mean they are using 
+     * their own thread). Setting this to a positive value will cause 
+     * a thread to be spawn. After waiting the specified amount of time, 
+     * the thread will invoke the executePeriodic method on this container 
+     * and all its children.
+     */
+    public int getBackgroundProcessorDelay();
+
+
+    /**
+     * Set the delay between the invocation of the execute method on this
+     * container and its children.
+     * 
+     * @param delay The delay in seconds between the invocation of 
+     *              backgroundProcess methods
+     */
+    public void setBackgroundProcessorDelay(int delay);
 
 
     /**
@@ -296,6 +332,14 @@ public interface Container {
 
 
     /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess();
+
+
+    /**
      * Add a new child Container to those associated with this Container,
      * if supported.  Prior to adding this Container to the set of children,
      * the child's <code>setParent()</code> method must be called, with this
@@ -321,17 +365,6 @@ public interface Container {
      * @param listener The listener to add
      */
     public void addContainerListener(ContainerListener listener);
-
-
-    /**
-     * Add the specified Mapper associated with this Container.
-     *
-     * @param mapper The corresponding Mapper implementation
-     *
-     * @exception IllegalArgumentException if this exception is thrown by
-     *  the <code>setContainer()</code> method of the Mapper
-     */
-    public void addMapper(Mapper mapper);
 
 
     /**
@@ -367,23 +400,6 @@ public interface Container {
 
 
     /**
-     * Return the Mapper associated with the specified protocol, if there
-     * is one.  If there is only one defined Mapper, use it for all protocols.
-     * If there is no matching Mapper, return <code>null</code>.
-     *
-     * @param protocol Protocol for which to find a Mapper
-     */
-    public Mapper findMapper(String protocol);
-
-
-    /**
-     * Return the set of Mappers associated with this Container.  If this
-     * Container has no Mappers, a zero-length array is returned.
-     */
-    public Mapper[] findMappers();
-
-
-    /**
      * Process the specified Request, and generate the corresponding Response,
      * according to the design of this particular Container.
      *
@@ -397,17 +413,6 @@ public interface Container {
      */
     public void invoke(Request request, Response response)
         throws IOException, ServletException;
-
-
-    /**
-     * Return the child Container that should be used to process this Request,
-     * based upon its characteristics.  If no such child Container can be
-     * identified, return <code>null</code> instead.
-     *
-     * @param request Request being processed
-     * @param update Update the Request to reflect the mapping selection?
-     */
-    public Container map(Request request, boolean update);
 
 
     /**
@@ -425,14 +430,6 @@ public interface Container {
      * @param listener The listener to remove
      */
     public void removeContainerListener(ContainerListener listener);
-
-
-    /**
-     * Remove a Mapper associated with this Container, if any.
-     *
-     * @param mapper The Mapper to be removed
-     */
-    public void removeMapper(Mapper mapper);
 
 
     /**

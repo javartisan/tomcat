@@ -30,7 +30,7 @@ import javax.naming.Context;
  * </ul>
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ContextBindings.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class ContextBindings {
@@ -263,12 +263,8 @@ public class ContextBindings {
             if (context == null)
                 throw new NamingException
                     (sm.getString("contextBindings.unknownContext", name));
-            Object n = clNameBindings.get(classLoader);
-            // Only bind CL if it isn't already bound to the context
-            if (n == null) {
-                clBindings.put(classLoader, context);
-                clNameBindings.put(classLoader, name);
-            }
+            clBindings.put(classLoader, context);
+            clNameBindings.put(classLoader, name);
         }
     }
 
@@ -305,7 +301,7 @@ public class ContextBindings {
                                          ClassLoader classLoader) {
         if (ContextAccessController.checkSecurityToken(name, token)) {
             Object n = clNameBindings.get(classLoader);
-            if (!(n.equals(name))) {
+            if ((n==null) || !(n.equals(name))) {
                 return;
             }
             clBindings.remove(classLoader);
@@ -365,4 +361,3 @@ public class ContextBindings {
 
 
 }
-

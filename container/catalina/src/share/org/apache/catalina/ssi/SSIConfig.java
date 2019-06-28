@@ -17,44 +17,44 @@
 
 package org.apache.catalina.ssi;
 
-import java.io.PrintWriter;
 
+import java.io.PrintWriter;
 /**
  * Implements the Server-side #exec command
- *
+ * 
  * @author Bip Thelin
  * @author Paul Speed
  * @author Dan Sandberg
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author David Becker
+ * @version $Id: SSIConfig.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 public final class SSIConfig implements SSICommand {
     /**
      * @see SSICommand
      */
-    public void process(SSIMediator ssiMediator,
-			String commandName,
-			String[] paramNames, 
-			String[] paramValues,
-			PrintWriter writer ) {
-
-        for(int i=0;i<paramNames.length;i++) {
-	    String paramName = paramNames[i];
-	    String paramValue = paramValues[i];
-	    String substitutedValue = ssiMediator.substituteVariables( paramValue );
-
-            if ( paramName.equalsIgnoreCase("errmsg") ) {
-		ssiMediator.setConfigErrMsg( substitutedValue );
-            } else if ( paramName.equalsIgnoreCase("sizefmt") ) {
-		ssiMediator.setConfigSizeFmt( substitutedValue );
-            } else if ( paramName.equalsIgnoreCase("timefmt") ) {
-		ssiMediator.setConfigTimeFmt( substitutedValue );
-	    } else {
-		ssiMediator.log("#config--Invalid attribute: " + paramName );
-		//We need to fetch this value each time, since it may change during the loop
-		String configErrMsg = ssiMediator.getConfigErrMsg();
-		writer.write( configErrMsg );
-	    }
+    public long process(SSIMediator ssiMediator, String commandName,
+            String[] paramNames, String[] paramValues, PrintWriter writer) {
+        for (int i = 0; i < paramNames.length; i++) {
+            String paramName = paramNames[i];
+            String paramValue = paramValues[i];
+            String substitutedValue = ssiMediator
+                    .substituteVariables(paramValue);
+            if (paramName.equalsIgnoreCase("errmsg")) {
+                ssiMediator.setConfigErrMsg(substitutedValue);
+            } else if (paramName.equalsIgnoreCase("sizefmt")) {
+                ssiMediator.setConfigSizeFmt(substitutedValue);
+            } else if (paramName.equalsIgnoreCase("timefmt")) {
+                ssiMediator.setConfigTimeFmt(substitutedValue);
+            } else {
+                ssiMediator.log("#config--Invalid attribute: " + paramName);
+                //We need to fetch this value each time, since it may change
+                // during the
+                // loop
+                String configErrMsg = ssiMediator.getConfigErrMsg();
+                writer.write(configErrMsg);
+            }
         }
+        // Setting config options doesn't really change the page
+        return 0;
     }
 }
-

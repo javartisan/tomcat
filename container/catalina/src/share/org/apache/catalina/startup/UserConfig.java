@@ -21,12 +21,12 @@ package org.apache.catalina.startup;
 
 import java.io.File;
 import java.util.Enumeration;
+
 import org.apache.catalina.Context;
 import org.apache.catalina.Host;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleEvent;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Logger;
 import org.apache.catalina.util.StringManager;
 
 
@@ -38,13 +38,17 @@ import org.apache.catalina.util.StringManager;
  * xxxxx is the username of the owning user for that web application
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: UserConfig.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public final class UserConfig
     implements LifecycleListener {
 
 
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( UserConfig.class );
+
+    
     // ----------------------------------------------------- Instance Variables
 
 
@@ -58,12 +62,6 @@ public final class UserConfig
      * The Java class name of the Context implementation we should use.
      */
     private String contextClass = "org.apache.catalina.core.StandardContext";
-
-
-    /**
-     * The debugging detail level for this component.
-     */
-    private int debug = 999;
 
 
     /**
@@ -146,28 +144,6 @@ public final class UserConfig
 
 
     /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-
-        return (this.debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-
-        this.debug = debug;
-
-    }
-
-
-    /**
      * Return the directory name for user web applications.
      */
     public String getDirectoryName() {
@@ -245,7 +221,7 @@ public final class UserConfig
         try {
             host = (Host) event.getLifecycle();
         } catch (ClassCastException e) {
-            log(sm.getString("hostConfig.cce", event.getLifecycle()), e);
+            log.error(sm.getString("hostConfig.cce", event.getLifecycle()), e);
             return;
         }
 
@@ -267,8 +243,8 @@ public final class UserConfig
      */
     private void deploy() {
 
-        if (debug >= 1)
-            log(sm.getString("userConfig.deploying"));
+        if (host.getLogger().isDebugEnabled())
+            host.getLogger().debug(sm.getString("userConfig.deploying"));
 
         // Load the user database object for this host
         UserDatabase database = null;
@@ -277,7 +253,7 @@ public final class UserConfig
             database = (UserDatabase) clazz.newInstance();
             database.setUserConfig(this);
         } catch (Exception e) {
-            log(sm.getString("userConfig.database"), e);
+            host.getLogger().error(sm.getString("userConfig.database"), e);
             return;
         }
 
@@ -313,7 +289,7 @@ public final class UserConfig
         if (!dd.exists() || !dd.isFile() || !dd.canRead())
             return;
         */
-        log(sm.getString("userConfig.deploy", user));
+        host.getLogger().info(sm.getString("userConfig.deploy", user));
 
         // Deploy the web application for this user
         try {
@@ -330,50 +306,7 @@ public final class UserConfig
             }
             host.addChild(context);
         } catch (Exception e) {
-            log(sm.getString("userConfig.error", user), e);
-        }
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Host (if any)
-     *
-     * @param message Message to be logged
-     */
-    private void log(String message) {
-
-        Logger logger = null;
-        if (host != null)
-            logger = host.getLogger();
-        if (logger != null)
-            logger.log("UserConfig[" + host.getName() + "]: " + message);
-        else
-            System.out.println("UserConfig[" + host.getName() + "]: "
-                               + message);
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Host (if any)
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
-     */
-    private void log(String message, Throwable throwable) {
-
-        Logger logger = null;
-        if (host != null)
-            logger = host.getLogger();
-        if (logger != null)
-            logger.log("UserConfig[" + host.getName() + "] "
-                       + message, throwable);
-        else {
-            System.out.println("UserConfig[" + host.getName() + "]: "
-                               + message);
-            System.out.println("" + throwable);
-            throwable.printStackTrace(System.out);
+            host.getLogger().error(sm.getString("userConfig.error", user), e);
         }
 
     }
@@ -384,8 +317,8 @@ public final class UserConfig
      */
     private void start() {
 
-        if (debug > 0)
-            log(sm.getString("userConfig.start"));
+        if (host.getLogger().isDebugEnabled())
+            host.getLogger().debug(sm.getString("userConfig.start"));
 
         deploy();
 
@@ -397,8 +330,8 @@ public final class UserConfig
      */
     private void stop() {
 
-        if (debug > 0)
-            log(sm.getString("userConfig.stop"));
+        if (host.getLogger().isDebugEnabled())
+            host.getLogger().debug(sm.getString("userConfig.stop"));
 
     }
 

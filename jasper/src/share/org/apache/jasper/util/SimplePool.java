@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -25,6 +26,9 @@ package org.apache.jasper.util;
  * @author Costin
  */
 public final class SimplePool  {
+
+    private static final int DEFAULT_SIZE=16;
+
     /*
      * Where the threads are held.
      */
@@ -33,54 +37,50 @@ public final class SimplePool  {
     private int max;
     private int current=-1;
 
-    Object lock;
-    public static final int DEFAULT_SIZE=16;
+    private Object lock;
     
     public SimplePool() {
-        this.max=DEFAULT_SIZE;
-        pool=new Object[max];
-        lock=new Object();
+	this.max=DEFAULT_SIZE;
+	this.pool=new Object[max];
+	this.lock=new Object();
     }
     
     public SimplePool(int max) {
-        this.max=max;
-        pool=new Object[max];
-        lock=new Object();
+	this.max=max;
+	this.pool=new Object[max];
+	this.lock=new Object();
     }
 
-    public  void set(Object o) {
-        put(o);
-    }
     /**
-     * Add the object to the pool, silent nothing if the pool is full
+     * Adds the given object to the pool, and does nothing if the pool is full
      */
-    public  void put(Object o) {
-        synchronized( lock ) {
-            if( current < (max-1) ) {
-                current += 1;
-                pool[current] = o;
+    public void put(Object o) {
+	synchronized( lock ) {
+	    if( current < (max-1) ) {
+		current += 1;
+		pool[current] = o;
             }
-        }
+	}
     }
 
     /**
      * Get an object from the pool, null if the pool is empty.
      */
-    public  Object get() {
-        Object item = null;
-        synchronized( lock ) {
-            if( current >= 0 ) {
-                item = pool[current];
-                current -= 1;
-            }
-        }
-        return item;
+    public Object get() {
+	Object item = null;
+	synchronized( lock ) {
+	    if( current >= 0 ) {
+		item = pool[current];
+		current -= 1;
+	    }
+	}
+	return item;
     }
 
     /**
      * Return the size of the pool
      */
     public int getMax() {
-        return max;
+	return max;
     }
 }

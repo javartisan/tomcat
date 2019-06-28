@@ -18,6 +18,8 @@
 
 package org.apache.catalina.deploy;
 
+import java.io.Serializable;
+
 
 /**
  * Representation of a context initialization parameter that is configured
@@ -27,10 +29,10 @@ package org.apache.catalina.deploy;
  * to modify the application deployment descriptor itself.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationParameter.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class ApplicationParameter {
+public class ApplicationParameter implements Serializable {
 
 
     // ------------------------------------------------------------- Properties

@@ -17,11 +17,8 @@
 
 package org.apache.catalina;
 
-
-import org.apache.catalina.cluster.ClusterMemberInfo;
-import org.apache.catalina.cluster.ClusterReceiver;
-import org.apache.catalina.cluster.ClusterSender;
-
+import java.io.IOException;
+import java.net.URL;
 /**
  * A <b>Cluster</b> works as a Cluster client/server for the local host
  * Different Cluster implementations can be used to support different
@@ -32,7 +29,9 @@ import org.apache.catalina.cluster.ClusterSender;
  * <code>ClusterInfo</code> used for receiving information in the Cluster.
  *
  * @author Bip Thelin
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Remy Maucherat
+ * @author Filip Hanik
+ * @version $Id: Cluster.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Cluster {
@@ -53,21 +52,6 @@ public interface Cluster {
      * @return The name of the cluster associated with this server
      */
     public String getClusterName();
-
-    /**
-     * Set the time in seconds that the Cluster waits before
-     * checking for changes and replicated data.
-     *
-     * @param checkInterval The time in seconds to sleep
-     */
-    public void setCheckInterval(int checkInterval);
-
-    /**
-     * Get the time in seconds that this Cluster sleeps.
-     *
-     * @return The value in seconds
-     */
-    public int getCheckInterval();
 
     /**
      * Set the name of the cluster to join, if no cluster with
@@ -92,57 +76,104 @@ public interface Cluster {
     public Container getContainer();
 
     /**
-     * The debug detail level for this Cluster
+     * Set the protocol parameters.
      *
-     * @param debug The debug level
+     * @param protocol The protocol used by the cluster
+     * @deprecated
      */
-    public void setDebug(int debug);
+    public void setProtocol(String protocol);
 
     /**
-     * Returns the debug level for this Cluster
+     * Get the protocol used by the cluster.
      *
-     * @return The debug level
+     * @return The protocol
+     * @deprecated
      */
-    public int getDebug();
+    public String getProtocol();
 
     // --------------------------------------------------------- Public Methods
 
     /**
-     * Returns a collection containing <code>ClusterMemberInfo</code>
-     * on the remote members of this Cluster. This method does
-     * not include the local host, to retrieve
-     * <code>ClusterMemberInfo</code> on the local host
-     * use <code>getLocalClusterInfo()</code> instead.
+     * Create a new manager which will use this cluster to replicate its
+     * sessions.
      *
-     * @return Collection with all members in the Cluster
+     * @param name Name (key) of the application with which the manager is
+     * associated
      */
-    public ClusterMemberInfo[] getRemoteClusterMembers();
+    public Manager createManager(String name);
+
+    // --------------------------------------------------------- Cluster Wide Deployments
+    
+    
+    /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess();
+
 
     /**
-     * Returns a <code>ClusterSender</code> which is the interface
-     * to use when sending information in the Cluster. senderId is
-     * used as a identifier so that information sent through this
-     * instance can only be used with the respectice
-     * <code>ClusterReceiver</code>
+     * Start an existing web application, attached to the specified context
+     * path in all the other nodes in the cluster.
+     * Only starts a web application if it is not running.
      *
-     * @return The ClusterSender
+     * @param contextPath The context path of the application to be started
+     *
+     * @exception IllegalArgumentException if the specified context path
+     *  is malformed (it must be "" or start with a slash)
+     * @exception IllegalArgumentException if the specified context path does
+     *  not identify a currently installed web application
+     * @exception IOException if an input/output error occurs during
+     *  startup
+     * @deprecated
      */
-    public ClusterSender getClusterSender(String senderId);
+    public void startContext(String contextPath) throws IOException;
+
 
     /**
-     * Returns a <code>ClusterReceiver</code> which is the interface
-     * to use when receiving information in the Cluster. senderId is
-     * used as a indentifier, only information send through the
-     * <code>ClusterSender</code> with the same senderId can be received.
+     * Install a new web application, whose web application archive is at the
+     * specified URL, into this container with the specified context path.
+     * A context path of "" (the empty string) should be used for the root
+     * application for this container.  Otherwise, the context path must
+     * start with a slash.
+     * <p>
+     * If this application is successfully installed, a ContainerEvent of type
+     * <code>PRE_INSTALL_EVENT</code> will be sent to registered listeners
+     * before the associated Context is started, and a ContainerEvent of type
+     * <code>INSTALL_EVENT</code> will be sent to all registered listeners
+     * after the associated Context is started, with the newly created
+     * <code>Context</code> as an argument.
      *
-     * @return The ClusterReceiver
+     * @param contextPath The context path to which this application should
+     *  be installed (must be unique)
+     * @param war A URL of type "jar:" that points to a WAR file, or type
+     *  "file:" that points to an unpacked directory structure containing
+     *  the web application to be installed
+     *
+     * @exception IllegalArgumentException if the specified context path
+     *  is malformed (it must be "" or start with a slash)
+     * @exception IllegalStateException if the specified context path
+     *  is already attached to an existing web application
+     * @deprecated
      */
-    public ClusterReceiver getClusterReceiver(String senderId);
+    public void installContext(String contextPath, URL war);
 
     /**
-     * Return cluster information about the local host
+     * Stop an existing web application, attached to the specified context
+     * path.  Only stops a web application if it is running.
      *
-     * @return Cluster information
+     * @param contextPath The context path of the application to be stopped
+     *
+     * @exception IllegalArgumentException if the specified context path
+     *  is malformed (it must be "" or start with a slash)
+     * @exception IllegalArgumentException if the specified context path does
+     *  not identify a currently installed web application
+     * @exception IOException if an input/output error occurs while stopping
+     *  the web application
+     * @deprecated
      */
-    public ClusterMemberInfo getLocalClusterMember();
+    public void stop(String contextPath) throws IOException;
+
+
 }

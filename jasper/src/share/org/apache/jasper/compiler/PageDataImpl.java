@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 package org.apache.jasper.compiler;
 
 import java.io.InputStream;
@@ -45,49 +46,34 @@ import org.apache.jasper.JasperException;
  *
  * @author Jan Luehe
  */
+class PageDataImpl extends PageData implements TagConstants {
 
-public class PageDataImpl extends PageData implements TagConstants {
-
-    private static final String JSP_NAMESPACE = "http://java.sun.com/JSP/Page";
-    private static final String JSP_VERSION = "1.2";
+    private static final String JSP_VERSION = "2.0";
     private static final String CDATA_START_SECTION = "<![CDATA[\n";
     private static final String CDATA_END_SECTION = "]]>\n";
 
-    // default "xmlns:jsp" and "version" attributes of jsp:root element
-    private static AttributesImpl defaultJspRootAttrs;
-
     // string buffer used to build XML view
     private StringBuffer buf;
-
-    /*
-     * Static initializer which sets the "xmlns:jsp" and "version" 
-     * attributes of the jsp:root element to their default values.
-     */
-    static {
-        defaultJspRootAttrs = new AttributesImpl();
-        defaultJspRootAttrs.addAttribute("", "", "xmlns:jsp", "CDATA",
-                                         JSP_NAMESPACE);
-        defaultJspRootAttrs.addAttribute("", "", "version", "CDATA",
-                                         JSP_VERSION);
-    }
 
     /**
      * Constructor.
      *
      * @param page the page nodes from which to generate the XML view
      */
-    public PageDataImpl(Node.Nodes page) throws JasperException {
+    public PageDataImpl(Node.Nodes page, Compiler compiler)
+                throws JasperException {
 
         // First pass
-        FirstPassVisitor firstPassVisitor
-            = new FirstPassVisitor(page.getRoot());
-        page.visit(firstPassVisitor);
+        FirstPassVisitor firstPass = new FirstPassVisitor(page.getRoot(),
+                                                          compiler.getPageInfo());
+        page.visit(firstPass);
 
         // Second pass
         buf = new StringBuffer();
-        SecondPassVisitor secondPassVisitor
-            = new SecondPassVisitor(page.getRoot(), buf);
-        page.visit(secondPassVisitor);
+        SecondPassVisitor secondPass
+            = new SecondPassVisitor(page.getRoot(), buf, compiler,
+                                    firstPass.getJspIdPrefix());
+        page.visit(secondPass);
     }
 
     /**
@@ -115,51 +101,75 @@ public class PageDataImpl extends PageData implements TagConstants {
      * In addition, this Visitor converts any taglib directives into xmlns:
      * attributes and adds them to the jsp:root element of the XML view.
      */
-    static class FirstPassVisitor extends Node.Visitor {
+    static class FirstPassVisitor
+                extends Node.Visitor implements TagConstants {
 
         private Node.Root root;
         private AttributesImpl rootAttrs;
+        private PageInfo pageInfo;
+
+        // Prefix for the 'id' attribute
+        private String jspIdPrefix;
 
         /*
          * Constructor
          */
-        public FirstPassVisitor(Node.Root root) {
+        public FirstPassVisitor(Node.Root root, PageInfo pageInfo) {
             this.root = root;
-            this.rootAttrs = new AttributesImpl(defaultJspRootAttrs);
+            this.pageInfo = pageInfo;
+            this.rootAttrs = new AttributesImpl();
+            this.rootAttrs.addAttribute("", "", "version", "CDATA",
+                                        JSP_VERSION);
+            this.jspIdPrefix = "jsp";
         }
 
         public void visit(Node.Root n) throws JasperException {
             visitBody(n);
-            root.setAttributes(rootAttrs);
-        }
-
-        public void visit(Node.JspRoot n) throws JasperException {
-            Attributes attrs = n.getAttributes();
-            if (attrs == null) {
-                throw new JasperException("Missing attributes in jsp:root");
-            }
-            int len = attrs.getLength();
-            for (int i=0; i<len; i++) {
-                String qName = attrs.getQName(i);
-                if ((qName.startsWith("xmlns:jsp")
-                     || qName.equals("version"))) {
-                    continue;
+            if (n == root) {
+                /*
+                 * Top-level page.
+                 *
+                 * Add
+                 *   xmlns:jsp="http://java.sun.com/JSP/Page"
+                 * attribute only if not already present.
+                 */
+                if (!JSP_URI.equals(rootAttrs.getValue("xmlns:jsp"))) {
+                    rootAttrs.addAttribute("", "", "xmlns:jsp", "CDATA",
+                                           JSP_URI);
                 }
-                rootAttrs.addAttribute(attrs.getURI(i),
-                                       attrs.getLocalName(i),
-                                       attrs.getQName(i),
-                                       attrs.getType(i),
-                                       attrs.getValue(i));
-            }
-            visitBody(n);
-            if (n == this.root) {
-                // top-level jsp:root element
+
+                if (pageInfo.isJspPrefixHijacked()) {
+                    /*
+                     * 'jsp' prefix has been hijacked, that is, bound to a
+                     * namespace other than the JSP namespace. This means that
+                     * when adding an 'id' attribute to each element, we can't
+                     * use the 'jsp' prefix. Therefore, create a new prefix 
+                     * (one that is unique across the translation unit) for use
+                     * by the 'id' attribute, and bind it to the JSP namespace
+                     */
+                    jspIdPrefix += "jsp";
+                    while (pageInfo.containsPrefix(jspIdPrefix)) {
+                        jspIdPrefix += "jsp";
+                    }
+                    rootAttrs.addAttribute("", "", "xmlns:" + jspIdPrefix,
+                                           "CDATA", JSP_URI);
+                }
+
                 root.setAttributes(rootAttrs);
             }
         }
 
+        public void visit(Node.JspRoot n) throws JasperException {
+            addAttributes(n.getTaglibAttributes());
+            addAttributes(n.getNonTaglibXmlnsAttributes());
+            addAttributes(n.getAttributes());
+
+            visitBody(n);
+        }
+
         /*
-         * Converts taglib directive into xmlns: attribute of jsp:root element.
+         * Converts taglib directive into "xmlns:..." attribute of jsp:root
+         * element.
          */
         public void visit(Node.TaglibDirective n) throws JasperException {
             Attributes attrs = n.getAttributes();
@@ -172,8 +182,44 @@ public class PageDataImpl extends PageData implements TagConstants {
                  * is the application's responsibility!
                  */
                 if (rootAttrs.getIndex(qName) == -1) {
-                    rootAttrs.addAttribute("", "", qName, "CDATA",
-                                           attrs.getValue("uri"));
+                    String location = attrs.getValue("uri");
+                    if (location != null) {
+                        if (location.startsWith("/")) {
+                            location = URN_JSPTLD + location;
+                        }
+                        rootAttrs.addAttribute("", "", qName, "CDATA",
+                                               location);
+                    } else {
+                        location = attrs.getValue("tagdir");
+                        rootAttrs.addAttribute("", "", qName, "CDATA",
+                                               URN_JSPTAGDIR + location);
+                    }
+                }
+            }
+        }
+
+        public String getJspIdPrefix() {
+            return jspIdPrefix;
+        }
+
+        private void addAttributes(Attributes attrs) {
+            if (attrs != null) {
+                int len = attrs.getLength();
+
+                for (int i=0; i<len; i++) {
+                    String qName = attrs.getQName(i);
+                    if ("version".equals(qName)) {
+                        continue;
+                    }
+
+                    // Bugzilla 35252: http://issues.apache.org/bugzilla/show_bug.cgi?id=35252
+                    if(rootAttrs.getIndex(qName) == -1) {
+                        rootAttrs.addAttribute(attrs.getURI(i),
+                                               attrs.getLocalName(i),
+                                               qName,
+                                               attrs.getType(i),
+                                               attrs.getValue(i));
+                    }
                 }
             }
         }
@@ -182,30 +228,47 @@ public class PageDataImpl extends PageData implements TagConstants {
 
     /*
      * Second-pass Visitor responsible for producing XML view and assigning
-     * each JSP element a jsp:id attribute.
+     * each element a unique jsp:id attribute.
      */
     static class SecondPassVisitor extends Node.Visitor
                 implements TagConstants {
 
         private Node.Root root;
         private StringBuffer buf;
+        private Compiler compiler;
+        private String jspIdPrefix;
+        private boolean resetDefaultNS = false;
 
-        // current jsp:id attribute value
+        // Current value of jsp:id attribute
         private int jspId;
 
         /*
          * Constructor
          */
-        public SecondPassVisitor(Node.Root root, StringBuffer buf) {
+        public SecondPassVisitor(Node.Root root, StringBuffer buf,
+                                 Compiler compiler, String jspIdPrefix) {
             this.root = root;
             this.buf = buf;
+            this.compiler = compiler;
+            this.jspIdPrefix = jspIdPrefix;
         }
 
         /*
-         * Visits root node of JSP page in JSP syntax.
+         * Visits root node.
          */
         public void visit(Node.Root n) throws JasperException {
-            appendTag(JSP_ROOT_TAG, n.getAttributes(), n.getBody());
+            if (n == this.root) {
+                // top-level page
+                appendXmlProlog();
+                appendTag(n);
+            } else {
+                boolean resetDefaultNSSave = resetDefaultNS;
+                if (n.isXmlSyntax()) {
+                    resetDefaultNS = true;
+                }
+                visitBody(n);
+                resetDefaultNS = resetDefaultNSSave;
+            }
         }
 
         /*
@@ -215,12 +278,7 @@ public class PageDataImpl extends PageData implements TagConstants {
          * include directive) are ignored.
          */
         public void visit(Node.JspRoot n) throws JasperException {
-            if (n == this.root) {
-                // top-level jsp:root element
-                appendTag(JSP_ROOT_TAG, n.getAttributes(), n.getBody());
-            } else {
-                visitBody(n);
-            }
+            visitBody(n);
         }
 
         public void visit(Node.PageDirective n) throws JasperException {
@@ -237,115 +295,166 @@ public class PageDataImpl extends PageData implements TagConstants {
         }
 
         public void visit(Node.Declaration n) throws JasperException {
-            // jsp:declaration has no attributes, except for jsp:id
-            appendTag(JSP_DECLARATION_TAG, n.getAttributes(), n.getText());
+            appendTag(n);
         }
 
         public void visit(Node.Expression n) throws JasperException {
-            // jsp:scriptlet has no attributes, except for jsp:id
-            appendTag(JSP_EXPRESSION_TAG, n.getAttributes(), n.getText());
+            appendTag(n);
         }
 
         public void visit(Node.Scriptlet n) throws JasperException {
-            // jsp:scriptlet has no attributes, except for jsp:id
-            appendTag(JSP_SCRIPTLET_TAG, n.getAttributes(), n.getText());
+            appendTag(n);
+        }
+
+        public void visit(Node.JspElement n) throws JasperException {
+            appendTag(n);
+        }
+
+        public void visit(Node.ELExpression n) throws JasperException {
+            if (!n.getRoot().isXmlSyntax()) {
+                buf.append("<").append(JSP_TEXT_ACTION);
+                buf.append(" ");
+                buf.append(jspIdPrefix);
+                buf.append(":id=\"");
+                buf.append(jspId++).append("\">");
+            }
+            buf.append("${");
+            buf.append(JspUtil.escapeXml(n.getText()));
+            buf.append("}");
+            if (!n.getRoot().isXmlSyntax()) {
+                buf.append(JSP_TEXT_ACTION_END);
+            }
+            buf.append("\n");
         }
 
         public void visit(Node.IncludeAction n) throws JasperException {
-            appendTag(JSP_INCLUDE_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
     
         public void visit(Node.ForwardAction n) throws JasperException {
-            appendTag(JSP_FORWARD_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
         public void visit(Node.GetProperty n) throws JasperException {
-            appendTag(JSP_GET_PROPERTY_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
         public void visit(Node.SetProperty n) throws JasperException {
-            appendTag(JSP_SET_PROPERTY_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
         public void visit(Node.ParamAction n) throws JasperException {
-            appendTag(JSP_PARAM_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
         public void visit(Node.ParamsAction n) throws JasperException {
-            appendTag(JSP_PARAMS_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
         public void visit(Node.FallBackAction n) throws JasperException {
-            appendTag(JSP_FALLBACK_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
         public void visit(Node.UseBean n) throws JasperException {
-            appendTag(JSP_USE_BEAN_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
         
         public void visit(Node.PlugIn n) throws JasperException {
-            appendTag(JSP_PLUGIN_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
+        }
+
+        public void visit(Node.NamedAttribute n) throws JasperException {
+            appendTag(n);
+        }
+        
+        public void visit(Node.JspBody n) throws JasperException {
+            appendTag(n);
         }
 
         public void visit(Node.CustomTag n) throws JasperException {
-            appendTag(n.getName(), n.getAttributes(), n.getBody());
+            boolean resetDefaultNSSave = resetDefaultNS;
+            appendTag(n, resetDefaultNS);
+            resetDefaultNS = resetDefaultNSSave;
         }
 
         public void visit(Node.UninterpretedTag n) throws JasperException {
-            appendTag(n.getName(), n.getAttributes(), n.getBody());
+            boolean resetDefaultNSSave = resetDefaultNS;
+            appendTag(n, resetDefaultNS);
+            resetDefaultNS = resetDefaultNSSave;
         }
 
         public void visit(Node.JspText n) throws JasperException {
-            // jsp:text has no attributes, except for jsp:id
-            appendTag(JSP_TEXT_TAG, n.getAttributes(), n.getBody());
+            appendTag(n);
         }
 
+        public void visit(Node.DoBodyAction n) throws JasperException {
+            appendTag(n);
+        }
+
+        public void visit(Node.InvokeAction n) throws JasperException {
+            appendTag(n);
+        }
+
+        public void visit(Node.TagDirective n) throws JasperException {
+            appendTagDirective(n);
+        }
+
+        public void visit(Node.AttributeDirective n) throws JasperException {
+            appendTag(n);
+        }
+
+        public void visit(Node.VariableDirective n) throws JasperException {
+            appendTag(n);
+        }
+        
         public void visit(Node.TemplateText n) throws JasperException {
             /*
              * If the template text came from a JSP page written in JSP syntax,
              * create a jsp:text element for it (JSP 5.3.2).
              */
-            appendText(n.getText(), !n.isXmlSyntax());
+            appendText(n.getText(), !n.getRoot().isXmlSyntax());
         }
 
         /*
-         * Appends the given tag (including its body, if present) to the XML
-         * view.
+         * Appends the given tag, including its body, to the XML view.
          */
-        private void appendTag(String tag, Attributes attrs, Node.Nodes body)
-                    throws JasperException {
-            buf.append("<").append(tag);
-            buf.append("\n");
-            buf.append("  ").append("jsp:id").append("=\"");
-            buf.append(jspId++).append("\"\n");
-            if (attrs != null) {
-                printAttributes(attrs);
-            }
-            if (body != null) {
-                buf.append(">\n");
-                body.visit(this);
-                buf.append("</" + tag + ">\n");
-            } else {
-                buf.append("/>\n");
-            }
+        private void appendTag(Node n) throws JasperException {
+            appendTag(n, false);
         }
 
         /*
-         * Appends the given tag, including its text body, to the XML view.
+         * Appends the given tag, including its body, to the XML view,
+         * and optionally reset default namespace to "", if none specified.
          */
-        private void appendTag(String tag, Attributes attrs, String text)
-                    throws JasperException {
-            buf.append("<").append(tag);
+        private void appendTag(Node n, boolean addDefaultNS)
+                throws JasperException {
+
+            Node.Nodes body = n.getBody();
+            String text = n.getText();
+
+            buf.append("<").append(n.getQName());
             buf.append("\n");
-            buf.append("  ").append("jsp:id").append("=\"");
+
+            printAttributes(n, addDefaultNS);
+            buf.append("  ").append(jspIdPrefix).append(":id").append("=\"");
             buf.append(jspId++).append("\"\n");
-            if (attrs != null) {
-                printAttributes(attrs);
-            }
-            if (text != null) {
+
+            if (ROOT_ACTION.equals(n.getLocalName()) || body != null
+                        || text != null) {
                 buf.append(">\n");
-                appendText(text, false);
-                buf.append("</" + tag + ">\n");
+                if (ROOT_ACTION.equals(n.getLocalName())) {
+                    if (compiler.getCompilationContext().isTagFile()) {
+                        appendTagDirective();
+                    } else {
+                        appendPageDirective();
+                    }
+                }
+                if (body != null) {
+                    body.visit(this);
+                } else {
+                    appendText(text, false);
+                }
+                buf.append("</" + n.getQName() + ">\n");
             } else {
                 buf.append("/>\n");
             }
@@ -360,32 +469,56 @@ public class PageDataImpl extends PageData implements TagConstants {
          * document, and since XML allows only single-value attributes,
          * the values of multiple import attributes must be combined into one,
          * separated by comma.
+         *
+         * If the given page directive contains just 'contentType' and/or
+         * 'pageEncoding' attributes, we ignore it, as we've already appended
+         * a page directive containing just these two attributes.
          */
-        private void appendPageDirective(Node.PageDirective pageDir) {
-            Attributes attrs = pageDir.getAttributes();
-            buf.append("<").append(JSP_PAGE_DIRECTIVE_TAG);
+        private void appendPageDirective(Node.PageDirective n) {
+            boolean append = false;
+            Attributes attrs = n.getAttributes();
+            int len = (attrs == null) ? 0 : attrs.getLength();
+            for (int i=0; i<len; i++) {
+                String attrName = attrs.getQName(i);
+                if (!"pageEncoding".equals(attrName)
+                        && !"contentType".equals(attrName)) {
+                    append = true;
+                    break;
+                }
+            }
+            if (!append) {
+                return;
+            }
+
+            buf.append("<").append(n.getQName());
             buf.append("\n");
 
             // append jsp:id
-            buf.append("  ").append("jsp:id").append("=\"");
+            buf.append("  ").append(jspIdPrefix).append(":id").append("=\"");
             buf.append(jspId++).append("\"\n");
 
             // append remaining attributes
-            int len = attrs.getLength();
             for (int i=0; i<len; i++) {
                 String attrName = attrs.getQName(i);
-                if ("import".equals(attrName)) {
-                    // Ignore page directive's import attribute for now
+                if ("import".equals(attrName) || "contentType".equals(attrName)
+                        || "pageEncoding".equals(attrName)) {
+                    /*
+                     * Page directive's 'import' attribute is considered
+                     * further down, and its 'pageEncoding' and 'contentType'
+                     * attributes are ignored, since we've already appended
+                     * a new page directive containing just these two
+                     * attributes
+                     */
                     continue;
                 }
                 String value = attrs.getValue(i);
                 buf.append("  ").append(attrName).append("=\"");
                 buf.append(JspUtil.getExprInXml(value)).append("\"\n");
             }
-            if (pageDir.getImports().size() > 0) {
+            if (n.getImports().size() > 0) {
                 // Concatenate names of imported classes/packages
                 boolean first = true;
-                ListIterator iter = pageDir.getImports().listIterator();
+                ListIterator iter = n.getImports().listIterator();
                 while (iter.hasNext()) {
                     if (first) {
                         first = false;
@@ -400,11 +533,84 @@ public class PageDataImpl extends PageData implements TagConstants {
             buf.append("/>\n");
         }
 
+        /*
+         * Appends a page directive with 'pageEncoding' and 'contentType'
+         * attributes.
+         *
+         * The value of the 'pageEncoding' attribute is hard-coded
+         * to UTF-8, whereas the value of the 'contentType' attribute, which
+         * is identical to what the container will pass to
+         * ServletResponse.setContentType(), is derived from the pageInfo.
+         */
+        private void appendPageDirective() {
+            buf.append("<").append(JSP_PAGE_DIRECTIVE_ACTION);
+            buf.append("\n");
+
+            // append jsp:id
+            buf.append("  ").append(jspIdPrefix).append(":id").append("=\"");
+            buf.append(jspId++).append("\"\n");
+            buf.append("  ").append("pageEncoding").append("=\"UTF-8\"\n");
+            buf.append("  ").append("contentType").append("=\"");
+            buf.append(compiler.getPageInfo().getContentType()).append("\"\n");
+            buf.append("/>\n");            
+        }
+
+        /*
+         * Appends the tag directive with the given attributes to the XML
+         * view.
+         *
+         * If the given tag directive contains just a 'pageEncoding'
+         * attributes, we ignore it, as we've already appended
+         * a tag directive containing just this attributes.
+         */
+        private void appendTagDirective(Node.TagDirective n)
+                throws JasperException {
+
+            boolean append = false;
+            Attributes attrs = n.getAttributes();
+            int len = (attrs == null) ? 0 : attrs.getLength();
+            for (int i=0; i<len; i++) {
+                String attrName = attrs.getQName(i);
+                if (!"pageEncoding".equals(attrName)) {
+                    append = true;
+                    break;
+                }
+            }
+            if (!append) {
+                return;
+            }
+
+            appendTag(n);
+        }
+
+        /*
+         * Appends a tag directive containing a single 'pageEncoding'
+         * attribute whose value is hard-coded to UTF-8.
+         */
+        private void appendTagDirective() {
+            buf.append("<").append(JSP_TAG_DIRECTIVE_ACTION);
+            buf.append("\n");
+
+            // append jsp:id
+            buf.append("  ").append(jspIdPrefix).append(":id").append("=\"");
+            buf.append(jspId++).append("\"\n");
+            buf.append("  ").append("pageEncoding").append("=\"UTF-8\"\n");
+            buf.append("/>\n");            
+        }
+
         private void appendText(String text, boolean createJspTextElement) {
             if (createJspTextElement) {
-                buf.append(JSP_TEXT_TAG_START);
+                buf.append("<").append(JSP_TEXT_ACTION);
+                buf.append("\n");
+
+                // append jsp:id
+                buf.append("  ").append(jspIdPrefix).append(":id").append("=\"");
+                buf.append(jspId++).append("\"\n");
+                buf.append(">\n");
+
                 appendCDATA(text);
-                buf.append(JSP_TEXT_TAG_END);
+                buf.append(JSP_TEXT_ACTION_END);
+                buf.append("\n");
             } else {
                 appendCDATA(text);
             }
@@ -425,6 +631,7 @@ public class PageDataImpl extends PageData implements TagConstants {
          * within the given text, so it can be included in a CDATA section.
          */
         private String escapeCDATA(String text) {
+            if( text==null ) return "";
             int len = text.length();
             CharArrayWriter result = new CharArrayWriter(len);
             for (int i=0; i<len; i++) {
@@ -448,16 +655,56 @@ public class PageDataImpl extends PageData implements TagConstants {
         }
 
         /*
-         * Appends the given attributes to the XML view.
+         * Appends the attributes of the given Node to the XML view.
          */
-        private void printAttributes(Attributes attrs) {
-            int len = attrs.getLength();
+        private void printAttributes(Node n, boolean addDefaultNS) {
+
+            /*
+             * Append "xmlns" attributes that represent tag libraries
+             */
+            Attributes attrs = n.getTaglibAttributes();
+            int len = (attrs == null) ? 0 : attrs.getLength();
+            for (int i=0; i<len; i++) {
+                String name = attrs.getQName(i);
+                String value = attrs.getValue(i);
+                buf.append("  ").append(name).append("=\"").append(value).append("\"\n");
+            }
+
+            /*
+             * Append "xmlns" attributes that do not represent tag libraries
+             */
+            attrs = n.getNonTaglibXmlnsAttributes();
+            len = (attrs == null) ? 0 : attrs.getLength();
+            boolean defaultNSSeen = false;
+            for (int i=0; i<len; i++) {
+                String name = attrs.getQName(i);
+                String value = attrs.getValue(i);
+                buf.append("  ").append(name).append("=\"").append(value).append("\"\n");
+                defaultNSSeen |= "xmlns".equals(name);
+            }
+            if (addDefaultNS && !defaultNSSeen) {
+                buf.append("  xmlns=\"\"\n");
+            }
+            resetDefaultNS = false;
+
+            /*
+             * Append all other attributes
+             */
+            attrs = n.getAttributes();
+            len = (attrs == null) ? 0 : attrs.getLength();
             for (int i=0; i<len; i++) {
                 String name = attrs.getQName(i);
                 String value = attrs.getValue(i);
                 buf.append("  ").append(name).append("=\"");
                 buf.append(JspUtil.getExprInXml(value)).append("\"\n");
             }
+        }
+
+        /*
+         * Appends XML prolog with encoding declaration.
+         */
+        private void appendXmlProlog() {
+            buf.append("<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n");
         }
     }
 }

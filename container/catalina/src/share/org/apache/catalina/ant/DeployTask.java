@@ -20,10 +20,13 @@ package org.apache.catalina.ant;
 
 
 import java.io.BufferedInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLEncoder;
+
 import org.apache.tools.ant.BuildException;
 
 
@@ -32,13 +35,42 @@ import org.apache.tools.ant.BuildException;
  * the Tomcat manager application.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeployTask.java 939523 2010-04-30 00:28:42Z kkolinko $
  * @since 4.1
  */
 public class DeployTask extends AbstractCatalinaTask {
 
 
     // ------------------------------------------------------------- Properties
+
+
+    /**
+     * URL of the context configuration file for this application, if any.
+     */
+    protected String config = null;
+
+    public String getConfig() {
+        return (this.config);
+    }
+
+    public void setConfig(String config) {
+        this.config = config;
+    }
+
+
+    /**
+     * URL of the server local web application archive (WAR) file 
+     * to be deployed.
+     */
+    protected String localWar = null;
+
+    public String getLocalWar() {
+        return (this.localWar);
+    }
+
+    public void setLocalWar(String localWar) {
+        this.localWar = localWar;
+    }
 
 
     /**
@@ -52,6 +84,34 @@ public class DeployTask extends AbstractCatalinaTask {
 
     public void setPath(String path) {
         this.path = path;
+    }
+
+
+    /**
+     * Tag to associate with this to be deployed webapp.
+     */
+    protected String tag = null;
+
+    public String getTag() {
+        return (this.tag);
+    }
+
+    public void setTag(String tag) {
+        this.tag = tag;
+    }
+
+
+    /**
+     * Update existing webapps.
+     */
+    protected boolean update = false;
+
+    public boolean getUpdate() {
+        return (this.update);
+    }
+
+    public void setUpdate(boolean update) {
+        this.update = update;
     }
 
 
@@ -84,22 +144,61 @@ public class DeployTask extends AbstractCatalinaTask {
             throw new BuildException
                 ("Must specify 'path' attribute");
         }
-        if (war == null) {
+        if ((war == null) && (localWar == null) && (config == null) && (tag == null)) {
             throw new BuildException
-                ("Must specify 'war' attribute");
+                ("Must specify either 'war', 'localWar', 'config', or 'tag' attribute");
         }
+
+        // Building an input stream on the WAR to upload, if any
         BufferedInputStream stream = null;
+        String contentType = null;
         int contentLength = -1;
-        try {
-            URL url = new URL(war);
-            URLConnection conn = url.openConnection();
-            contentLength = conn.getContentLength();
-            stream = new BufferedInputStream(conn.getInputStream(), 1024);
-        } catch (IOException e) {
-            throw new BuildException(e);
+        if (war != null) {
+            if (war.startsWith("file:")) {
+                try {
+                    URL url = new URL(war);
+                    URLConnection conn = url.openConnection();
+                    contentLength = conn.getContentLength();
+                    stream = new BufferedInputStream
+                        (conn.getInputStream(), 1024);
+                } catch (IOException e) {
+                    throw new BuildException(e);
+                }
+            } else {
+                try {
+                    stream = new BufferedInputStream
+                        (new FileInputStream(war), 1024);
+                } catch (IOException e) {
+                    throw new BuildException(e);
+                }
+            }
+            contentType = "application/octet-stream";
         }
-        execute("/deploy?path=" + URLEncoder.encode(this.path), stream,
-                "application/octet-stream", contentLength);
+
+        // Building URL
+        StringBuffer sb = new StringBuffer("/deploy?path=");
+        try {
+            sb.append(URLEncoder.encode(this.path, getCharset()));
+            if ((war == null) && (config != null)) {
+                sb.append("&config=");
+                sb.append(URLEncoder.encode(config, getCharset()));
+            }
+            if ((war == null) && (localWar != null)) {
+                sb.append("&war=");
+                sb.append(URLEncoder.encode(localWar, getCharset()));
+            }
+            if (update) {
+                sb.append("&update=true");
+            }
+            if (tag != null) {
+                sb.append("&tag=");
+                sb.append(URLEncoder.encode(tag, getCharset()));
+            }
+        } catch (UnsupportedEncodingException e) {
+            throw new BuildException("Invalid 'charset' attribute: " + getCharset());
+        }
+
+        execute(sb.toString(), stream, contentType, contentLength);
 
     }
 

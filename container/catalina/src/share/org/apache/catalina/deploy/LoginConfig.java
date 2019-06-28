@@ -20,6 +20,7 @@ package org.apache.catalina.deploy;
 
 
 import org.apache.catalina.util.RequestUtil;
+import java.io.Serializable;
 
 
 /**
@@ -28,10 +29,10 @@ import org.apache.catalina.util.RequestUtil;
  * deployment descriptor.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: LoginConfig.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class LoginConfig {
+public class LoginConfig implements Serializable {
 
 
     // ----------------------------------------------------------- Constructors

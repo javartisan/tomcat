@@ -24,31 +24,30 @@ import java.io.IOException;
 import javax.management.Attribute;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
+import javax.management.JMException;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.TreeControl;
 import org.apache.webapp.admin.TreeControlNode;
-import org.apache.webapp.admin.logger.DeleteLoggerAction;
+import org.apache.webapp.admin.valve.ValveUtil;
 
 /**
  * The <code>Action</code> that completes <em>Add Realm</em> and
  * <em>Edit Realm</em> transactions for JDBC realm.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveJDBCRealmAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveJDBCRealmAction extends Action {
@@ -61,6 +60,10 @@ public final class SaveJDBCRealmAction extends Action {
      */
     private String createStandardRealmTypes[] =
     { "java.lang.String",     // parent
+      "java.lang.String",     // driverName
+      "java.lang.String",     // connectionName
+      "java.lang.String",     // connectionPassword
+      "java.lang.String",     // connectionURL
     };
 
 
@@ -69,12 +72,6 @@ public final class SaveJDBCRealmAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -102,10 +99,8 @@ public final class SaveJDBCRealmAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -129,7 +124,7 @@ public final class SaveJDBCRealmAction extends Action {
             try {
 
                 String parent = rform.getParentObjectName();                
-                String objectName = DeleteLoggerAction.getObjectName(parent,
+                String objectName = ValveUtil.getObjectName(parent,
                                     TomcatTreeBuilder.REALM_TYPE);
                 
                 ObjectName pname = new ObjectName(parent);
@@ -139,13 +134,12 @@ public final class SaveJDBCRealmAction extends Action {
                 // Parent in this case needs to be the container mBean for the service 
                 try {                                                        
                     if ("Service".equalsIgnoreCase(pname.getKeyProperty("type"))) {
-                        sb.append(":type=Engine,service=");
-                        sb.append(pname.getKeyProperty("name"));
+                        sb.append(":type=Engine");
                         parent = sb.toString();
                     }
                 } catch (Exception e) {
                     String message =
-                        resources.getMessage("error.engineName.bad",
+                        resources.getMessage(locale, "error.engineName.bad",
                                          sb.toString());
                     getServlet().log(message);
                     response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -163,17 +157,27 @@ public final class SaveJDBCRealmAction extends Action {
                     return (new ActionForward(mapping.getInput()));
                 }
 
+                String domain = oname.getDomain();
                 // Look up our MBeanFactory MBean
-                ObjectName fname =
-                    new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+                ObjectName fname = 
+                    TomcatTreeBuilder.getMBeanFactory();
 
                 // Create a new StandardRealm object
-                values = new String[1];
+                values = new String[5];
                 values[0] = parent;
+		values[1] = rform.getDriver();
+		values[2] = rform.getConnectionName();
+		values[3] = rform.getConnectionPassword();
+		values[4] = rform.getConnectionURL();
                 operation = "createJDBCRealm";
                 rObjectName = (String)
                     mBServer.invoke(fname, operation,
                                     values, createStandardRealmTypes);
+                                    
+                if (rObjectName==null) {
+                    request.setAttribute("warning", "error.jdbcrealm");
+                    return (mapping.findForward("Save Unsuccessful"));
+                }
 
                 // Add the new Realm to our tree control node
                 TreeControl control = (TreeControl)
@@ -183,7 +187,7 @@ public final class SaveJDBCRealmAction extends Action {
                     if (parentNode != null) {
                         String nodeLabel = rform.getNodeLabel();                        
                         String encodedName =
-                            URLEncoder.encode(rObjectName);
+                            URLEncoder.encode(rObjectName,TomcatTreeBuilder.URL_ENCODING);
                         TreeControlNode childNode =
                             new TreeControlNode(rObjectName,
                                                 "Realm.gif",
@@ -191,7 +195,7 @@ public final class SaveJDBCRealmAction extends Action {
                                                 "EditRealm.do?select=" +
                                                 encodedName,
                                                 "content",
-                                                true);
+                                                true, domain);
                         parentNode.addChild(childNode);
                         // FIXME - force a redisplay
                     } else {
@@ -220,62 +224,51 @@ public final class SaveJDBCRealmAction extends Action {
 
         // Perform attribute updates as requested
         String attribute = null;
+        String value = null;
+
         try {
 
             ObjectName roname = new ObjectName(rObjectName);
 
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(rform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(roname,
-                                  new Attribute("debug", new Integer(debug)));
-
             attribute = "digest";
-            String digest = rform.getDigest();
-            if ((digest != null) && (digest.length()>0)) {
-                mBServer.setAttribute(roname,
-                                  new Attribute("digest",  digest));
-            }                               
+            value = rform.getDigest();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "driverName";
-            mBServer.setAttribute(roname,
-                                  new Attribute("driverName",  rform.getDriver()));
+            value = rform.getDriver();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "roleNameCol";
-            mBServer.setAttribute(roname,
-                                  new Attribute("roleNameCol",  rform.getRoleNameCol()));
+            value = rform.getRoleNameCol();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "userNameCol";
-            mBServer.setAttribute(roname,
-                                  new Attribute("userNameCol",  rform.getUserNameCol()));
+            value = rform.getUserNameCol();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "userCredCol";
-            mBServer.setAttribute(roname,
-                                  new Attribute("userCredCol",  rform.getPasswordCol()));
+            value = rform.getPasswordCol();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "userTable";
-            mBServer.setAttribute(roname,
-                                  new Attribute("userTable",  rform.getUserTable()));
+            value = rform.getUserTable();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "userRoleTable";
-            mBServer.setAttribute(roname,
-                                  new Attribute("userRoleTable",  rform.getRoleTable()));
+            value = rform.getRoleTable();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "connectionName";
-            mBServer.setAttribute(roname,
-                                  new Attribute("connectionName",  rform.getConnectionName()));
+            value = rform.getConnectionName();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "connectionURL";
-            mBServer.setAttribute(roname,
-                                  new Attribute("connectionURL",  rform.getConnectionURL()));
+            value = rform.getConnectionURL();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
             attribute = "connectionPassword";
-            mBServer.setAttribute(roname,
-                                  new Attribute("connectionPassword",  rform.getConnectionPassword()));
+            value = rform.getConnectionPassword();
+            setAttributeIfPresent(mBServer, roname, attribute, value);
 
         } catch (Exception e) {
 
@@ -293,6 +286,30 @@ public final class SaveJDBCRealmAction extends Action {
         session.removeAttribute(mapping.getAttribute());
         return (mapping.findForward("Save Successful"));
         
+    }
+
+    /**
+     * Sets the given attribute to the given value
+     * in the given server's object name, if the value
+     * is not null or empty.
+     *
+     * @param theServer The server
+     * @param roname The object name
+     * @param attribute The attribute name
+     * @param value The attribute value
+     * @throws JMException If a JMX error occurs
+     */
+    protected void setAttributeIfPresent(MBeanServer mBServer, ObjectName roname, String attribute, String value)
+        throws JMException {
+
+        if((mBServer == null) || (roname == null) || (attribute == null)) {
+            throw new IllegalArgumentException("MBeanServer, ObjectName, attribute required.");
+        }
+
+        if((value != null) && (value.trim().length() > 0)) {
+            mBServer.setAttribute(roname,
+                                  new Attribute(attribute,  value));
+        }
     }
     
 }

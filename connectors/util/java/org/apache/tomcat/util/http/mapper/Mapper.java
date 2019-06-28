@@ -154,7 +154,7 @@ public final class Mapper {
         Host newHost = new Host();
         newHost.name = alias;
         newHost.contextList = realHost.contextList;
-        newHost.object = realHost;
+        newHost.object = realHost.object;
         if (insertMap(hosts, newHosts, newHost)) {
             hosts = newHosts;
         }
@@ -730,7 +730,7 @@ public final class Mapper {
         if(mappingData.wrapper == null && noServletPath) {
             // The path is empty, redirect to "/"
             mappingData.redirectPath.setChars
-                (path.getBuffer(), pathOffset, pathEnd);
+                (path.getBuffer(), pathOffset, pathEnd-pathOffset);
             path.setEnd(pathEnd - 1);
             return;
         }

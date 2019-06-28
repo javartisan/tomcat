@@ -25,15 +25,17 @@ import org.apache.struts.action.ActionMapping;
  * Form bean for the Request Dumper valve page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RequestDumperValveForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class RequestDumperValveForm extends ValveForm {
-    
+        
     // ----------------------------------------------------- Instance Variables
 
+    
     // ------------------------------------------------------------- Properties
-
+    
+        
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -43,10 +45,10 @@ public final class RequestDumperValveForm extends ValveForm {
      * @param request The servlet request we are processing
      */
     public void reset(ActionMapping mapping, HttpServletRequest request) {
-        
+    
         super.reset(mapping, request);
-        
     }
+    
     
     /**
      * Render this object as a String.

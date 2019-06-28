@@ -25,8 +25,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -43,25 +41,19 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Edit Host</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditHostAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class EditHostAction extends Action {
-    
+
     /**
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
 
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-    
 
     // --------------------------------------------------------- Public Methods
-    
+
     /**
      * Process the specified HTTP request, and create the corresponding HTTP
      * response (or forward to another web component that will create it).
@@ -82,14 +74,12 @@ public class EditHostAction extends Action {
                                  HttpServletRequest request,
                                  HttpServletResponse response)
         throws IOException, ServletException {
-        
+
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
+
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
             mBServer = ((ApplicationServlet) getServlet()).getServer();
@@ -97,23 +87,7 @@ public class EditHostAction extends Action {
             throw new ServletException
             ("Cannot acquire MBeanServer reference", t);
         }
-        
-        String adminHost = null;
-        // Get the host name the admin app runs on
-        // this host cannot be deleted from the admin tool
-        try {
-            adminHost = Lists.getAdminAppHost(
-                                  mBServer, "Catalina" ,request);
-        } catch (Exception e) {
-            String message =
-                resources.getMessage("error.hostName.bad",
-                                        adminHost);
-            getServlet().log(message);
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
-            return (null);
-        }
-        request.setAttribute("adminAppHost", adminHost);
-                
+
         // Set up the object names of the MBeans we are manipulating
         ObjectName hname = null;
         StringBuffer sb = null;
@@ -121,25 +95,43 @@ public class EditHostAction extends Action {
             hname = new ObjectName(request.getParameter("select"));
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.hostName.bad",
+                resources.getMessage(locale, "error.hostName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
             return (null);
         }
         
+        String adminHost = null;
+        String domain = hname.getDomain();
+        // Get the host name the admin app runs on
+        // this host cannot be deleted from the admin tool
+        try {
+            adminHost = Lists.getAdminAppHost(
+                                  mBServer, domain ,request);
+        } catch (Exception e) {
+            String message =
+                resources.getMessage(locale, "error.hostName.bad",
+                                        adminHost);
+            getServlet().log(message);
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
+            return (null);
+        }
+        request.setAttribute("adminAppHost", adminHost);
+
         // Fill in the form values for display and editing
         HostForm hostFm = new HostForm();
         session.setAttribute("hostForm", hostFm);
         hostFm.setAdminAction("Edit");
         hostFm.setObjectName(hname.toString());
-        sb = new StringBuffer("Host (");
+        sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.host"));
+        sb.append(" (");
         sb.append(hname.getKeyProperty("host"));
         sb.append(")");
         hostFm.setNodeLabel(sb.toString());
-        hostFm.setDebugLvlVals(Lists.getDebugLevels());
         hostFm.setBooleanVals(Lists.getBooleanValues());
-        
+
         String attribute = null;
         try {
 
@@ -147,9 +139,7 @@ public class EditHostAction extends Action {
             attribute = "name";
             hostFm.setHostName
                 ((String) mBServer.getAttribute(hname, attribute));
-            attribute = "debug";
-            hostFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(hname, attribute)).toString());
+
             attribute = "appBase";
             hostFm.setAppBase
                 ((String) mBServer.getAttribute(hname, attribute));
@@ -159,11 +149,17 @@ public class EditHostAction extends Action {
             attribute = "deployXML";
             hostFm.setDeployXML
                 (((Boolean) mBServer.getAttribute(hname, attribute)).toString());
-            attribute = "liveDeploy";
-            hostFm.setLiveDeploy
-                (((Boolean) mBServer.getAttribute(hname, attribute)).toString());
+            attribute = "deployOnStartup";
+            hostFm.setDeployOnStartup
+                (((Boolean) mBServer.getAttribute(hname, attribute)).toString());                
             attribute = "unpackWARs";
             hostFm.setUnpackWARs
+                (((Boolean) mBServer.getAttribute(hname, attribute)).toString());
+            attribute = "xmlNamespaceAware";
+            hostFm.setXmlNamespaceAware
+                (((Boolean) mBServer.getAttribute(hname, attribute)).toString());
+            attribute = "xmlValidation";
+            hostFm.setXmlValidation
                 (((Boolean) mBServer.getAttribute(hname, attribute)).toString());
 
         } catch (Throwable t) {
@@ -181,9 +177,9 @@ public class EditHostAction extends Action {
         String operation = null;
         try {
             operation = "findAliases";
-            String aliases[] = 
+            String aliases[] =
                 (String[]) mBServer.invoke(hname, operation, null, null);
-            
+
             hostFm.setAliasVals(new ArrayList(Arrays.asList(aliases)));
 
         } catch (Throwable t) {
@@ -194,11 +190,11 @@ public class EditHostAction extends Action {
                 (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
                 resources.getMessage(locale, "users.error.invoke",
                                      operation));
-            return (null);            
+            return (null);
         }
-                
+
         // Forward to the host display page
         return (mapping.findForward("Host"));
-        
+
     }
 }

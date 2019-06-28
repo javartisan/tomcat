@@ -25,7 +25,7 @@ public class Constants {
 
     // Authentication methods for login configuration
     public static final String BASIC_METHOD = "BASIC";
-    public static final String CERT_METHOD = "CLIENT-CERT";
+    public static final String CERT_METHOD = "CLIENT_CERT";
     public static final String DIGEST_METHOD = "DIGEST";
     public static final String FORM_METHOD = "FORM";
 
@@ -40,7 +40,10 @@ public class Constants {
     public static final String FORM_USERNAME = "j_username";
 
     // Cookie name for single sign on support
-    public static final String SINGLE_SIGN_ON_COOKIE = "JSESSIONIDSSO";
+    public static final String SINGLE_SIGN_ON_COOKIE =
+        System.getProperty(
+                "org.apache.catalina.authenticator.Constants.SSO_SESSION_COOKIE_NAME",
+                "JSESSIONIDSSO");
 
 
     // --------------------------------------------------------- Request Notes
@@ -54,10 +57,10 @@ public class Constants {
      * also call several existing methods on Request to determine whether
      * or not any user has been authenticated:</p>
      * <ul>
-     * <li><strong>((HttpServletRequest) getRequest()).getAuthType()</strong>
-     *     will return BASIC, CLIENT-CERT, DIGEST, FORM, or <code>null</code>
+     * <li><strong>request.getAuthType()</strong>
+     *     will return BASIC, CLIENT_CERT, DIGEST, FORM, or <code>null</code>
      *     if there is no authenticated user.</li>
-     * <li><strong>((HttpServletRequest) getRequest()).getUserPrincipal()</strong>
+     * <li><strong>request.getUserPrincipal()</strong>
      *     will return the authenticated <code>Principal</code> returned by the
      *     <code>Realm</code> that authenticated this user.</li>
      * </ul>

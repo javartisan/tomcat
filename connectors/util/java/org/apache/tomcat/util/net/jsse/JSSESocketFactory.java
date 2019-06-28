@@ -26,9 +26,13 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.security.KeyManagementException;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Vector;
 
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
@@ -75,7 +79,32 @@ public abstract class JSSESocketFactory
     protected String clientAuth = "false";
     protected SSLServerSocketFactory sslProxy = null;
     protected String[] enabledCiphers;
-   
+    protected boolean allowUnsafeLegacyRenegotiation = false;
+
+    protected static final boolean RFC_5746_SUPPORTED;
+
+    static {
+        boolean result = false;
+        SSLContext context;
+        try {
+            context = SSLContext.getInstance("TLS");
+            context.init(null, null, new SecureRandom());
+            SSLServerSocketFactory ssf = context.getServerSocketFactory();
+            String ciphers[] = ssf.getSupportedCipherSuites();
+            for (int i = 0; i < ciphers.length; i++) {
+                String cipher = ciphers[i];
+                if ("TLS_EMPTY_RENEGOTIATION_INFO_SCSV".equals(cipher)) {
+                    result = true;
+                    break;
+                }
+            }
+        } catch (NoSuchAlgorithmException e) {
+            // Assume no RFC 5746 support
+        } catch (KeyManagementException e) {
+            // Assume no RFC 5746 support
+        }
+        RFC_5746_SUPPORTED = result;
+    }
 
     public JSSESocketFactory () {
     }
@@ -122,8 +151,14 @@ public abstract class JSSESocketFactory
         return asock;
     }
 
+    
     public void handshake(Socket sock) throws IOException {
         ((SSLSocket)sock).startHandshake();
+        
+        if (!allowUnsafeLegacyRenegotiation && !RFC_5746_SUPPORTED) {
+            // Prevent futher handshakes by removing all cipher suites
+            ((SSLSocket) sock).setEnabledCipherSuites(new String[0]);
+        }
     }
 
     /*
@@ -371,7 +406,6 @@ public abstract class JSSESocketFactory
         String requestedProtocols = (String) attributes.get("protocols");
         setEnabledProtocols(socket, getEnabledProtocols(socket, 
                                                          requestedProtocols));
-
         // we don't know if client auth is needed -
         // after parsing the request we may re-handshake
         configureClientAuth(socket);
@@ -384,10 +418,21 @@ public abstract class JSSESocketFactory
      */
     protected void checkConfig() throws IOException {
         // Create an unbound server socket
-        ServerSocket socket =
-            JdkCompat.getJdkCompat().getUnboundSocket(sslProxy);
+        ServerSocket socket;
+        try {
+            socket = JdkCompat.getJdkCompat().getUnboundSocket(sslProxy);
+        } catch (IOException ex) {
+            // Bug 50744 - some old JDKs do not implement unbound sockets
+            if (log.isDebugEnabled()) {
+                log.debug(sm.getString("jsse.ssl_conf_unbound_socket"), ex);
+            }
+            return;
+        }
         if (socket == null) {
-            // Can create unbound sockets (1.3 JVM) - can't test the connection
+            // Can't create unbound sockets (1.3 JVM) - can't test the connection
+            if (log.isDebugEnabled()) {
+                log.debug(sm.getString("jsse.ssl_conf_unbound_socket"));
+            }
             return;
         }
         initServerSocket(socket);

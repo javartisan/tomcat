@@ -26,7 +26,7 @@ import org.apache.struts.action.ActionMapping;
  * Form bean for the delete env entries page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: UserDatabasesForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -52,7 +52,25 @@ public final class UserDatabasesForm extends BaseForm {
         this.userDatabases = userDatabases;
     }
 
+    /**
+     * The domain of this userdatabase.
+     */
+    private String domain = null;
+    
+    /**
+     * Return the domain of the userdatabase this bean refers to.
+     */
+    public String getDomain() {
+        return this.domain;
+    }
 
+    /**
+     * Set the domain of the userdatabase this bean refers to.
+     */
+    public void setDomain(String domain) {
+        this.domain = domain;
+    }
+    
     // --------------------------------------------------------- Public Methods
 
 

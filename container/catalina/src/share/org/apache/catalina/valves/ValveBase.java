@@ -20,14 +20,27 @@ package org.apache.catalina.valves;
 
 
 import java.io.IOException;
+
+import javax.management.MBeanRegistration;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
 import javax.servlet.ServletException;
+
 import org.apache.catalina.Contained;
 import org.apache.catalina.Container;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
+import org.apache.catalina.Context;
+import org.apache.catalina.Engine;
+import org.apache.catalina.Host;
+import org.apache.catalina.Pipeline;
 import org.apache.catalina.Valve;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.Wrapper;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+import org.apache.catalina.core.ContainerBase;
 import org.apache.catalina.util.StringManager;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 
 /**
@@ -38,12 +51,12 @@ import org.apache.catalina.util.StringManager;
  * management and lifecycle support.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ValveBase.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public abstract class ValveBase
-    implements Contained, Valve {
-
+    implements Contained, Valve, MBeanRegistration {
+    private static Log log = LogFactory.getLog(ValveBase.class);
 
     //------------------------------------------------------ Instance Variables
 
@@ -55,9 +68,9 @@ public abstract class ValveBase
 
 
     /**
-     * The debugging detail level for this component.
+     * Container log
      */
-    protected int debug = 0;
+    protected Log containerLog = null;
 
 
     /**
@@ -66,6 +79,12 @@ public abstract class ValveBase
      */
     protected static String info =
         "org.apache.catalina.core.ValveBase/1.0";
+
+
+    /**
+     * The next Valve in the pipeline this Valve is a component of.
+     */
+    protected Valve next = null;
 
 
     /**
@@ -100,28 +119,6 @@ public abstract class ValveBase
     }
 
 
-   /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-
-        return (this.debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-
-        this.debug = debug;
-
-    }
-
-
     /**
      * Return descriptive information about this Valve implementation.
      */
@@ -132,7 +129,39 @@ public abstract class ValveBase
     }
 
 
+    /**
+     * Return the next Valve in this pipeline, or <code>null</code> if this
+     * is the last Valve in the pipeline.
+     */
+    public Valve getNext() {
+
+        return (next);
+
+    }
+
+
+    /**
+     * Set the Valve that follows this one in the pipeline it is part of.
+     *
+     * @param valve The new next valve
+     */
+    public void setNext(Valve valve) {
+
+        this.next = valve;
+
+    }
+
+
     //---------------------------------------------------------- Public Methods
+
+
+    /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess() {
+    }
 
 
     /**
@@ -143,15 +172,150 @@ public abstract class ValveBase
      *
      * @param request The servlet request to be processed
      * @param response The servlet response to be created
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if a servlet error occurs
      */
-    public abstract void invoke(Request request, Response response,
-                                ValveContext context)
+    public abstract void invoke(Request request, Response response)
         throws IOException, ServletException;
 
 
+    /**
+     * Return a String rendering of this object.
+     */
+    public String toString() {
+        StringBuffer sb = new StringBuffer(this.getClass().getName());
+        sb.append("[");
+        if (container != null)
+            sb.append(container.getName());
+        sb.append("]");
+        return (sb.toString());
+    }
+
+
+    // -------------------- JMX and Registration  --------------------
+    protected String domain;
+    protected ObjectName oname;
+    protected MBeanServer mserver;
+    protected ObjectName controller;
+
+    public ObjectName getObjectName() {
+        return oname;
+    }
+
+    public void setObjectName(ObjectName oname) {
+        this.oname = oname;
+    }
+
+    public String getDomain() {
+        return domain;
+    }
+
+    public ObjectName preRegister(MBeanServer server,
+                                  ObjectName name) throws Exception {
+        oname=name;
+        mserver=server;
+        domain=name.getDomain();
+
+
+        return name;
+    }
+
+    public void postRegister(Boolean registrationDone) {
+    }
+
+    public void preDeregister() throws Exception {
+    }
+
+    public void postDeregister() {
+    }
+
+    public ObjectName getController() {
+        return controller;
+    }
+
+    public void setController(ObjectName controller) {
+        this.controller = controller;
+    }
+
+    /** From the name, extract the parent object name
+     *
+     * @param valveName The valve name
+     * @return ObjectName The parent name
+     */
+    public ObjectName getParentName( ObjectName valveName ) {
+
+        return null;
+    }
+
+    public ObjectName createObjectName(String domain, ObjectName parent)
+            throws MalformedObjectNameException
+    {
+        Container container=this.getContainer();
+        if( container == null || ! (container instanceof ContainerBase) )
+            return null;
+        this.containerLog = container.getLogger();
+        ContainerBase containerBase=(ContainerBase)container;
+        Pipeline pipe=containerBase.getPipeline();
+        Valve valves[]=pipe.getValves();
+
+        /* Compute the "parent name" part */
+        String parentName="";
+        if (container instanceof Engine) {
+        } else if (container instanceof Host) {
+            parentName=",host=" +container.getName();
+        } else if (container instanceof Context) {
+                    String path = ((Context)container).getPath();
+                    if (path.length() < 1) {
+                        path = "/";
+                    }
+                    Host host = (Host) container.getParent();
+                    parentName=",path=" + path + ",host=" +
+                            host.getName();
+        } else if (container instanceof Wrapper) {
+            Context ctx = (Context) container.getParent();
+            String path = ctx.getPath();
+            if (path.length() < 1) {
+                path = "/";
+            }
+            Host host = (Host) ctx.getParent();
+            parentName=",servlet=" + container.getName() +
+                    ",path=" + path + ",host=" + host.getName();
+        }
+        log.debug("valve parent=" + parentName + " " + parent);
+
+        String className=this.getClass().getName();
+        int period = className.lastIndexOf('.');
+        if (period >= 0)
+            className = className.substring(period + 1);
+
+        int seq=0;
+        for( int i=0; i<valves.length; i++ ) {
+            // Find other valves with the same name
+            if (valves[i] == this) {
+                break;
+            }
+            if( valves[i]!=null &&
+                    valves[i].getClass() == this.getClass() ) {
+                log.debug("Duplicate " + valves[i] + " " + this + " " + container);
+                seq++;
+            }
+        }
+        String ext="";
+        if( seq > 0 ) {
+            ext=",seq=" + seq;
+        }
+
+        ObjectName objectName = 
+            new ObjectName( domain + ":type=Valve,name=" + className + ext + parentName);
+        log.debug("valve objectname = "+objectName);
+        return objectName;
+    }
+
+    // -------------------- JMX data  --------------------
+
+    public ObjectName getContainerName() {
+        if( container== null) return null;
+        return ((ContainerBase)container).getJmxName();
+    }
 }

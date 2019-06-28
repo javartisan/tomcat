@@ -466,7 +466,7 @@ import java.util.*;
  *  </TR>
  * </TABLE>
  *
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MIME2Java.java 939526 2010-04-30 00:39:28Z kkolinko $
  * @author TAMURA Kent &lt;kent@trl.ibm.co.jp&gt;
  */
 public class MIME2Java {

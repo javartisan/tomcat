@@ -18,40 +18,44 @@
 
 package org.apache.naming.resources;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Hashtable;
-import java.util.Vector;
 import java.util.Date;
 import java.util.Enumeration;
-import java.io.File;
-import java.io.InputStream;
-import java.io.IOException;
+import java.util.Hashtable;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
+
+import javax.naming.CompositeName;
 import javax.naming.Name;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
-import javax.naming.CompositeName;
 import javax.naming.OperationNotSupportedException;
-import javax.naming.directory.DirContext;
 import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
 import javax.naming.directory.ModificationItem;
 import javax.naming.directory.SearchControls;
-import org.apache.naming.NamingEntry;
+
 import org.apache.naming.NamingContextBindingsEnumeration;
 import org.apache.naming.NamingContextEnumeration;
+import org.apache.naming.NamingEntry;
 
 /**
  * WAR Directory Context implementation.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: WARDirContext.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class WARDirContext extends BaseDirContext {
 
-
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( WARDirContext.class );
+    
     // ----------------------------------------------------------- Constructors
 
 
@@ -151,9 +155,8 @@ public class WARDirContext extends BaseDirContext {
             try {
                 base.close();
             } catch (IOException e) {
-                System.out.println
-                    ("Exception closing WAR File " + base.getName());
-                e.printStackTrace(System.out);
+                log.warn
+                    ("Exception closing WAR File " + base.getName(), e);
             }
         }
         base = null;
@@ -276,12 +279,12 @@ public class WARDirContext extends BaseDirContext {
     public NamingEnumeration list(Name name)
         throws NamingException {
         if (name.isEmpty())
-            return new NamingContextEnumeration(list(entries));
+            return new NamingContextEnumeration(list(entries).iterator());
         Entry entry = treeLookup(name);
         if (entry == null)
             throw new NamingException
                 (sm.getString("resources.notFound", name));
-        return new NamingContextEnumeration(list(entry));
+        return new NamingContextEnumeration(list(entry).iterator());
     }
 
 
@@ -320,12 +323,14 @@ public class WARDirContext extends BaseDirContext {
     public NamingEnumeration listBindings(Name name)
         throws NamingException {
         if (name.isEmpty())
-            return new NamingContextBindingsEnumeration(list(entries), this);
+            return new NamingContextBindingsEnumeration(list(entries).iterator(),
+                    this);
         Entry entry = treeLookup(name);
         if (entry == null)
             throw new NamingException
                 (sm.getString("resources.notFound", name));
-        return new NamingContextBindingsEnumeration(list(entry), this);
+        return new NamingContextBindingsEnumeration(list(entry).iterator(),
+                this);
     }
 
 
@@ -796,9 +801,9 @@ public class WARDirContext extends BaseDirContext {
     /**
      * List children as objects.
      */
-    protected Vector list(Entry entry) {
+    protected ArrayList list(Entry entry) {
         
-        Vector entries = new Vector();
+        ArrayList entries = new ArrayList();
         Entry[] children = entry.getChildren();
         Arrays.sort(children);
         NamingEntry namingEntry = null;
@@ -813,7 +818,7 @@ public class WARDirContext extends BaseDirContext {
             }
             namingEntry = new NamingEntry
                 (children[i].getName(), object, NamingEntry.ENTRY);
-            entries.addElement(namingEntry);
+            entries.add(namingEntry);
         }
         
         return entries;
@@ -933,7 +938,9 @@ public class WARDirContext extends BaseDirContext {
             throws IOException {
             try {
                 if (binaryContent == null) {
-                    inputStream = base.getInputStream(entry);
+                    InputStream is = base.getInputStream(entry);
+                    inputStream = is;
+                    return is;
                 }
             } catch (ZipException e) {
                 throw new IOException(e.getMessage());

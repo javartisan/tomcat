@@ -23,7 +23,7 @@ import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
@@ -35,7 +35,7 @@ import java.util.NoSuchElementException;
  * Constructors are provided to easliy create such wrappers.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Enumerator.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public final class Enumerator implements Enumeration {
@@ -96,8 +96,8 @@ public final class Enumerator implements Enumeration {
         if (!clone) {
             this.iterator = iterator;
         } else {
-            List list = new LinkedList();
-            while(iterator.hasNext()) {
+            List list = new ArrayList();
+            while (iterator.hasNext()) {
                 list.add(iterator.next());
             }
             this.iterator = list.iterator();   

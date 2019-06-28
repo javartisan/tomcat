@@ -21,23 +21,39 @@ package org.apache.catalina.realm;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
-import java.security.Principal;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.Principal;
 import java.security.cert.X509Certificate;
-import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
+
+import javax.management.Attribute;
+import javax.management.MBeanRegistration;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import javax.servlet.http.HttpServletResponse;
 
 import org.apache.catalina.Container;
+import org.apache.catalina.Context;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Logger;
 import org.apache.catalina.Realm;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+import org.apache.catalina.core.ContainerBase;
+import org.apache.catalina.deploy.LoginConfig;
+import org.apache.catalina.deploy.SecurityConstraint;
+import org.apache.catalina.deploy.SecurityCollection;
 import org.apache.catalina.util.HexUtils;
 import org.apache.catalina.util.LifecycleSupport;
-import org.apache.catalina.util.StringManager;
 import org.apache.catalina.util.MD5Encoder;
-
+import org.apache.catalina.util.StringManager;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.modeler.Registry;
 
 /**
  * Simple implementation of <b>Realm</b> that reads an XML file to configure
@@ -45,12 +61,13 @@ import org.apache.catalina.util.MD5Encoder;
  * location) are identical to those currently supported by Tomcat 3.X.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RealmBase.java 1392252 2012-10-01 09:35:59Z markt $
  */
 
 public abstract class RealmBase
-    implements Lifecycle, Realm {
+    implements Lifecycle, Realm, MBeanRegistration {
 
+    private static Log log = LogFactory.getLog(RealmBase.class);
 
     // ----------------------------------------------------- Instance Variables
 
@@ -62,9 +79,9 @@ public abstract class RealmBase
 
 
     /**
-     * The debugging detail level for this component.
+     * Container log
      */
-    protected int debug = 0;
+    protected Log containerLog = null;
 
 
     /**
@@ -136,6 +153,12 @@ public abstract class RealmBase
      */
     protected boolean validate = true;
 
+    
+    /**
+     * The all role mode.
+     */
+    protected AllRolesMode allRolesMode = AllRolesMode.STRICT_MODE;
+    
 
     // ------------------------------------------------------------- Properties
 
@@ -164,26 +187,23 @@ public abstract class RealmBase
     }
 
     /**
-     * Return the debugging detail level for this component.
+     * Return the all roles mode.
      */
-    public int getDebug() {
+    public String getAllRolesMode() {
 
-        return (this.debug);
+        return allRolesMode.toString();
 
     }
 
 
     /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
+     * Set the all roles mode.
      */
-    public void setDebug(int debug) {
+    public void setAllRolesMode(String allRolesMode) {
 
-        this.debug = debug;
+        this.allRolesMode = AllRolesMode.toMode(allRolesMode);
 
     }
-
 
     /**
      * Return the digest algorithm  used for storing credentials.
@@ -205,7 +225,6 @@ public abstract class RealmBase
         this.digest = digest;
 
     }
-
 
     /**
      * Returns the digest encoding charset.
@@ -262,6 +281,7 @@ public abstract class RealmBase
     // --------------------------------------------------------- Public Methods
 
 
+    
     /**
      * Add a property change listener to this component.
      *
@@ -286,7 +306,7 @@ public abstract class RealmBase
 
         String serverCredentials = getPassword(username);
 
-        boolean validated;
+        boolean validated ;
         if ( serverCredentials == null ) {
             validated = false;
         } else if(hasMessageDigest()) {
@@ -294,13 +314,19 @@ public abstract class RealmBase
         } else {
             validated = serverCredentials.equals(credentials);
         }
-
         if(! validated ) {
+            if (containerLog.isTraceEnabled()) {
+                containerLog.trace(sm.getString("realmBase.authenticateFailure",
+                                                username));
+            }
             return null;
+        }
+        if (containerLog.isTraceEnabled()) {
+            containerLog.trace(sm.getString("realmBase.authenticateSuccess",
+                                            username));
         }
 
         return getPrincipal(username);
-
     }
 
 
@@ -322,41 +348,31 @@ public abstract class RealmBase
     /**
      * Return the Principal associated with the specified username, which
      * matches the digest calculated using the given parameters using the
-     * method described in RFC 2617; otherwise return <code>null</code>.
+     * method described in RFC 2069; otherwise return <code>null</code>.
      *
      * @param username Username of the Principal to look up
      * @param clientDigest Digest which has been submitted by the client
-     * @param nOnce Unique (or supposedly unique) token which has been used
+     * @param nonce Unique (or supposedly unique) token which has been used
      * for this request
      * @param realm Realm name
      * @param md5a2 Second MD5 digest used to calculate the digest :
      * MD5(Method + ":" + uri)
      */
     public Principal authenticate(String username, String clientDigest,
-                                  String nOnce, String nc, String cnonce,
+                                  String nonce, String nc, String cnonce,
                                   String qop, String realm,
                                   String md5a2) {
-
-        /*
-          System.out.println("Digest : " + clientDigest);
-
-          System.out.println("************ Digest info");
-          System.out.println("Username:" + username);
-          System.out.println("ClientSigest:" + clientDigest);
-          System.out.println("nOnce:" + nOnce);
-          System.out.println("nc:" + nc);
-          System.out.println("cnonce:" + cnonce);
-          System.out.println("qop:" + qop);
-          System.out.println("realm:" + realm);
-          System.out.println("md5a2:" + md5a2);
-        */
-
 
         String md5a1 = getDigest(username, realm);
         if (md5a1 == null)
             return null;
-        String serverDigestValue = md5a1 + ":" + nOnce + ":" + nc + ":"
-            + cnonce + ":" + qop + ":" + md5a2;
+        String serverDigestValue;
+        if (qop == null) {
+            serverDigestValue = md5a1 + ":" + nonce + ":" + md5a2;
+        } else {
+            serverDigestValue = md5a1 + ":" + nonce + ":" + nc + ":" +
+                    cnonce + ":" + qop + ":" + md5a2;
+        }
 
         byte[] valueBytes = null;
         if(getDigestEncoding() == null) {
@@ -365,16 +381,25 @@ public abstract class RealmBase
             try {
                 valueBytes = serverDigestValue.getBytes(getDigestEncoding());
             } catch (UnsupportedEncodingException uee) {
-                log("Illegal digestEncoding: " + getDigestEncoding(), uee);
+                log.error("Illegal digestEncoding: " + getDigestEncoding(), uee);
                 throw new IllegalArgumentException(uee.getMessage());
             }
         }
 
-        String serverDigest =
-            md5Encoder.encode(md5Helper.digest(valueBytes));
+        String serverDigest = null;
+        // Bugzilla 32137
+        synchronized(md5Helper) {
+            serverDigest = md5Encoder.encode(md5Helper.digest(valueBytes));
+        }
 
-        //System.out.println("Server digest : " + serverDigest);
-
+        if (log.isDebugEnabled()) {
+            log.debug("Digest : " + clientDigest + " Username:" + username 
+                    + " ClientSigest:" + clientDigest + " nonce:" + nonce 
+                    + " nc:" + nc + " cnonce:" + cnonce + " qop:" + qop 
+                    + " realm:" + realm + "md5a2:" + md5a2 
+                    + " Server digest:" + serverDigest);
+        }
+        
         if (serverDigest.equals(clientDigest))
             return getPrincipal(username);
         else
@@ -396,18 +421,18 @@ public abstract class RealmBase
             return (null);
 
         // Check the validity of each certificate in the chain
-        if (debug >= 1)
-            log("Authenticating client certificate chain");
+        if (log.isDebugEnabled())
+            log.debug("Authenticating client certificate chain");
         if (validate) {
             for (int i = 0; i < certs.length; i++) {
-                if (debug >= 2)
-                    log(" Checking validity for '" +
+                if (log.isDebugEnabled())
+                    log.debug(" Checking validity for '" +
                         certs[i].getSubjectDN().getName() + "'");
                 try {
                     certs[i].checkValidity();
                 } catch (Exception e) {
-                    if (debug >= 2)
-                        log("  Validity exception", e);
+                    if (log.isDebugEnabled())
+                        log.debug("  Validity exception", e);
                     return (null);
                 }
             }
@@ -418,7 +443,382 @@ public abstract class RealmBase
 
     }
 
+    
+    /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess() {
+    }
 
+
+    /**
+     * Return the SecurityConstraints configured to guard the request URI for
+     * this request, or <code>null</code> if there is no such constraint.
+     *
+     * @param request Request we are processing
+     * @param context Context the Request is mapped to
+     */
+    public SecurityConstraint [] findSecurityConstraints(Request request,
+                                                         Context context) {
+
+        ArrayList results = null;
+        // Are there any defined security constraints?
+        SecurityConstraint constraints[] = context.findConstraints();
+        if ((constraints == null) || (constraints.length == 0)) {
+            if (log.isDebugEnabled())
+                log.debug("  No applicable constraints defined");
+            return (null);
+        }
+
+        // Check each defined security constraint
+        String uri = request.getRequestPathMB().toString();
+        
+        String method = request.getMethod();
+        int i;
+        boolean found = false;
+        for (i = 0; i < constraints.length; i++) {
+            SecurityCollection [] collection = constraints[i].findCollections();
+                     
+            // If collection is null, continue to avoid an NPE
+            // See Bugzilla 30624
+            if ( collection == null) {
+		continue;
+            }
+
+            if (log.isDebugEnabled()) {
+                log.debug("  Checking constraint '" + constraints[i] +
+                    "' against " + method + " " + uri + " --> " +
+                    constraints[i].included(uri, method));
+	    }
+
+            for(int j=0; j < collection.length; j++){
+                String [] patterns = collection[j].findPatterns();
+ 
+                // If patterns is null, continue to avoid an NPE
+                // See Bugzilla 30624
+                if ( patterns == null) {
+		    continue;
+                }
+
+                for(int k=0; k < patterns.length; k++) {
+                    if(uri.equals(patterns[k])) {
+                        found = true;
+                        if(collection[j].findMethod(method)) {
+                            if(results == null) {
+                                results = new ArrayList();
+                            }
+                            results.add(constraints[i]);
+                        }
+                    }
+                }
+            }
+        }
+
+        if(found) {
+            return resultsToArray(results);
+        }
+
+        int longest = -1;
+
+        for (i = 0; i < constraints.length; i++) {
+            SecurityCollection [] collection = constraints[i].findCollections();
+            
+            // If collection is null, continue to avoid an NPE
+            // See Bugzilla 30624
+            if ( collection == null) {
+		continue;
+            }
+
+            if (log.isDebugEnabled()) {
+                log.debug("  Checking constraint '" + constraints[i] +
+                    "' against " + method + " " + uri + " --> " +
+                    constraints[i].included(uri, method));
+	    }
+
+            for(int j=0; j < collection.length; j++){
+                String [] patterns = collection[j].findPatterns();
+
+                // If patterns is null, continue to avoid an NPE
+                // See Bugzilla 30624
+                if ( patterns == null) {
+		    continue;
+                }
+
+                boolean matched = false;
+                int length = -1;
+                for(int k=0; k < patterns.length; k++) {
+                    String pattern = patterns[k];
+                    if(pattern.startsWith("/") && pattern.endsWith("/*") && 
+                       pattern.length() >= longest) {
+                            
+                        if(pattern.length() == 2) {
+                            matched = true;
+                            length = pattern.length();
+                        } else if(pattern.regionMatches(0,uri,0,
+                                                        pattern.length()-1) ||
+                                  (pattern.length()-2 == uri.length() &&
+                                   pattern.regionMatches(0,uri,0,
+                                                        pattern.length()-2))) {
+                            matched = true;
+                            length = pattern.length();
+                        }
+                    }
+                }
+                if(matched) {
+                    found = true;
+                    if(length > longest) {
+                        if(results != null) {
+                            results.clear();
+                        }
+                        longest = length;
+                    }
+                    if(collection[j].findMethod(method)) {
+                        if(results == null) {
+                            results = new ArrayList();
+                        }
+                        results.add(constraints[i]);
+                    }
+                }
+            }
+        }
+
+        if(found) {
+            return  resultsToArray(results);
+        }
+
+        for (i = 0; i < constraints.length; i++) {
+            SecurityCollection [] collection = constraints[i].findCollections();
+
+            // If collection is null, continue to avoid an NPE
+            // See Bugzilla 30624
+            if ( collection == null) {
+		continue;
+            }
+            
+            if (log.isDebugEnabled()) {
+                log.debug("  Checking constraint '" + constraints[i] +
+                    "' against " + method + " " + uri + " --> " +
+                    constraints[i].included(uri, method));
+	    }
+
+            boolean matched = false;
+            int pos = -1;
+            for(int j=0; j < collection.length; j++){
+                String [] patterns = collection[j].findPatterns();
+
+                // If patterns is null, continue to avoid an NPE
+                // See Bugzilla 30624
+                if ( patterns == null) {
+		    continue;
+                }
+
+                for(int k=0; k < patterns.length && !matched; k++) {
+                    String pattern = patterns[k];
+                    if(pattern.startsWith("*.")){
+                        int slash = uri.lastIndexOf("/");
+                        int dot = uri.lastIndexOf(".");
+                        if(slash >= 0 && dot > slash &&
+                           dot != uri.length()-1 &&
+                           uri.length()-dot == pattern.length()-1) {
+                            if(pattern.regionMatches(1,uri,dot,uri.length()-dot)) {
+                                matched = true;
+                                pos = j;
+                            }
+                        }
+                    }
+                }
+            }
+            if(matched) {
+                found = true;
+                if(collection[pos].findMethod(method)) {
+                    if(results == null) {
+                        results = new ArrayList();
+                    }
+                    results.add(constraints[i]);
+                }
+            }
+        }
+
+        if(found) {
+            return resultsToArray(results);
+        }
+
+        for (i = 0; i < constraints.length; i++) {
+            SecurityCollection [] collection = constraints[i].findCollections();
+            
+            // If collection is null, continue to avoid an NPE
+            // See Bugzilla 30624
+            if ( collection == null) {
+		continue;
+            }
+
+            if (log.isDebugEnabled()) {
+                log.debug("  Checking constraint '" + constraints[i] +
+                    "' against " + method + " " + uri + " --> " +
+                    constraints[i].included(uri, method));
+	    }
+
+            for(int j=0; j < collection.length; j++){
+                String [] patterns = collection[j].findPatterns();
+
+                // If patterns is null, continue to avoid an NPE
+                // See Bugzilla 30624
+                if ( patterns == null) {
+		    continue;
+                }
+
+                boolean matched = false;
+                for(int k=0; k < patterns.length && !matched; k++) {
+                    String pattern = patterns[k];
+                    if(pattern.equals("/")){
+                        matched = true;
+                    }
+                }
+                if(matched) {
+                    if(results == null) {
+                        results = new ArrayList();
+                    }                    
+                    results.add(constraints[i]);
+                }
+            }
+        }
+
+        if(results == null) {
+            // No applicable security constraint was found
+            if (log.isDebugEnabled())
+                log.debug("  No applicable constraint located");
+        }
+        return resultsToArray(results);
+    }
+ 
+    /**
+     * Convert an ArrayList to a SecurityContraint [].
+     */
+    private SecurityConstraint [] resultsToArray(ArrayList results) {
+        if(results == null) {
+            return null;
+        }
+        SecurityConstraint [] array = new SecurityConstraint[results.size()];
+        results.toArray(array);
+        return array;
+    }
+
+    
+    /**
+     * Perform access control based on the specified authorization constraint.
+     * Return <code>true</code> if this constraint is satisfied and processing
+     * should continue, or <code>false</code> otherwise.
+     *
+     * @param request Request we are processing
+     * @param response Response we are creating
+     * @param constraints Security constraint we are enforcing
+     * @param context The Context to which client of this class is attached.
+     *
+     * @exception IOException if an input/output error occurs
+     */
+    public boolean hasResourcePermission(Request request,
+                                         Response response,
+                                         SecurityConstraint []constraints,
+                                         Context context)
+        throws IOException {
+
+        if (constraints == null || constraints.length == 0)
+            return (true);
+
+        // Which user principal have we already authenticated?
+        Principal principal = request.getPrincipal();
+        boolean status = false;
+        boolean denyfromall = false;
+        for(int i=0; i < constraints.length; i++) {
+            SecurityConstraint constraint = constraints[i];
+
+            String roles[];
+            if (constraint.getAllRoles()) {
+                // * means all roles defined in web.xml
+                roles = request.getContext().findSecurityRoles();
+            } else {
+                roles = constraint.findAuthRoles();
+            }
+
+            if (roles == null)
+                roles = new String[0];
+
+            if (log.isDebugEnabled())
+                log.debug("  Checking roles " + principal);
+
+            if (roles.length == 0 && !constraint.getAllRoles()) {
+                if(constraint.getAuthConstraint()) {
+                    if( log.isDebugEnabled() )
+                        log.debug("No roles ");
+                    status = false; // No listed roles means no access at all
+                    denyfromall = true;
+                    break;
+                } else {
+                    if(log.isDebugEnabled())
+                        log.debug("Passing all access");
+                    status = true;
+                }
+            } else if (principal == null) {
+                if (log.isDebugEnabled())
+                    log.debug("  No user authenticated, cannot grant access");
+            } else {
+                for (int j = 0; j < roles.length; j++) {
+                    if (hasRole(principal, roles[j])) {
+                        status = true;
+                        if( log.isDebugEnabled() )
+                            log.debug( "Role found:  " + roles[j]);
+                    }
+                    else if( log.isDebugEnabled() )
+                        log.debug( "No role found:  " + roles[j]);
+                }
+            }
+        }
+
+        if (!denyfromall && allRolesMode != AllRolesMode.STRICT_MODE &&
+                !status && principal != null) {
+            if (log.isDebugEnabled()) {
+                log.debug("Checking for all roles mode: " + allRolesMode);
+            }
+            // Check for an all roles(role-name="*")
+            for (int i = 0; i < constraints.length; i++) {
+                SecurityConstraint constraint = constraints[i];
+                String roles[];
+                // If the all roles mode exists, sets
+                if (constraint.getAllRoles()) {
+                    if (allRolesMode == AllRolesMode.AUTH_ONLY_MODE) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Granting access for role-name=*, auth-only");
+                        }
+                        status = true;
+                        break;
+                    }
+                    
+                    // For AllRolesMode.STRICT_AUTH_ONLY_MODE there must be zero roles
+                    roles = request.getContext().findSecurityRoles();
+                    if (roles.length == 0 && allRolesMode == AllRolesMode.STRICT_AUTH_ONLY_MODE) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Granting access for role-name=*, strict auth-only");
+                        }
+                        status = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Return a "Forbidden" message denying access to this resource
+        if(!status) {
+            response.sendError
+                (HttpServletResponse.SC_FORBIDDEN,
+                 sm.getString("realmBase.forbidden"));
+        }
+        return status;
+
+    }
+    
+    
     /**
      * Return <code>true</code> if the specified Principal has the specified
      * security role, within the context of this Realm; otherwise return
@@ -439,24 +839,110 @@ public abstract class RealmBase
 
         GenericPrincipal gp = (GenericPrincipal) principal;
         if (!(gp.getRealm() == this)) {
-            if (debug >= 2) {
-                log("Different realm " + this + " " + gp.getRealm());
-            }
+            if(log.isDebugEnabled())
+                log.debug("Different realm " + this + " " + gp.getRealm());//    return (false);
         }
-
         boolean result = gp.hasRole(role);
-        if (debug >= 2) {
+        if (log.isDebugEnabled()) {
             String name = principal.getName();
             if (result)
-                log(sm.getString("realmBase.hasRoleSuccess", name, role));
+                log.debug(sm.getString("realmBase.hasRoleSuccess", name, role));
             else
-                log(sm.getString("realmBase.hasRoleFailure", name, role));
+                log.debug(sm.getString("realmBase.hasRoleFailure", name, role));
         }
         return (result);
 
     }
 
+    
+    /**
+     * Enforce any user data constraint required by the security constraint
+     * guarding this request URI.  Return <code>true</code> if this constraint
+     * was not violated and processing should continue, or <code>false</code>
+     * if we have created a response already.
+     *
+     * @param request Request we are processing
+     * @param response Response we are creating
+     * @param constraints Security constraint being checked
+     *
+     * @exception IOException if an input/output error occurs
+     */
+    public boolean hasUserDataPermission(Request request,
+                                         Response response,
+                                         SecurityConstraint []constraints)
+        throws IOException {
 
+        // Is there a relevant user data constraint?
+        if (constraints == null || constraints.length == 0) {
+            if (log.isDebugEnabled())
+                log.debug("  No applicable security constraint defined");
+            return (true);
+        }
+        for(int i=0; i < constraints.length; i++) {
+            SecurityConstraint constraint = constraints[i];
+            String userConstraint = constraint.getUserConstraint();
+            if (userConstraint == null) {
+                if (log.isDebugEnabled())
+                    log.debug("  No applicable user data constraint defined");
+                return (true);
+            }
+            if (userConstraint.equals(Constants.NONE_TRANSPORT)) {
+                if (log.isDebugEnabled())
+                    log.debug("  User data constraint has no restrictions");
+                return (true);
+            }
+
+        }
+        // Validate the request against the user data constraint
+        if (request.getRequest().isSecure()) {
+            if (log.isDebugEnabled())
+                log.debug("  User data constraint already satisfied");
+            return (true);
+        }
+        // Initialize variables we need to determine the appropriate action
+        int redirectPort = request.getConnector().getRedirectPort();
+
+        // Is redirecting disabled?
+        if (redirectPort <= 0) {
+            if (log.isDebugEnabled())
+                log.debug("  SSL redirect is disabled");
+            response.sendError
+                (HttpServletResponse.SC_FORBIDDEN,
+                 request.getRequestURI());
+            return (false);
+        }
+
+        // Redirect to the corresponding SSL port
+        StringBuffer file = new StringBuffer();
+        String protocol = "https";
+        String host = request.getServerName();
+        // Protocol
+        file.append(protocol).append("://").append(host);
+        // Host with port
+        if(redirectPort != 443) {
+            file.append(":").append(redirectPort);
+        }
+        // URI
+        file.append(request.getRequestURI());
+        String requestedSessionId = request.getRequestedSessionId();
+        if ((requestedSessionId != null) &&
+            request.isRequestedSessionIdFromURL()) {
+            file.append(";jsessionid=");
+            file.append(requestedSessionId);
+        }
+        String queryString = request.getQueryString();
+        if (queryString != null) {
+            file.append('?');
+            file.append(queryString);
+        }
+        if (log.isDebugEnabled())
+            log.debug("  Redirecting to " + file.toString());
+        response.sendRedirect(file.toString());
+        return (false);
+
+    }
+    
+    
     /**
      * Remove a property change listener from this component.
      *
@@ -506,7 +992,6 @@ public abstract class RealmBase
 
     }
 
-
     /**
      * Prepare for the beginning of active use of the public methods of this
      * component.  This method should be called before any of the public
@@ -519,9 +1004,14 @@ public abstract class RealmBase
     public void start() throws LifecycleException {
 
         // Validate and update our current component state
-        if (started)
-            throw new LifecycleException
-                (sm.getString("realmBase.alreadyStarted"));
+        if (started) {
+            if(log.isInfoEnabled())
+                log.info(sm.getString("realmBase.alreadyStarted"));
+            return;
+        }
+        if( !initialized ) {
+            init();
+        }
         lifecycle.fireLifecycleEvent(START_EVENT, null);
         started = true;
 
@@ -551,17 +1041,35 @@ public abstract class RealmBase
         throws LifecycleException {
 
         // Validate and update our current component state
-        if (!started)
-            throw new LifecycleException
-                (sm.getString("realmBase.notStarted"));
+        if (!started) {
+            if(log.isInfoEnabled())
+                log.info(sm.getString("realmBase.notStarted"));
+            return;
+        }
         lifecycle.fireLifecycleEvent(STOP_EVENT, null);
         started = false;
 
         // Clean up allocated resources
         md = null;
-
+        
+        destroy();
+    
     }
-
+    
+    public void destroy() {
+    
+        // unregister this realm
+        if ( oname!=null ) {   
+            try {   
+                Registry.getRegistry(null, null).unregisterComponent(oname); 
+                if(log.isDebugEnabled())
+                    log.debug( "unregistering realm " + oname );   
+            } catch( Exception ex ) {   
+                log.error( "Can't unregister realm " + oname, ex);   
+            }      
+        }
+          
+    }
 
     // ------------------------------------------------------ Protected Methods
 
@@ -570,10 +1078,6 @@ public abstract class RealmBase
      * Digest the password using the specified algorithm and
      * convert the result to a corresponding hexadecimal string.
      * If exception, the plain credentials string is returned.
-     *
-     * <strong>IMPLEMENTATION NOTE</strong> - This implementation is
-     * synchronized because it reuses the MessageDigest instance.
-     * This should be faster than cloning the instance on every request.
      *
      * @param credentials Password or other credentials to use in
      *  authenticating this username
@@ -596,7 +1100,7 @@ public abstract class RealmBase
                     try {
                         bytes = credentials.getBytes(getDigestEncoding());
                     } catch (UnsupportedEncodingException uee) {
-                        log("Illegal digestEncoding: " + getDigestEncoding(), uee);
+                        log.error("Illegal digestEncoding: " + getDigestEncoding(), uee);
                         throw new IllegalArgumentException(uee.getMessage());
                     }
                 }
@@ -604,7 +1108,7 @@ public abstract class RealmBase
 
                 return (HexUtils.convert(md.digest()));
             } catch (Exception e) {
-                log(sm.getString("realmBase.digest"), e);
+                log.error(sm.getString("realmBase.digest"), e);
                 return (credentials);
             }
         }
@@ -623,8 +1127,8 @@ public abstract class RealmBase
             try {
                 md5Helper = MessageDigest.getInstance("MD5");
             } catch (NoSuchAlgorithmException e) {
-                e.printStackTrace();
-                throw new IllegalStateException();
+                log.error("Couldn't get MD5 digest: ", e);
+                throw new IllegalStateException(e.getMessage());
             }
         }
 
@@ -643,13 +1147,16 @@ public abstract class RealmBase
             try {
                 valueBytes = digestValue.getBytes(getDigestEncoding());
             } catch (UnsupportedEncodingException uee) {
-                log("Illegal digestEncoding: " + getDigestEncoding(), uee);
+                log.error("Illegal digestEncoding: " + getDigestEncoding(), uee);
                 throw new IllegalArgumentException(uee.getMessage());
             }
         }
 
-        byte[] digest =
-            md5Helper.digest(valueBytes);
+        byte[] digest = null;
+        // Bugzilla 32137
+        synchronized(md5Helper) {
+            digest = md5Helper.digest(valueBytes);
+        }
 
         return md5Encoder.encode(digest);
     }
@@ -669,63 +1176,17 @@ public abstract class RealmBase
 
 
     /**
-     * Return the Principal associated with the given user name.
-     */
-    protected abstract Principal getPrincipal(String username);
-
-
-    /**
      * Return the Principal associated with the given certificate.
      */
     protected Principal getPrincipal(X509Certificate usercert) {
         return(getPrincipal(usercert.getSubjectDN().getName()));
     }
     
-    /**
-     * Log a message on the Logger associated with our Container (if any)
-     *
-     * @param message Message to be logged
-     */
-    protected void log(String message) {
-
-        Logger logger = null;
-        String name = null;
-        if (container != null) {
-            logger = container.getLogger();
-            name = container.getName();
-        }
-
-        if (logger != null) {
-            logger.log(getName()+"[" + name + "]: " + message);
-        } else {
-            System.out.println(getName()+"[" + name + "]: " + message);
-        }
-
-    }
-
 
     /**
-     * Log a message on the Logger associated with our Container (if any)
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
+     * Return the Principal associated with the given user name.
      */
-    protected void log(String message, Throwable throwable) {
-
-        Logger logger = null;
-        String name = null;
-        if (container != null) {
-            logger = container.getLogger();
-            name = container.getName();
-        }
-
-        if (logger != null) {
-            logger.log(getName()+"[" + name + "]: " + message, throwable);
-        } else {
-            System.out.println(getName()+"[" + name + "]: " + message);
-            throwable.printStackTrace(System.out);
-        }
-    }
+    protected abstract Principal getPrincipal(String username);
 
 
     // --------------------------------------------------------- Static Methods
@@ -739,7 +1200,7 @@ public abstract class RealmBase
      * @param credentials Password or other credentials to use in
      *  authenticating this username
      * @param algorithm Algorithm used to do the digest
-     * @param encoding Character encoding of the string to digest 
+     * @param encoding Character encoding of the string to digest
      */
     public final static String Digest(String credentials, String algorithm,
                                       String encoding) {
@@ -748,19 +1209,19 @@ public abstract class RealmBase
             // Obtain a new message digest with "digest" encryption
             MessageDigest md =
                 (MessageDigest) MessageDigest.getInstance(algorithm).clone();
- 
+
             // encode the credentials
             // Should use the digestEncoding, but that's not a static field
             if (encoding == null) {
                 md.update(credentials.getBytes());
             } else {
-                md.update(credentials.getBytes(encoding));
+                md.update(credentials.getBytes(encoding));                
             }
 
             // Digest the credentials and return as hexadecimal
             return (HexUtils.convert(md.digest()));
         } catch(Exception ex) {
-            ex.printStackTrace();
+            log.error(ex);
             return credentials;
         }
 
@@ -773,7 +1234,7 @@ public abstract class RealmBase
      * If exception, the plain credentials string is returned
      */
     public static void main(String args[]) {
-    	
+
         String encoding = null;
         int firstCredentialArg = 2;
         
@@ -781,7 +1242,7 @@ public abstract class RealmBase
             encoding = args[3];
             firstCredentialArg = 4;
         }
-
+        
         if(args.length > firstCredentialArg && args[0].equalsIgnoreCase("-a")) {
             for(int i=firstCredentialArg; i < args.length ; i++){
                 System.out.print(args[i]+":");
@@ -794,5 +1255,165 @@ public abstract class RealmBase
 
     }
 
+
+    // -------------------- JMX and Registration  --------------------
+    protected String type;
+    protected String domain;
+    protected String host;
+    protected String path;
+    protected ObjectName oname;
+    protected ObjectName controller;
+    protected MBeanServer mserver;
+
+    public ObjectName getController() {
+        return controller;
+    }
+
+    public void setController(ObjectName controller) {
+        this.controller = controller;
+    }
+
+    public ObjectName getObjectName() {
+        return oname;
+    }
+
+    public String getDomain() {
+        return domain;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public ObjectName preRegister(MBeanServer server,
+                                  ObjectName name) throws Exception {
+        oname=name;
+        mserver=server;
+        domain=name.getDomain();
+
+        type=name.getKeyProperty("type");
+        host=name.getKeyProperty("host");
+        path=name.getKeyProperty("path");
+
+        return name;
+    }
+
+    public void postRegister(Boolean registrationDone) {
+    }
+
+    public void preDeregister() throws Exception {
+    }
+
+    public void postDeregister() {
+    }
+
+    protected boolean initialized=false;
+
+    /**
+     * Initialize this Realm.  If it's already been
+     * initialized, do nothing.
+     */    
+    public void init() {
+        // Bugzilla 39875: if already initialized, do nothing
+        if( initialized && container != null ) return;
+
+        // We want logger as soon as possible
+        if (container != null) {
+            this.containerLog = container.getLogger();
+        }
+        
+        initialized=true;
+        if( container== null ) {
+            ObjectName parent=null;
+            // Register with the parent
+            try {
+                if( host == null ) {
+                    // global
+                    parent=new ObjectName(domain +":type=Engine");
+                } else if( path==null ) {
+                    parent=new ObjectName(domain +
+                            ":type=Host,host=" + host);
+                } else {
+                    parent=new ObjectName(domain +":j2eeType=WebModule,name=//" +
+                            host + path);
+                }
+                if( mserver.isRegistered(parent ))  {
+                    if(log.isDebugEnabled())
+                        log.debug("Register with " + parent);
+                    mserver.setAttribute(parent, new Attribute("realm", this));
+                }
+            } catch (Exception e) {
+                log.error("Parent not available yet: " + parent);  
+            }
+        }
+        
+        if( oname==null ) {
+            // register
+            try {
+                ContainerBase cb=(ContainerBase)container;
+                oname=new ObjectName(cb.getDomain()+":type=Realm" + cb.getContainerSuffix());
+                Registry.getRegistry(null, null).registerComponent(this, oname, null );
+                if(log.isDebugEnabled())
+                    log.debug("Register Realm "+oname);
+            } catch (Throwable e) {
+                log.error( "Can't register " + oname, e);
+            }
+        }
+
+    }
+
+
+    protected static class AllRolesMode {
+        
+        private String name;
+        /** Use the strict servlet spec interpretation which requires that the user
+         * have one of the web-app/security-role/role-name 
+         */
+        public static final AllRolesMode STRICT_MODE = new AllRolesMode("strict");
+        /** Allow any authenticated user
+         */
+        public static final AllRolesMode AUTH_ONLY_MODE = new AllRolesMode("authOnly");
+        /** Allow any authenticated user only if there are no web-app/security-roles
+         */
+        public static final AllRolesMode STRICT_AUTH_ONLY_MODE = new AllRolesMode("strictAuthOnly");
+        
+        static AllRolesMode toMode(String name)
+        {
+            AllRolesMode mode;
+            if( name.equalsIgnoreCase(STRICT_MODE.name) )
+                mode = STRICT_MODE;
+            else if( name.equalsIgnoreCase(AUTH_ONLY_MODE.name) )
+                mode = AUTH_ONLY_MODE;
+            else if( name.equalsIgnoreCase(STRICT_AUTH_ONLY_MODE.name) )
+                mode = STRICT_AUTH_ONLY_MODE;
+            else
+                throw new IllegalStateException("Unknown mode, must be one of: strict, authOnly, strictAuthOnly");
+            return mode;
+        }
+        
+        private AllRolesMode(String name)
+        {
+            this.name = name;
+        }
+        
+        public boolean equals(Object o)
+        {
+            boolean equals = false;
+            if( o instanceof AllRolesMode )
+            {
+                AllRolesMode mode = (AllRolesMode) o;
+                equals = name.equals(mode.name);
+            }
+            return equals;
+        }
+        public int hashCode()
+        {
+            return name.hashCode();
+        }
+        public String toString()
+        {
+            return name;
+        }
+    }
 
 }

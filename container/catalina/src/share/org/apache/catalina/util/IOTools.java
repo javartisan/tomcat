@@ -64,9 +64,9 @@ public class IOTools {
      * Read input from input stream and write it to output stream 
      * until there is no more input from input stream.
      *
-     * @param is Input stream the input stream to read from.
-     * @param os Output stream the output stream to write to.
-     * @param buf The byte array to use as a buffer
+     * @param is input stream the input stream to read from.
+     * @param os output stream the output stream to write to.
+     * @param buf the byte array to use as a buffer
      */
     public static void flow( InputStream is, OutputStream os, byte[] buf ) 
         throws IOException {
@@ -77,7 +77,7 @@ public class IOTools {
     }  
 
     /**
-     * @see #flow( InputStream, OutputStream, byte[] )
+     * @see #flow( java.io.InputStream, java.io.OutputStream, byte[] )
      */ 
     public static void flow( InputStream is, OutputStream os ) 
         throws IOException {

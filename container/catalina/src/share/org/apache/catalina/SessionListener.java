@@ -19,11 +19,13 @@
 package org.apache.catalina;
 
 
+
+
 /**
  * Interface defining a listener for significant Session generated events.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SessionListener.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface SessionListener {

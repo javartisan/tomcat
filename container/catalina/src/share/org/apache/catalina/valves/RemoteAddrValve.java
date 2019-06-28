@@ -21,9 +21,8 @@ package org.apache.catalina.valves;
 
 import java.io.IOException;
 import javax.servlet.ServletException;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 
 
 /**
@@ -31,7 +30,7 @@ import org.apache.catalina.ValveContext;
  * based on the string representation of the remote client's IP address.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RemoteAddrValve.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public final class RemoteAddrValve
@@ -72,18 +71,14 @@ public final class RemoteAddrValve
      *
      * @param request The servlet request to be processed
      * @param response The servlet response to be created
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if a servlet error occurs
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        process(request.getRequest().getRemoteAddr(),
-                request, response, context);
+        process(request.getRequest().getRemoteAddr(), request, response);
 
     }
 

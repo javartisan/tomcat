@@ -215,9 +215,7 @@ public class AjpMessage {
             // but is the only consistent approach within the current
             // servlet framework.  It must suffice until servlet output
             // streams properly encode their output.
-            if ((c <= 31) && (c != 9)) {
-                c = ' ';
-            } else if (c == 127) {
+            if (((c <= 31) && (c != 9)) || c == 127 || c > 255) {
                 c = ' ';
             }
             appendByte(c);
@@ -250,9 +248,7 @@ public class AjpMessage {
             // but is the only consistent approach within the current
             // servlet framework.  It must suffice until servlet output
             // streams properly encode their output.
-            if ((c <= 31) && (c != 9)) {
-                c = ' ';
-            } else if (c == 127) {
+            if (((c <= 31) && (c != 9)) || c == 127 || c > 255) {
                 c = ' ';
             }
             appendByte(c);
@@ -297,11 +293,13 @@ public class AjpMessage {
     public int getInt() {
         int b1 = buf[pos++] & 0xFF;
         int b2 = buf[pos++] & 0xFF;
+        validatePos(pos);
         return (b1<<8) + b2;
     }
 
 
     public int peekInt() {
+        validatePos(pos + 2);
         int b1 = buf[pos] & 0xFF;
         int b2 = buf[pos+1] & 0xFF;
         return (b1<<8) + b2;
@@ -310,25 +308,41 @@ public class AjpMessage {
     
     public byte getByte() {
         byte res = buf[pos++];
+        validatePos(pos);
         return res;
     }
 
     
     public byte peekByte() {
+        validatePos(pos + 1);
         byte res = buf[pos];
         return res;
     }
 
-    
     public void getBytes(MessageBytes mb) {
+        doGetBytes(mb, true);
+    }
+    
+    public void getBodyBytes(MessageBytes mb) {
+        doGetBytes(mb, false);
+    }
+    
+    private void doGetBytes(MessageBytes mb, boolean terminated) {
         int length = getInt();
         if ((length == 0xFFFF) || (length == -1)) {
             mb.recycle();
             return;
         }
+        if (terminated) {
+            validatePos(pos + length + 1);
+        } else {
+            validatePos(pos + length);
+        }
         mb.setBytes(buf, pos, length);
         pos += length;
-        pos++; // Skip the terminating \0
+        if (terminated) {
+            pos++; // Skip the terminating \0
+        }
     }
     
     
@@ -338,6 +352,7 @@ public class AjpMessage {
      * on the encoding.
      *
      * @return The number of bytes copied.
+     * @deprecated
      */
     public int getBytes(byte[] dest) {
         int length = getInt();
@@ -349,6 +364,7 @@ public class AjpMessage {
         if ((length == 0xFFFF) || (length == -1)) {
             return 0;
         }
+        validatePos(pos + length + 1);
 
         System.arraycopy(buf, pos, dest, 0, length);
         pos += length;
@@ -371,6 +387,7 @@ public class AjpMessage {
         b1 |= (buf[pos++] & 0xFF);
         b1 <<=8;
         b1 |= (buf[pos++] & 0xFF);
+        validatePos(pos);
         return  b1;
     }
 
@@ -415,6 +432,15 @@ public class AjpMessage {
             for (int j = 0; j < max; j += 16) { 
                 log.debug(hexLine(buf, j, len));
             }
+        }
+    }
+
+
+    private void validatePos(int posToTest) {
+        if (posToTest > len + 4) {
+            // Trying to read data beyond the end of the AJP message
+            throw new ArrayIndexOutOfBoundsException(sm.getString(
+                    "ajpMessage.invalidPos", String.valueOf(posToTest)));
         }
     }
 

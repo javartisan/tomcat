@@ -71,7 +71,7 @@ import org.apache.tomcat.util.http.Parameters;
  *
  * @author Remy Maucherat
  * @author Craig R. McClanahan
- * @version $Revision: 483776 $ $Date: 2006-12-08 02:11:48 +0000 (Fri, 08 Dec 2006) $
+ * @version $Id: CoyoteRequest.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public class CoyoteRequest

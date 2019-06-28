@@ -28,14 +28,13 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
+import org.apache.commons.modeler.Registry;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.TomcatTreeBuilder;
@@ -43,13 +42,12 @@ import org.apache.webapp.admin.TreeControl;
 import org.apache.webapp.admin.TreeControlNode;
 
 
-
 /**
  * The <code>Action</code> that completes <em>Add Context</em> and
  * <em>Edit Context</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveContextAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveContextAction extends Action {
@@ -79,18 +77,19 @@ public final class SaveContextAction extends Action {
     private String createStandardManagerTypes[] =
     { "java.lang.String",     // parent
     };
-    
+
+    /**
+     * Signature for the <code>removeContext</code> operation.
+     */
+    private String removeContextTypes[] =
+    { "java.lang.String",      // Object name
+    };
+        
     /**
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -118,10 +117,8 @@ public final class SaveContextAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -137,30 +134,29 @@ public final class SaveContextAction extends Action {
         String cObjectName = cform.getObjectName();
         String lObjectName = cform.getLoaderObjectName();
         String mObjectName = cform.getManagerObjectName();
-        String oNamePath = "";
         if ((cform.getPath() == null) || (cform.getPath().length()<1)) {
-            oNamePath = ("/");
-        } else {
-            oNamePath = cform.getPath();
+            cform.setPath("/");
         }
-
+       
         // Perform a "Create Context" transaction (if requested)
         if ("Create".equals(adminAction)) {
 
             String operation = null;
             Object values[] = null;
             
-            try {
+            try {                
                 // get the parent host name
                 String parentName = cform.getParentObjectName();
                 ObjectName honame = new ObjectName(parentName);
                 
                 // Ensure that the requested context name is unique
-                ObjectName oname =
-                    new ObjectName(TomcatTreeBuilder.CONTEXT_TYPE +
-                                   ",path=" + oNamePath +
-                                   ",host=" + honame.getKeyProperty("host") +
-                                   ",service=" + honame.getKeyProperty("service"));
+                ObjectName oname = 
+                        new ObjectName(honame.getDomain() + 
+                                    ":j2eeType=WebModule,name=//" +
+                                    honame.getKeyProperty("host") + 
+                                    cform.getPath() +
+                                    // FIXME set J2EEApplication and J2EEServer
+                                    ",J2EEApplication=none,J2EEServer=none");                   
                 
                 if (mBServer.isRegistered(oname)) {
                     ActionMessages errors = new ActionMessages();
@@ -171,21 +167,19 @@ public final class SaveContextAction extends Action {
                 }
                 
                 // Look up our MBeanFactory MBean
-                ObjectName fname =
-                    new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+                ObjectName fname = 
+                    TomcatTreeBuilder.getMBeanFactory();
 
                 // Create a new StandardContext object
                 values = new Object[3];
                 values[0] = parentName;
-                values[1] = oNamePath;
+                values[1] = cform.getPath();
                 values[2] = cform.getDocBase();
-
-                operation = "createStandardContext";    
                 
+                operation = "createStandardContext";
                 cObjectName = (String)
                     mBServer.invoke(fname, operation,
                                     values, createStandardContextTypes);
-                
                 // Create a new Loader object
                 values = new String[1];
                 // parent of loader is the newly created context
@@ -203,10 +197,25 @@ public final class SaveContextAction extends Action {
                 mObjectName = (String)
                     mBServer.invoke(fname, operation,
                                     values, createStandardManagerTypes);
+                                                                       
+                if (mObjectName==null) {
+                    operation = "removeLoader";
+                    values[0] = lObjectName;
+                    mBServer.invoke(fname, operation, values, 
+                        removeContextTypes);
+                    operation = "removeContext";
+                    values[0] = cObjectName;
+                    mBServer.invoke(fname, operation, values, 
+                        removeContextTypes);
+                    Registry.getRegistry(null, null).unregisterComponent(
+                            new ObjectName(cObjectName));
+                    request.setAttribute("warning", "error.context.directory");
+                    return (mapping.findForward("Save Unsuccessful"));
+                }
                 
                 // Add the new Context to our tree control node
                 addToTreeControlNode(oname, cObjectName, parentName, 
-                                    resources, session);
+                                    resources, session, locale);                     
 
             } catch (Exception e) {
                 getServlet().log
@@ -229,16 +238,6 @@ public final class SaveContextAction extends Action {
             ObjectName coname = new ObjectName(cObjectName);
             ObjectName loname = new ObjectName(lObjectName);
             ObjectName moname = new ObjectName(mObjectName);
-
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(cform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }            
-            mBServer.setAttribute(coname,
-                                  new Attribute("debug", new Integer(debug)));
 
             attribute = "path";
             String path = "";
@@ -278,16 +277,6 @@ public final class SaveContextAction extends Action {
             mBServer.setAttribute(coname,
                                   new Attribute("crossContext", new Boolean(crossContext)));
 
-            attribute = "privileged";
-            String privileged = "false";
-            try {
-                privileged = cform.getPrivileged();
-            } catch (Throwable t) {
-                privileged = "false";
-            }
-            mBServer.setAttribute(coname,
-                                  new Attribute("privileged", new Boolean(privileged)));
-
             attribute = "override";
             String override = "false";
             try {
@@ -297,6 +286,16 @@ public final class SaveContextAction extends Action {
             }
             mBServer.setAttribute(coname,
                                   new Attribute("override", new Boolean(override)));
+
+            attribute = "privileged";
+            String privileged = "false";
+            try {
+                privileged = cform.getPrivileged();
+            } catch (Throwable t) {
+                privileged = "false";
+            }
+            mBServer.setAttribute(coname,
+                                  new Attribute("privileged", new Boolean(privileged)));
 
             attribute = "reloadable";
             String reloadable = "false";
@@ -329,15 +328,16 @@ public final class SaveContextAction extends Action {
                                   new Attribute("useNaming", new Boolean(useNaming)));
 
             attribute = "antiJARLocking";
-            String antiJarLocking = "false";
-            try {
-                antiJarLocking = cform.getAntiJarLocking();
-            } catch (Throwable t) {
-                antiJarLocking = "false";
-            }
+            String antiJarLocking = cform.getAntiJarLocking();
             mBServer.setAttribute(coname,
                                   new Attribute("antiJARLocking", new Boolean(antiJarLocking)));
 
+            attribute = "antiResourceLocking";
+            String antiResourceLocking = cform.getAntiResourceLocking();
+            mBServer.setAttribute(coname,
+                                  new Attribute("antiResourceLocking", new Boolean(antiResourceLocking)));
+
+	    
             // Loader properties            
             attribute = "reloadable";
             try {
@@ -348,24 +348,15 @@ public final class SaveContextAction extends Action {
             mBServer.setAttribute(loname,
                                   new Attribute("reloadable", new Boolean(reloadable)));
             
-            attribute = "debug";
-            try {
-                debug = Integer.parseInt(cform.getLdrDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(loname,
-                                  new Attribute("debug", new Integer(debug)));
-            
-            attribute = "checkInterval";
-            int checkInterval = 15;
-            try {
-                checkInterval = Integer.parseInt(cform.getLdrCheckInterval());
-            } catch (Throwable t) {
-                checkInterval = 15;
-            }
-            mBServer.setAttribute(loname,
-                                  new Attribute("checkInterval", new Integer(checkInterval)));
+            //attribute = "checkInterval";
+            //int checkInterval = 15;
+            //try {
+            //    checkInterval = Integer.parseInt(cform.getLdrCheckInterval());
+            //} catch (Throwable t) {
+            //    checkInterval = 15;
+            //}
+            //mBServer.setAttribute(loname,
+            //                      new Attribute("checkInterval", new Integer(checkInterval)));
 
             // Manager properties            
             attribute = "entropy";
@@ -375,23 +366,14 @@ public final class SaveContextAction extends Action {
                                   new Attribute("entropy",entropy));
             }
             
-            attribute = "debug";
-            try {
-                debug = Integer.parseInt(cform.getMgrDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }            
-            mBServer.setAttribute(moname,
-                                  new Attribute("debug", new Integer(debug)));
-            
-            attribute = "checkInterval";
-            try {
-                checkInterval = Integer.parseInt(cform.getMgrCheckInterval());
-            } catch (Throwable t) {
-                checkInterval = 60;
-            }
-            mBServer.setAttribute(moname,
-                                  new Attribute("checkInterval", new Integer(checkInterval)));
+            //attribute = "checkInterval";
+            //try {
+            //    checkInterval = Integer.parseInt(cform.getMgrCheckInterval());
+            //} catch (Throwable t) {
+            //    checkInterval = 60;
+            //}
+            //mBServer.setAttribute(moname,
+            //                      new Attribute("checkInterval", new Integer(checkInterval)));
             
             attribute = "maxActiveSessions";
             int maxActiveSessions = -1;
@@ -432,16 +414,28 @@ public final class SaveContextAction extends Action {
      */
     public void addToTreeControlNode(ObjectName oname, String containerName, 
                                     String parentName, MessageResources resources, 
-                                    HttpSession session) 
+                                    HttpSession session, Locale locale) 
         throws Exception {
                               
+        String domain = oname.getDomain();
         TreeControl control = (TreeControl) session.getAttribute("treeControlTest");
         if (control != null) {
             TreeControlNode parentNode = control.findNode(parentName);
             if (parentNode != null) {
-                String path = oname.getKeyProperty("path");
-                String nodeLabel = "Context (" + path + ")";
-                String encodedName = URLEncoder.encode(oname.toString());
+                String type = "Context";
+                String path = "";
+                String host = "";
+                String name = oname.getKeyProperty("name");
+                if ((name != null) && (name.length() > 0)) {
+                    name = name.substring(2);
+                    int i = name.indexOf("/");
+                    host = name.substring(0,i);
+                    path = name.substring(i); 
+                }
+                String nodeLabel = 
+                    resources.getMessage(locale, "server.service.treeBuilder.context") + 
+                    " (" + path + ")";
+                String encodedName = URLEncoder.encode(oname.toString(),TomcatTreeBuilder.URL_ENCODING);
                 TreeControlNode childNode = 
                     new TreeControlNode(oname.toString(),
                                         "Context.gif",
@@ -449,77 +443,62 @@ public final class SaveContextAction extends Action {
                                         "EditContext.do?select=" +
                                         encodedName,
                                         "content",
-                                        true);
+                                        true, domain);
                 parentNode.addChild(childNode);
+        
                 // FIXME - force a redisplay
-                String type = oname.getKeyProperty("type");
-                if (type == null) {
-                    type = "";
-                }
-                if (path == null) {
-                    path = "";
-                }        
-                String host = oname.getKeyProperty("host");
-                if (host == null) {
-                    host = "";
-                }        
-                String service = oname.getKeyProperty("service");
                 TreeControlNode subtree = new TreeControlNode
                     ("Context Resource Administration " + containerName,
                     "folder_16_pad.gif",
-                    resources.getMessage("resources.treeBuilder.subtreeNode"),
+                    resources.getMessage(locale, "resources.treeBuilder.subtreeNode"),
                     null,
                     "content",
-                    true);        
+                    true, domain);        
                 childNode.addChild(subtree);
                 TreeControlNode datasources = new TreeControlNode
                     ("Context Data Sources " + containerName,
                     "Datasource.gif",
-                    resources.getMessage("resources.treeBuilder.datasources"),
+                    resources.getMessage(locale, "resources.treeBuilder.datasources"),
                     "resources/listDataSources.do?resourcetype=" + 
-                    URLEncoder.encode(type) + "&path=" +
-                    URLEncoder.encode(path) + "&host=" + 
-                    URLEncoder.encode(host) + "&service=" +
-                    URLEncoder.encode(service) + "&forward=" +
-                    URLEncoder.encode("DataSources List Setup"),
+                    URLEncoder.encode(type,TomcatTreeBuilder.URL_ENCODING) + "&path=" +
+                    URLEncoder.encode(path,TomcatTreeBuilder.URL_ENCODING) + "&host=" + 
+                    URLEncoder.encode(host,TomcatTreeBuilder.URL_ENCODING) + "&forward=" +
+                    URLEncoder.encode("DataSources List Setup",TomcatTreeBuilder.URL_ENCODING),
                     "content",
-                    false);
+                    false, domain);
                 TreeControlNode mailsessions = new TreeControlNode
                     ("Context Mail Sessions " + containerName,
                     "Mailsession.gif",
-                    resources.getMessage("resources.treeBuilder.mailsessions"),
+                    resources.getMessage(locale, "resources.treeBuilder.mailsessions"),
                     "resources/listMailSessions.do?resourcetype=" + 
-                    URLEncoder.encode(type) + "&path=" +
-                    URLEncoder.encode(path) + "&host=" + 
-                    URLEncoder.encode(host) + "&service=" +
-                    URLEncoder.encode(service) + "&forward=" +
-                    URLEncoder.encode("MailSessions List Setup"),
+                    URLEncoder.encode(type,TomcatTreeBuilder.URL_ENCODING) + "&path=" +
+                    URLEncoder.encode(path,TomcatTreeBuilder.URL_ENCODING) + "&host=" + 
+                    URLEncoder.encode(host,TomcatTreeBuilder.URL_ENCODING) + "&forward=" +
+                    URLEncoder.encode("MailSessions List Setup",TomcatTreeBuilder.URL_ENCODING),
                     "content",
-                    false);
+                    false, domain);
                 TreeControlNode resourcelinks = new TreeControlNode
                     ("Resource Links " + containerName,
                     "ResourceLink.gif",
-                    resources.getMessage("resources.treeBuilder.resourcelinks"),
+                    resources.getMessage(locale, "resources.treeBuilder.resourcelinks"),
                     "resources/listResourceLinks.do?resourcetype=" + 
-                    URLEncoder.encode(type) + "&path=" +
-                    URLEncoder.encode(path) + "&host=" + 
-                    URLEncoder.encode(host) + "&service=" +
-                    URLEncoder.encode(service) + "&forward=" +
-                    URLEncoder.encode("ResourceLinks List Setup"),
+                    URLEncoder.encode(type,TomcatTreeBuilder.URL_ENCODING) + "&path=" +
+                    URLEncoder.encode(path,TomcatTreeBuilder.URL_ENCODING) + "&host=" + 
+                    URLEncoder.encode(host,TomcatTreeBuilder.URL_ENCODING) + "&forward=" +
+                    URLEncoder.encode("ResourceLinks List Setup",TomcatTreeBuilder.URL_ENCODING),
                     "content",
-                    false);
+                    false, domain);
                 TreeControlNode envs = new TreeControlNode
                     ("Context Environment Entries "+ containerName,
                     "EnvironmentEntries.gif",
-                    resources.getMessage("resources.env.entries"),
+                    resources.getMessage(locale ,"resources.env.entries"),
                     "resources/listEnvEntries.do?resourcetype=" + 
-                    URLEncoder.encode(type) + "&path=" +
-                    URLEncoder.encode(path) + "&host=" + 
-                    URLEncoder.encode(host) + "&service=" +
-                    URLEncoder.encode(service) + "&forward=" +
-                    URLEncoder.encode("EnvEntries List Setup"),
+                    URLEncoder.encode(type,TomcatTreeBuilder.URL_ENCODING) + "&path=" +
+                    URLEncoder.encode(path,TomcatTreeBuilder.URL_ENCODING) + "&host=" + 
+                    URLEncoder.encode(host,TomcatTreeBuilder.URL_ENCODING) + "&forward=" +
+                    URLEncoder.encode("EnvEntries List Setup",TomcatTreeBuilder.URL_ENCODING),
                     "content",
-                    false);
+                    false, domain);
                 subtree.addChild(datasources);
                 subtree.addChild(mailsessions);
                 subtree.addChild(resourcelinks);
@@ -532,5 +511,5 @@ public final class SaveContextAction extends Action {
             getServlet().log("Cannot find TreeControlNode!");
         }                              
     }    
-    
+        
 }

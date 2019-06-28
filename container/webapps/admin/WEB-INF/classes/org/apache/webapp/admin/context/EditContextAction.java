@@ -23,8 +23,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -41,7 +39,7 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Edit Context</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditContextAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class EditContextAction extends Action {
@@ -51,12 +49,6 @@ public class EditContextAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
 
     // --------------------------------------------------------- Public Methods
@@ -84,10 +76,8 @@ public class EditContextAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -110,27 +100,27 @@ public class EditContextAction extends Action {
             cname = new ObjectName(request.getParameter("select"));
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.contextName.bad",
+                resources.getMessage(locale, "error.contextName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
             return (null);
         }
-        
+        String name = cname.getKeyProperty("name");
+        name = name.substring(2);
+        int i = name.indexOf("/");
+        String host = name.substring(0,i);
+        String path = name.substring(i);
         // Get the corresponding loader
         try {
             sb = new StringBuffer(cname.getDomain());
             sb.append(":type=Loader");
-            sb.append(",path=");
-            sb.append(cname.getKeyProperty("path"));
-            sb.append(",host=");
-            sb.append(cname.getKeyProperty("host"));
-            sb.append(",service=");
-            sb.append(cname.getKeyProperty("service"));
+            sb.append(",path="+path);
+            sb.append(",host="+host);
             lname = new ObjectName(sb.toString());
          } catch (Exception e) {
             String message =
-                resources.getMessage("error.managerName.bad",
+                resources.getMessage(locale, "error.managerName.bad",
                                  sb.toString());
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -142,12 +132,8 @@ public class EditContextAction extends Action {
         try {
             sb = new StringBuffer(cname.getDomain());
             sb.append(":type=Manager");
-            sb.append(",path=");
-            sb.append(cname.getKeyProperty("path"));
-            sb.append(",host=");
-            sb.append(cname.getKeyProperty("host"));
-            sb.append(",service=");
-            sb.append(cname.getKeyProperty("service"));
+            sb.append(",path="+path);
+            sb.append(",host="+host);
             mname = new ObjectName(sb.toString());
         } catch (Exception e) {
             String message =
@@ -165,20 +151,18 @@ public class EditContextAction extends Action {
         contextFm.setObjectName(cname.toString());
         contextFm.setLoaderObjectName(lname.toString());
         contextFm.setManagerObjectName(mname.toString());
-        sb = new StringBuffer("Context (");
-        sb.append(cname.getKeyProperty("path"));
+        sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.context"));
+        sb.append(" (");
+        sb.append(path);
         sb.append(")");
         contextFm.setNodeLabel(sb.toString());
-        contextFm.setDebugLvlVals(Lists.getDebugLevels());
         contextFm.setBooleanVals(Lists.getBooleanValues());
        
         String attribute = null;
         try {
 
             // Copy scalar properties
-            attribute = "debug";
-            contextFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(cname, attribute)).toString());
             attribute = "path";
             contextFm.setPath
                 ((String) mBServer.getAttribute(cname, attribute));
@@ -209,34 +193,31 @@ public class EditContextAction extends Action {
             attribute = "privileged";
             contextFm.setPrivileged
                 (((Boolean) mBServer.getAttribute(cname, attribute)).toString());
-            attribute = "antiJARLocking";
-            contextFm.setAntiJarLocking
-                (((Boolean) mBServer.getAttribute(cname, attribute)).toString());
 
+	    attribute = "antiJARLocking";
+	    contextFm.setAntiJarLocking
+		(((Boolean) mBServer.getAttribute(cname, attribute)).toString());
+	    attribute = "antiResourceLocking";
+	    contextFm.setAntiResourceLocking
+		(((Boolean) mBServer.getAttribute(cname, attribute)).toString());
             // loader properties
-            attribute = "debug";
-            contextFm.setLdrDebugLvl
-                (((Integer) mBServer.getAttribute(lname, attribute)).toString());
-            attribute = "checkInterval";
-            contextFm.setLdrCheckInterval
-                (((Integer) mBServer.getAttribute(lname, attribute)).toString());
+            //attribute = "checkInterval";
+            //contextFm.setLdrCheckInterval
+            //    (((Integer) mBServer.getAttribute(lname, attribute)).toString());
             attribute = "reloadable";
             contextFm.setLdrReloadable
                 (((Boolean) mBServer.getAttribute(lname, attribute)).toString());
 
             // manager properties
-            attribute = "debug";
-            contextFm.setMgrDebugLvl
-                (((Integer) mBServer.getAttribute(mname, attribute)).toString());
             attribute = "entropy";
             contextFm.setMgrSessionIDInit
                 ((String) mBServer.getAttribute(mname, attribute));
             attribute = "maxActiveSessions";
             contextFm.setMgrMaxSessions
                 (((Integer) mBServer.getAttribute(mname, attribute)).toString());
-            attribute = "checkInterval";
-            contextFm.setMgrCheckInterval
-                (((Integer) mBServer.getAttribute(mname, attribute)).toString());
+            //attribute = "checkInterval";
+            //contextFm.setMgrCheckInterval
+            //    (((Integer) mBServer.getAttribute(mname, attribute)).toString());
 
         } catch (Throwable t) {
             getServlet().log

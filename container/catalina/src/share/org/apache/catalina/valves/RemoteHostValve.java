@@ -21,17 +21,16 @@ package org.apache.catalina.valves;
 
 import java.io.IOException;
 import javax.servlet.ServletException;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 
 
 /**
  * Concrete implementation of <code>RequestFilterValve</code> that filters
- * based on the string representation of the remote client's IP address.
+ * based on the remote client's host name.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RemoteHostValve.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public final class RemoteHostValve
@@ -72,18 +71,14 @@ public final class RemoteHostValve
      *
      * @param request The servlet request to be processed
      * @param response The servlet response to be created
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error occurs
      * @exception ServletException if a servlet error occurs
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        process(request.getRequest().getRemoteHost(),
-                request, response, context);
+        process(request.getRequest().getRemoteHost(), request, response);
 
     }
 

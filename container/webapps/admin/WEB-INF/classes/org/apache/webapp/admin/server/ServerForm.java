@@ -19,18 +19,16 @@ package org.apache.webapp.admin.server;
 
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionMapping;
-
-import java.util.List;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the server form page.  
  * @author Patrick Luby
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ServerForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class ServerForm extends ActionForm {
@@ -48,16 +46,14 @@ public final class ServerForm extends ActionForm {
     private String portNumberText = "8080";
     
     /**
-     * The text for the debug level.
-     */
-    private String debugLvl = "0";
-
-    /**
      * The text for the shutdown text.
      */    
     private String shutdownText = null;
     
-    private List debugLvlVals = null;
+    /**
+     * The object name of the Connector this bean refers to.
+     */
+    private String objectName = null;
     
     // ------------------------------------------------------------- Properties
     /**
@@ -79,24 +75,6 @@ public final class ServerForm extends ActionForm {
     }    
     
     /**
-     * Return the debugVals.
-     */
-    public List getDebugLvlVals() {
-        
-        return this.debugLvlVals;
-        
-    }
-    
-    /**
-     * Set the debugVals.
-     */
-    public void setDebugLvlVals(List debugLvlVals) {
-        
-        this.debugLvlVals = debugLvlVals;
-        
-    }
-        
-    /**
      * Return the portNumberText.
      */
     public String getPortNumberText() {
@@ -111,24 +89,6 @@ public final class ServerForm extends ActionForm {
     public void setPortNumberText(String portNumberText) {
         
         this.portNumberText = portNumberText;
-        
-    }
-    
-    /**
-     * Return the Debug Level Text.
-     */
-    public String getDebugLvl() {
-        
-        return this.debugLvl;
-        
-    }
-    
-    /**
-     * Set the Debug Level Text.
-     */
-    public void setDebugLvl(String debugLvl) {
-        
-        this.debugLvl = debugLvl;
         
     }
     
@@ -150,6 +110,25 @@ public final class ServerForm extends ActionForm {
         
     }
     
+    /**
+     * Return the object name of the Connector this bean refers to.
+     */
+    public String getObjectName() {
+
+        return this.objectName;
+
+    }
+
+
+    /**
+     * Set the object name of the Connector this bean refers to.
+     */
+    public void setObjectName(String objectName) {
+
+        this.objectName = objectName;
+
+    }
+    
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -161,7 +140,6 @@ public final class ServerForm extends ActionForm {
     public void reset(ActionMapping mapping, HttpServletRequest request) {
         
         this.portNumberText = null;
-        this.debugLvl = "0";
         this.shutdownText = null;
         
     }
@@ -182,35 +160,30 @@ public final class ServerForm extends ActionForm {
         
         ActionErrors errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        if (submit != null) {
-            
-            // check for portNumber -- must not be blank, must be in
-            // the range 1 to 65535.
-            
-            if ((portNumberText == null) || (portNumberText.length() < 1)) {
-                errors.add("portNumberText",
-                new ActionMessage("error.portNumber.required"));
-            } else {
-                try {
-                    int port = Integer.parseInt(portNumberText);
-                    if ((port <= 0) || (port >65535 ))
-                        errors.add("portNumberText", 
-                            new ActionMessage("error.portNumber.range"));
-                } catch (NumberFormatException e) {
+        // check for portNumber -- must not be blank, must be in
+        // the range 1 to 65535.
+        
+        if ((portNumberText == null) || (portNumberText.length() < 1)) {
+            errors.add("portNumberText",
+            new ActionMessage("error.portNumber.required"));
+        } else {
+            try {
+                int port = Integer.parseInt(portNumberText);
+                if ((port <= 0) || (port >65535 ))
                     errors.add("portNumberText", 
-                        new ActionMessage("error.portNumber.format"));
-                }
+                        new ActionMessage("error.portNumber.range"));
+            } catch (NumberFormatException e) {
+                errors.add("portNumberText", 
+                    new ActionMessage("error.portNumber.format"));
             }
-        
-            // shutdown text can be any non-empty string of atleast 6 characters.
-            
-            if ((shutdownText == null) || (shutdownText.length() < 7))
-                errors.add("shutdownText",
-                new ActionMessage("error.shutdownText.length"));
-            
         }
+    
+        // shutdown text can be any non-empty string of atleast 6 characters.
         
+        if ((shutdownText == null) || (shutdownText.length() < 7))
+            errors.add("shutdownText",
+            new ActionMessage("error.shutdownText.length"));
+            
         return errors;
         
     }

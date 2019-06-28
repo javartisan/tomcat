@@ -29,6 +29,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Iterator;
 import javax.servlet.ServletContext;
@@ -43,7 +46,7 @@ import org.apache.catalina.Session;
 import org.apache.catalina.util.CustomObjectInputStream;
 import org.apache.catalina.util.LifecycleSupport;
 
-
+import org.apache.catalina.security.SecurityUtil;
 /**
  * Standard implementation of the <b>Manager</b> interface that provides
  * simple session persistence across restarts of this component (such as
@@ -55,27 +58,48 @@ import org.apache.catalina.util.LifecycleSupport;
  * <code>stop()</code> methods of this class at the correct times.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Jean-Francois Arcand
+ * @version $Id: StandardManager.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class StandardManager
     extends ManagerBase
-    implements Lifecycle, PropertyChangeListener, Runnable {
+    implements Lifecycle, PropertyChangeListener {
+
+    // ---------------------------------------------------- Security Classes
+    private class PrivilegedDoLoad
+        implements PrivilegedExceptionAction {
+
+        PrivilegedDoLoad() {
+        }
+
+        public Object run() throws Exception{
+           doLoad();
+           return null;
+        }
+    }
+
+    private class PrivilegedDoUnload
+        implements PrivilegedExceptionAction {
+
+        PrivilegedDoUnload() {
+        }
+
+        public Object run() throws Exception{
+            doUnload();
+            return null;
+        }
+
+    }
 
 
     // ----------------------------------------------------- Instance Variables
 
 
     /**
-     * The interval (in seconds) between checks for expired sessions.
-     */
-    private int checkInterval = 60;
-
-
-    /**
      * The descriptive information about this implementation.
      */
-    private static final String info = "StandardManager/1.0";
+    protected static final String info = "StandardManager/1.0";
 
 
     /**
@@ -87,7 +111,7 @@ public class StandardManager
     /**
      * The maximum number of active Sessions allowed, or -1 for no limit.
      */
-    private int maxActiveSessions = -1;
+    protected int maxActiveSessions = -1;
 
 
     /**
@@ -104,62 +128,28 @@ public class StandardManager
      * temporary working directory provided by our context, available via
      * the <code>javax.servlet.context.tempdir</code> context attribute.
      */
-    private String pathname = "SESSIONS.ser";
+    protected String pathname = "SESSIONS.ser";
 
 
     /**
      * Has this component been started yet?
      */
-    private boolean started = false;
+    protected boolean started = false;
 
 
     /**
-     * The background thread.
+     * Number of session creations that failed due to maxActiveSessions.
      */
-    private Thread thread = null;
+    protected int rejectedSessions = 0;
 
 
     /**
-     * The background thread completion semaphore.
+     * Processing time during session expiration.
      */
-    private boolean threadDone = false;
+    protected long processingTime = 0;
 
-
-    /**
-     * Name to register for the background thread.
-     */
-    private String threadName = "StandardManager";
-
-    private int rejectedSessions=0;
-    private int expiredSessions=0;
 
     // ------------------------------------------------------------- Properties
-
-
-    /**
-     * Return the check interval (in seconds) for this Manager.
-     */
-    public int getCheckInterval() {
-
-        return (this.checkInterval);
-
-    }
-
-
-    /**
-     * Set the check interval (in seconds) for this Manager.
-     *
-     * @param checkInterval The new check interval
-     */
-    public void setCheckInterval(int checkInterval) {
-
-        int oldCheckInterval = this.checkInterval;
-        this.checkInterval = checkInterval;
-        support.firePropertyChange("checkInterval",
-                                   new Integer(oldCheckInterval),
-                                   new Integer(this.checkInterval));
-
-    }
 
 
     /**
@@ -210,28 +200,19 @@ public class StandardManager
 
     }
 
-    /**
-     * Number of session creations that failed due to maxActiveSessions.
+
+    /** Number of session creations that failed due to maxActiveSessions
+     *
+     * @return The count
      */
     public int getRejectedSessions() {
         return rejectedSessions;
     }
 
+
     public void setRejectedSessions(int rejectedSessions) {
         this.rejectedSessions = rejectedSessions;
     }
-
-    /** 
-     * Number of sessions that expired.
-     */
-    public int getExpiredSessions() {
-        return expiredSessions;
-    }
-
-    public void setExpiredSessions(int expiredSessions) {
-        this.expiredSessions = expiredSessions;
-    }
-
 
 
     /**
@@ -288,7 +269,6 @@ public class StandardManager
 
     // --------------------------------------------------------- Public Methods
 
-
     /**
      * Construct and return a new session object, based on the default
      * settings specified by this Manager's properties.  The session
@@ -299,16 +279,16 @@ public class StandardManager
      * @exception IllegalStateException if a new session cannot be
      *  instantiated for any reason
      */
-    public Session createSession() {
+    public Session createSession(String sessionId) {
 
         if ((maxActiveSessions >= 0) &&
-          (sessions.size() >= maxActiveSessions)) {
+            (sessions.size() >= maxActiveSessions)) {
             rejectedSessions++;
             throw new IllegalStateException
                 (sm.getString("standardManager.createSession.ise"));
         }
 
-        return (super.createSession());
+        return (super.createSession(sessionId));
 
     }
 
@@ -323,20 +303,48 @@ public class StandardManager
      * @exception IOException if an input/output error occurs
      */
     public void load() throws ClassNotFoundException, IOException {
+        if (SecurityUtil.isPackageProtectionEnabled()){
+            try{
+                AccessController.doPrivileged( new PrivilegedDoLoad() );
+            } catch (PrivilegedActionException ex){
+                Exception exception = ex.getException();
+                if (exception instanceof ClassNotFoundException){
+                    throw (ClassNotFoundException)exception;
+                } else if (exception instanceof IOException){
+                    throw (IOException)exception;
+                }
+                if (log.isDebugEnabled())
+                    log.debug("Unreported exception in load() "
+                        + exception);
+            }
+        } else {
+            doLoad();
+        }
+    }
 
-        if (debug >= 1)
-            log("Start: Loading persisted sessions");
+
+    /**
+     * Load any currently active sessions that were previously unloaded
+     * to the appropriate persistence mechanism, if any.  If persistence is not
+     * supported, this method returns without doing anything.
+     *
+     * @exception ClassNotFoundException if a serialized class cannot be
+     *  found during the reload
+     * @exception IOException if an input/output error occurs
+     */
+    protected void doLoad() throws ClassNotFoundException, IOException {
+        if (log.isDebugEnabled())
+            log.debug("Start: Loading persisted sessions");
 
         // Initialize our internal data structures
-        recycled.clear();
         sessions.clear();
 
         // Open an input stream to the specified pathname, if any
         File file = file();
         if (file == null)
             return;
-        if (debug >= 1)
-            log(sm.getString("standardManager.loading", pathname));
+        if (log.isDebugEnabled())
+            log.debug(sm.getString("standardManager.loading", pathname));
         FileInputStream fis = null;
         ObjectInputStream ois = null;
         Loader loader = null;
@@ -349,21 +357,20 @@ public class StandardManager
             if (loader != null)
                 classLoader = loader.getClassLoader();
             if (classLoader != null) {
-                if (debug >= 1)
-                    log("Creating custom object input stream for class loader "
-                        + classLoader);
+                if (log.isDebugEnabled())
+                    log.debug("Creating custom object input stream for class loader ");
                 ois = new CustomObjectInputStream(bis, classLoader);
             } else {
-                if (debug >= 1)
-                    log("Creating standard object input stream");
+                if (log.isDebugEnabled())
+                    log.debug("Creating standard object input stream");
                 ois = new ObjectInputStream(bis);
             }
         } catch (FileNotFoundException e) {
-            if (debug >= 1)
-                log("No persisted data file found");
+            if (log.isDebugEnabled())
+                log.debug("No persisted data file found");
             return;
         } catch (IOException e) {
-            log(sm.getString("standardManager.loading.ioe", e), e);
+            log.error(sm.getString("standardManager.loading.ioe", e), e);
             if (ois != null) {
                 try {
                     ois.close();
@@ -380,17 +387,18 @@ public class StandardManager
             try {
                 Integer count = (Integer) ois.readObject();
                 int n = count.intValue();
-                if (debug >= 1)
-                    log("Loading " + n + " persisted sessions");
+                if (log.isDebugEnabled())
+                    log.debug("Loading " + n + " persisted sessions");
                 for (int i = 0; i < n; i++) {
-                    StandardSession session = new StandardSession(this);
+                    StandardSession session = getNewSession();
                     session.readObjectData(ois);
                     session.setManager(this);
-                    sessions.put(session.getId(), session);
-                    ((StandardSession) session).activate();
+                    sessions.put(session.getIdInternal(), session);
+                    session.activate();
+                    sessionCounter++;
                 }
             } catch (ClassNotFoundException e) {
-              log(sm.getString("standardManager.loading.cnfe", e), e);
+                log.error(sm.getString("standardManager.loading.cnfe", e), e);
                 if (ois != null) {
                     try {
                         ois.close();
@@ -401,7 +409,7 @@ public class StandardManager
                 }
                 throw e;
             } catch (IOException e) {
-              log(sm.getString("standardManager.loading.ioe", e), e);
+                log.error(sm.getString("standardManager.loading.ioe", e), e);
                 if (ois != null) {
                     try {
                         ois.close();
@@ -426,8 +434,8 @@ public class StandardManager
             }
         }
 
-        if (debug >= 1)
-            log("Finish: Loading persisted sessions");
+        if (log.isDebugEnabled())
+            log.debug("Finish: Loading persisted sessions");
     }
 
 
@@ -439,23 +447,49 @@ public class StandardManager
      * @exception IOException if an input/output error occurs
      */
     public void unload() throws IOException {
+        if (SecurityUtil.isPackageProtectionEnabled()){
+            try{
+                AccessController.doPrivileged( new PrivilegedDoUnload() );
+            } catch (PrivilegedActionException ex){
+                Exception exception = ex.getException();
+                if (exception instanceof IOException){
+                    throw (IOException)exception;
+                }
+                if (log.isDebugEnabled())
+                    log.debug("Unreported exception in unLoad() "
+                        + exception);
+            }
+        } else {
+            doUnload();
+        }
+    }
 
-        if (debug >= 1)
-            log("Unloading persisted sessions");
+
+    /**
+     * Save any currently active sessions in the appropriate persistence
+     * mechanism, if any.  If persistence is not supported, this method
+     * returns without doing anything.
+     *
+     * @exception IOException if an input/output error occurs
+     */
+    protected void doUnload() throws IOException {
+
+        if (log.isDebugEnabled())
+            log.debug("Unloading persisted sessions");
 
         // Open an output stream to the specified pathname, if any
         File file = file();
         if (file == null)
             return;
-        if (debug >= 1)
-            log(sm.getString("standardManager.unloading", pathname));
+        if (log.isDebugEnabled())
+            log.debug(sm.getString("standardManager.unloading", pathname));
         FileOutputStream fos = null;
         ObjectOutputStream oos = null;
         try {
             fos = new FileOutputStream(file.getAbsolutePath());
             oos = new ObjectOutputStream(new BufferedOutputStream(fos));
         } catch (IOException e) {
-            log(sm.getString("standardManager.unloading.ioe", e), e);
+            log.error(sm.getString("standardManager.unloading.ioe", e), e);
             if (oos != null) {
                 try {
                     oos.close();
@@ -470,8 +504,8 @@ public class StandardManager
         // Write the number of active sessions, followed by the details
         ArrayList list = new ArrayList();
         synchronized (sessions) {
-            if (debug >= 1)
-                log("Unloading " + sessions.size() + " sessions");
+            if (log.isDebugEnabled())
+                log.debug("Unloading " + sessions.size() + " sessions");
             try {
                 oos.writeObject(new Integer(sessions.size()));
                 Iterator elements = sessions.values().iterator();
@@ -483,7 +517,7 @@ public class StandardManager
                     session.writeObjectData(oos);
                 }
             } catch (IOException e) {
-                log(sm.getString("standardManager.unloading.ioe", e), e);
+                log.error(sm.getString("standardManager.unloading.ioe", e), e);
                 if (oos != null) {
                     try {
                         oos.close();
@@ -514,8 +548,8 @@ public class StandardManager
         }
 
         // Expire all the sessions we just wrote
-        if (debug >= 1)
-            log("Expiring " + list.size() + " persisted sessions");
+        if (log.isDebugEnabled())
+            log.debug("Expiring " + list.size() + " persisted sessions");
         Iterator expires = list.iterator();
         while (expires.hasNext()) {
             StandardSession session = (StandardSession) expires.next();
@@ -523,11 +557,13 @@ public class StandardManager
                 session.expire(false);
             } catch (Throwable t) {
                 ;
+            } finally {
+                session.recycle();
             }
         }
 
-        if (debug >= 1)
-            log("Unloading complete");
+        if (log.isDebugEnabled())
+            log.debug("Unloading complete");
 
     }
 
@@ -569,7 +605,6 @@ public class StandardManager
 
     }
 
-
     /**
      * Prepare for the beginning of active use of the public methods of this
      * component.  This method should be called after <code>configure()</code>,
@@ -580,32 +615,29 @@ public class StandardManager
      */
     public void start() throws LifecycleException {
 
-        if (debug >= 1)
-            log("Starting");
+        if( ! initialized )
+            init();
 
         // Validate and update our current component state
-        if (started)
-            throw new LifecycleException
-                (sm.getString("standardManager.alreadyStarted"));
+        if (started) {
+            return;
+        }
         lifecycle.fireLifecycleEvent(START_EVENT, null);
         started = true;
 
         // Force initialization of the random number generator
-        if (debug >= 1)
-            log("Force random number initialization starting");
-        String dummy = generateSessionId();
-        if (debug >= 1)
-            log("Force random number initialization completed");
+        if (log.isDebugEnabled())
+            log.debug("Force random number initialization starting");
+        generateSessionId();
+        if (log.isDebugEnabled())
+            log.debug("Force random number initialization completed");
 
         // Load unloaded sessions, if any
         try {
             load();
         } catch (Throwable t) {
-            log(sm.getString("standardManager.managerLoad"), t);
+            log.error(sm.getString("standardManager.managerLoad"), t);
         }
-
-        // Start the background reaper thread
-        threadStart();
 
     }
 
@@ -620,8 +652,8 @@ public class StandardManager
      */
     public void stop() throws LifecycleException {
 
-        if (debug >= 1)
-            log("Stopping");
+        if (log.isDebugEnabled())
+            log.debug("Stopping");
 
         // Validate and update our current component state
         if (!started)
@@ -630,32 +662,36 @@ public class StandardManager
         lifecycle.fireLifecycleEvent(STOP_EVENT, null);
         started = false;
 
-        // Stop the background reaper thread
-        threadStop();
-
         // Write out sessions
         try {
             unload();
-        } catch (IOException e) {
-            log(sm.getString("standardManager.managerUnload"), e);
+        } catch (Throwable t) {
+            log.error(sm.getString("standardManager.managerUnload"), t);
         }
 
         // Expire all active sessions
         Session sessions[] = findSessions();
         for (int i = 0; i < sessions.length; i++) {
-            StandardSession session = (StandardSession) sessions[i];
-            if (!session.isValid())
-                continue;
+            Session session = sessions[i];
             try {
-                session.expire();
+                if (session.isValid()) {
+                    session.expire();
+                }
             } catch (Throwable t) {
                 ;
+            } finally {
+                // Measure against memory leaking if references to the session
+                // object are kept in a shared field somewhere
+                session.recycle();
             }
         }
 
         // Require a new random number generator if we are restarted
         this.random = null;
 
+        if( initialized ) {
+            destroy();
+        }
     }
 
 
@@ -672,7 +708,6 @@ public class StandardManager
         // Validate the source of this event
         if (!(event.getSource() instanceof Context))
             return;
-        Context context = (Context) event.getSource();
 
         // Process a relevant property change
         if (event.getPropertyName().equals("sessionTimeout")) {
@@ -680,7 +715,7 @@ public class StandardManager
                 setMaxInactiveInterval
                     ( ((Integer) event.getNewValue()).intValue()*60 );
             } catch (NumberFormatException e) {
-                log(sm.getString("standardManager.sessionTimeout",
+                log.error(sm.getString("standardManager.sessionTimeout",
                                  event.getNewValue().toString()));
             }
         }
@@ -688,14 +723,14 @@ public class StandardManager
     }
 
 
-    // -------------------------------------------------------- Private Methods
+    // ------------------------------------------------------ Protected Methods
 
 
     /**
      * Return a File object representing the pathname to our
      * persistence file, if any.
      */
-    private File file() {
+    protected File file() {
 
         if ((pathname == null) || (pathname.length() == 0))
             return (null);
@@ -713,109 +748,6 @@ public class StandardManager
 //        if (!file.isAbsolute())
 //            return (null);
         return (file);
-
-    }
-
-
-    /**
-     * Invalidate all sessions that have expired.
-     */
-    private void processExpires() {
-
-        long timeNow = System.currentTimeMillis();
-        Session sessions[] = findSessions();
-
-        for (int i = 0; i < sessions.length; i++) {
-            StandardSession session = (StandardSession) sessions[i];
-            if (!session.isValid())
-                continue;
-            int maxInactiveInterval = session.getMaxInactiveInterval();
-            if (maxInactiveInterval < 0)
-                continue;
-            int timeIdle = // Truncate, do not round up
-                (int) ((timeNow - session.getLastUsedTime()) / 1000L);
-            if (timeIdle >= maxInactiveInterval) {
-                try {
-                    expiredSessions++;
-                    session.expire();
-                } catch (Throwable t) {
-                    log(sm.getString("standardManager.expireException"), t);
-                }
-            }
-        }
-
-    }
-
-
-    /**
-     * Sleep for the duration specified by the <code>checkInterval</code>
-     * property.
-     */
-    private void threadSleep() {
-
-        try {
-            Thread.sleep(checkInterval * 1000L);
-        } catch (InterruptedException e) {
-            ;
-        }
-
-    }
-
-
-    /**
-     * Start the background thread that will periodically check for
-     * session timeouts.
-     */
-    private void threadStart() {
-
-        if (thread != null)
-            return;
-
-        threadDone = false;
-        threadName = "StandardManager[" + container.getName() + "]";
-        thread = new Thread(this, threadName);
-        thread.setDaemon(true);
-        thread.setContextClassLoader(container.getLoader().getClassLoader());
-        thread.start();
-
-    }
-
-
-    /**
-     * Stop the background thread that is periodically checking for
-     * session timeouts.
-     */
-    private void threadStop() {
-
-        if (thread == null)
-            return;
-
-        threadDone = true;
-        thread.interrupt();
-        try {
-            thread.join();
-        } catch (InterruptedException e) {
-            ;
-        }
-
-        thread = null;
-
-    }
-
-
-    // ------------------------------------------------------ Background Thread
-
-
-    /**
-     * The background thread that checks for session timeouts and shutdown.
-     */
-    public void run() {
-
-        // Loop until the termination semaphore is set
-        while (!threadDone) {
-            threadSleep();
-            processExpires();
-        }
 
     }
 }

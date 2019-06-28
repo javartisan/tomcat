@@ -30,7 +30,7 @@ import java.util.ArrayList;
  *
  * @author Jazmin Jonson
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: TreeControlNode.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class TreeControlNode implements Serializable {
@@ -60,7 +60,7 @@ public class TreeControlNode implements Serializable {
     public TreeControlNode(String name,
                            String icon, String label,
                            String action, String target,
-                           boolean expanded) {
+                           boolean expanded, String domain) {
 
         super();
         this.name = name;
@@ -69,6 +69,7 @@ public class TreeControlNode implements Serializable {
         this.action = action;
         this.target = target;
         this.expanded = expanded;
+        this.domain = domain;
 
     }
 
@@ -96,6 +97,14 @@ public class TreeControlNode implements Serializable {
         return (this.action);
     }
 
+    /**
+     * The domain of this node.
+     */
+    protected String domain = null;
+
+    public String getDomain() {
+        return (this.domain);
+    }
 
     /**
      * Is this node currently expanded?

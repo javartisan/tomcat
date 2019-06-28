@@ -18,17 +18,17 @@
 
 package org.apache.naming;
 
-import java.util.Vector;
-import java.util.Enumeration;
-import javax.naming.NamingException;
-import javax.naming.NamingEnumeration;
+import java.util.Iterator;
+
 import javax.naming.NameClassPair;
+import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
 
 /**
  * Naming enumeration implementation.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NamingContextEnumeration.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class NamingContextEnumeration 
@@ -38,13 +38,8 @@ public class NamingContextEnumeration
     // ----------------------------------------------------------- Constructors
 
 
-    public NamingContextEnumeration(Vector entries) {
-        enumeration = entries.elements();
-    }
-
-
-    public NamingContextEnumeration(Enumeration enumeration) {
-        this.enumeration = enumeration;
+    public NamingContextEnumeration(Iterator entries) {
+    	iterator = entries;
     }
 
 
@@ -54,7 +49,7 @@ public class NamingContextEnumeration
     /**
      * Underlying enumeration.
      */
-    protected Enumeration enumeration;
+    protected Iterator iterator;
 
 
     // --------------------------------------------------------- Public Methods
@@ -74,7 +69,7 @@ public class NamingContextEnumeration
      */
     public boolean hasMore()
         throws NamingException {
-        return enumeration.hasMoreElements();
+        return iterator.hasNext();
     }
 
 
@@ -87,12 +82,12 @@ public class NamingContextEnumeration
 
 
     public boolean hasMoreElements() {
-        return enumeration.hasMoreElements();
+        return iterator.hasNext();
     }
 
 
     public Object nextElement() {
-        NamingEntry entry = (NamingEntry) enumeration.nextElement();
+        NamingEntry entry = (NamingEntry) iterator.next();
         return new NameClassPair(entry.name, entry.value.getClass().getName());
     }
 

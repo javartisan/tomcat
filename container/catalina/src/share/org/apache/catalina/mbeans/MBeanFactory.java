@@ -17,47 +17,44 @@
 
 package org.apache.catalina.mbeans;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import java.io.File;
+import java.util.Vector;
+
 import javax.management.MBeanException;
+import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.management.RuntimeOperationsException;
-import org.apache.catalina.Connector;
-import org.apache.catalina.Container;
+
 import org.apache.catalina.Context;
-import org.apache.catalina.DefaultContext;
 import org.apache.catalina.Engine;
 import org.apache.catalina.Host;
-import org.apache.catalina.Logger;
-import org.apache.catalina.Realm;
 import org.apache.catalina.Server;
 import org.apache.catalina.ServerFactory;
 import org.apache.catalina.Service;
 import org.apache.catalina.Valve;
 import org.apache.catalina.authenticator.SingleSignOn;
+import org.apache.catalina.connector.Connector;
+import org.apache.catalina.core.ContainerBase;
 import org.apache.catalina.core.StandardContext;
-import org.apache.catalina.core.StandardService;
-import org.apache.catalina.core.StandardDefaultContext;
 import org.apache.catalina.core.StandardEngine;
 import org.apache.catalina.core.StandardHost;
+import org.apache.catalina.core.StandardService;
 import org.apache.catalina.loader.WebappLoader;
-import org.apache.catalina.logger.FileLogger;
-import org.apache.catalina.logger.SystemErrLogger;
-import org.apache.catalina.logger.SystemOutLogger;
+import org.apache.catalina.realm.DataSourceRealm;
 import org.apache.catalina.realm.JDBCRealm;
 import org.apache.catalina.realm.JNDIRealm;
+import org.apache.catalina.realm.JAASRealm;
 import org.apache.catalina.realm.MemoryRealm;
 import org.apache.catalina.realm.UserDatabaseRealm;
 import org.apache.catalina.session.StandardManager;
 import org.apache.catalina.startup.ContextConfig;
+import org.apache.catalina.startup.HostConfig;
 import org.apache.catalina.valves.AccessLogValve;
 import org.apache.catalina.valves.RemoteAddrValve;
 import org.apache.catalina.valves.RemoteHostValve;
 import org.apache.catalina.valves.RequestDumperValve;
 import org.apache.catalina.valves.ValveBase;
 import org.apache.commons.modeler.BaseModelMBean;
-import org.apache.commons.modeler.ManagedBean;
-import org.apache.commons.modeler.Registry;
 
 
 /**
@@ -65,16 +62,18 @@ import org.apache.commons.modeler.Registry;
  * <code>org.apache.catalina.core.StandardServer</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MBeanFactory.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class MBeanFactory extends BaseModelMBean {
 
-    /**
-     * The configuration information registry for our managed beans.
-     */
-    private static Registry registry = MBeanUtils.createRegistry();
+    private static org.apache.commons.logging.Log log = 
+        org.apache.commons.logging.LogFactory.getLog(MBeanFactory.class);
 
+    /**
+     * The <code>MBeanServer</code> for this application.
+     */
+    private static MBeanServer mserver = MBeanUtils.createServer();
 
     // ----------------------------------------------------------- Constructors
 
@@ -103,6 +102,7 @@ public class MBeanFactory extends BaseModelMBean {
 
     // ------------------------------------------------------------- Operations
 
+
     /**
      * Return the managed bean definition for the specified bean type
      *
@@ -112,8 +112,6 @@ public class MBeanFactory extends BaseModelMBean {
 
         if (type.equals("org.apache.catalina.core.StandardContext")) {
             return "StandardContext";
-        } else if (type.equals("org.apache.catalina.core.StandardDefaultContext")) {
-            return "DefaultContext";
         } else if (type.equals("org.apache.catalina.core.StandardEngine")) {
             return "Engine";
         } else if (type.equals("org.apache.catalina.core.StandardHost")) {
@@ -124,7 +122,7 @@ public class MBeanFactory extends BaseModelMBean {
 
     }
 
-    
+
     /**
      * Little convenience method to remove redundant code
      * when retrieving the path string
@@ -138,7 +136,89 @@ public class MBeanFactory extends BaseModelMBean {
         }
         return t;
     }
+    
+   /**
+     * Get Parent ContainerBase to add its child component 
+     * from parent's ObjectName
+     */
+    private ContainerBase getParentContainerFromParent(ObjectName pname) 
+        throws Exception {
+        
+        String type = pname.getKeyProperty("type");
+        String j2eeType = pname.getKeyProperty("j2eeType");
+        Service service = getService(pname);
+        StandardEngine engine = (StandardEngine) service.getContainer();
+        if ((j2eeType!=null) && (j2eeType.equals("WebModule"))) {
+            String name = pname.getKeyProperty("name");
+            name = name.substring(2);
+            int i = name.indexOf("/");
+            String hostName = name.substring(0,i);
+            String path = name.substring(i);
+            Host host = (Host) engine.findChild(hostName);
+            String pathStr = getPathStr(path);
+            StandardContext context = (StandardContext)host.findChild(pathStr);
+            return context;
+        } else if (type != null) {
+            if (type.equals("Engine")) {
+                return engine;
+            } else if (type.equals("Host")) {
+                String hostName = pname.getKeyProperty("host");
+                StandardHost host = (StandardHost) engine.findChild(hostName);
+                return host;
+            }
+        }
+        return null;
+        
+    }
 
+
+    /**
+     * Get Parent ContainerBase to add its child component 
+     * from child component's ObjectName  as a String
+     */    
+    private ContainerBase getParentContainerFromChild(ObjectName oname) 
+        throws Exception {
+        
+        String hostName = oname.getKeyProperty("host");
+        String path = oname.getKeyProperty("path");
+        Service service = getService(oname);
+        StandardEngine engine = (StandardEngine) service.getContainer();
+        if (hostName == null) {             
+            // child's container is Engine
+            return engine;
+        } else if (path == null) {      
+            // child's container is Host
+            StandardHost host = (StandardHost) engine.findChild(hostName);
+            return host;
+        } else {                
+            // child's container is Context
+            StandardHost host = (StandardHost) engine.findChild(hostName);
+            path = getPathStr(path);
+            StandardContext context = (StandardContext) host.findChild(path);
+            return context;
+        }
+    }
+
+    
+    private Service getService(ObjectName oname) throws Exception {
+    
+        String domain = oname.getDomain();
+        Server server = ServerFactory.getServer();
+        Service[] services = server.findServices();
+        StandardService service = null;
+        for (int i = 0; i < services.length; i++) {
+            service = (StandardService) services[i];
+            if (domain.equals(service.getObjectName().getDomain())) {
+                break;
+            }
+        }
+        if (!service.getObjectName().getDomain().equals(domain)) {
+            throw new Exception("Service with the domain is not found");
+        }        
+        return service;
+
+    }
+    
     
     /**
      * Create a new AccessLoggerValve.
@@ -150,34 +230,17 @@ public class MBeanFactory extends BaseModelMBean {
     public String createAccessLoggerValve(String parent)
         throws Exception {
 
+        ObjectName pname = new ObjectName(parent);
         // Create a new AccessLogValve instance
         AccessLogValve accessLogger = new AccessLogValve();
-
+        ContainerBase containerBase = getParentContainerFromParent(pname);
         // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            ((StandardContext)context).addValve(accessLogger);
-        } else if (type.equals("Engine")) {
-            ((StandardEngine)engine).addValve(accessLogger);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            ((StandardHost)host).addValve(accessLogger);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("AccessLogValve");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), accessLogger);
+        containerBase.addValve(accessLogger);
+        ObjectName oname = accessLogger.getObjectName();
         return (oname.toString());
 
     }
+        
 
     /**
      * Create a new AjpConnector
@@ -191,140 +254,44 @@ public class MBeanFactory extends BaseModelMBean {
     public String createAjpConnector(String parent, String address, int port)
         throws Exception {
 
-        Object retobj = null;
-
-        try {
-
-            // Create a new CoyoteConnector instance for AJP
-            // use reflection to avoid j-t-c compile-time circular dependencies
-            Class cls = Class.forName("org.apache.coyote.tomcat4.CoyoteConnector");
-            Constructor ct = cls.getConstructor(null);
-            retobj = ct.newInstance(null);
-            Class partypes1 [] = new Class[1];
-            // Set address
-            String str = new String();
-            if (address != null && address.length() > 0) {
-                partypes1[0] = str.getClass();
-                Method meth1 = cls.getMethod("setAddress", partypes1);
-                Object arglist1[] = new Object[1];
-                arglist1[0] = address;
-                meth1.invoke(retobj, arglist1);
-            }
-            // Set port number
-            Class partypes2 [] = new Class[1];
-            partypes2[0] = Integer.TYPE;
-            Method meth2 = cls.getMethod("setPort", partypes2);
-            Object arglist2[] = new Object[1];
-            arglist2[0] = new Integer(port);
-            meth2.invoke(retobj, arglist2);
-            // set protocolHandlerClassName for AJP
-            Class partypes3 [] = new Class[1];
-            partypes3[0] = str.getClass();
-            Method meth3 = cls.getMethod("setProtocolHandlerClassName", partypes3);
-            Object arglist3[] = new Object[1];
-            arglist3[0] = new String("org.apache.jk.server.JkCoyoteHandler");
-            meth3.invoke(retobj, arglist3);
-
-        } catch (Exception e) {
-            throw new MBeanException(e);
-        }
-
-        // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("name"));
-        service.addConnector((Connector)retobj);
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("CoyoteConnector");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), (Connector)retobj);
-        return (oname.toString());
-
+        return createConnector(parent, address, port, true, false);
     }
-
-
+    
     /**
-     * Create a new DefaultContext.
+     * Create a new DataSource Realm.
      *
      * @param parent MBean Name of the associated parent component
      *
      * @exception Exception if an MBean cannot be created or registered
      */
-    public String createDefaultContext(String parent)
-        throws Exception {
+    public String createDataSourceRealm(String parent, String dataSourceName, 
+        String roleNameCol, String userCredCol, String userNameCol, 
+        String userRoleTable, String userTable) throws Exception {
 
-        // Create a new StandardDefaultContext instance
-        StandardDefaultContext context = new StandardDefaultContext();
-
-        // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        String serviceName = pname.getKeyProperty("service");
-        if (serviceName == null) {
-            serviceName = pname.getKeyProperty("name");
-        }
-        Service service = server.findService(serviceName);
-        Engine engine = (Engine) service.getContainer();
-        String hostName = pname.getKeyProperty("host");
-        if (hostName == null) { //if DefaultContext is nested in Engine
-            context.setParent(engine);
-            engine.addDefaultContext(context);
-        } else {                // if DefaultContext is nested in Host
-            Host host = (Host) engine.findChild(hostName);
-            context.setParent(host);
-            host.addDefaultContext(context);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("DefaultContext");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), context);
-        return (oname.toString());
-
-    }
-
-
-    /**
-     * Create a new FileLogger.
-     *
-     * @param parent MBean Name of the associated parent component
-     *
-     * @exception Exception if an MBean cannot be created or registered
-     */
-    public String createFileLogger(String parent)
-        throws Exception {
-
-        // Create a new FileLogger instance
-        FileLogger fileLogger = new FileLogger();
+        // Create a new DataSourceRealm instance
+        DataSourceRealm realm = new DataSourceRealm();
+        realm.setDataSourceName(dataSourceName);
+        realm.setRoleNameCol(roleNameCol);
+        realm.setUserCredCol(userCredCol);
+        realm.setUserNameCol(userNameCol);
+        realm.setUserRoleTable(userRoleTable);
+        realm.setUserTable(userTable);
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setLogger(fileLogger);
-        } else if (type.equals("Engine")) {
-            engine.setLogger(fileLogger);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setLogger(fileLogger);
-        }
-
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        // Add the new instance to its parent component
+        containerBase.setRealm(realm);
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("FileLogger");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), fileLogger);
-        return (oname.toString());
+        ObjectName oname = realm.getObjectName();
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
+        }   
 
     }
-    
-    
+
     /**
      * Create a new HttpConnector
      *
@@ -335,53 +302,50 @@ public class MBeanFactory extends BaseModelMBean {
      * @exception Exception if an MBean cannot be created or registered
      */
     public String createHttpConnector(String parent, String address, int port)
-        throws Exception {
-
-        Object retobj = null;
-
-        try {
-
-            // Create a new CoyoteConnector instance
-            // use reflection to avoid j-t-c compile-time circular dependencies
-            Class cls = Class.forName("org.apache.coyote.tomcat4.CoyoteConnector");
-            Constructor ct = cls.getConstructor(null);
-            retobj = ct.newInstance(null);
-            Class partypes1 [] = new Class[1];
-            // Set address
-            String str = new String();
-            if (address != null && address.length() > 0) {
-                partypes1[0] = str.getClass();
-                Method meth1 = cls.getMethod("setAddress", partypes1);
-                Object arglist1[] = new Object[1];
-                arglist1[0] = address;
-                meth1.invoke(retobj, arglist1);
-            }
-            // Set port number
-            Class partypes2 [] = new Class[1];
-            partypes2[0] = Integer.TYPE;
-            Method meth2 = cls.getMethod("setPort", partypes2);
-            Object arglist2[] = new Object[1];
-            arglist2[0] = new Integer(port);
-            meth2.invoke(retobj, arglist2);
-        } catch (Exception e) {
-            throw new MBeanException(e);
-        }
-
-        // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("name"));
-        service.addConnector((Connector)retobj);
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("CoyoteConnector");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), (Connector)retobj);
-        return (oname.toString());
-
+            throws Exception {
+        return createConnector(parent, address, port, false, false);
     }
 
-    
+    /**
+     * Create a new Connector
+     *
+     * @param parent MBean Name of the associated parent component
+     * @param address The IP address on which to bind
+     * @param port TCP port number to listen on
+     * @param isAjp Create a AJP/1.3 Connector
+     * @param isSSL Create a secure Connector
+     *
+     * @exception Exception if an MBean cannot be created or registered
+     */
+    private String createConnector(String parent, String address, int port, boolean isAjp, boolean isSSL)
+        throws Exception {
+        Connector retobj;
+        if (isAjp) {
+            retobj = new Connector("AJP/1.3");
+        } else {
+            retobj = new Connector("HTTP/1.1");
+        }
+        if ((address!=null) && (address.length()>0)) {
+            retobj.setProperty("address", address);
+        }
+        // Set port number
+        retobj.setPort(port);
+        // Set SSL
+        retobj.setSecure(isSSL);
+        retobj.setScheme(isSSL ? "https" : "http");
+        // Add the new instance to its parent component
+        // FIX ME - addConnector will fail
+        ObjectName pname = new ObjectName(parent);
+        Service service = getService(pname);
+        service.addConnector(retobj);
+        
+        // Return the corresponding MBean name
+        ObjectName coname = retobj.getObjectName();
+        
+        return (coname.toString());
+    }
+
+
     /**
      * Create a new HttpsConnector
      *
@@ -393,83 +357,8 @@ public class MBeanFactory extends BaseModelMBean {
      */
     public String createHttpsConnector(String parent, String address, int port)
         throws Exception {
-
-        Object retobj = null;
-
-        try {
-
-            // Create a new CoyoteConnector instance
-            // use reflection to avoid j-t-c compile-time circular dependencies
-            Class cls = Class.forName("org.apache.coyote.tomcat4.CoyoteConnector");
-            Constructor ct = cls.getConstructor(null);
-            retobj = ct.newInstance(null);
-            Class partypes1 [] = new Class[1];
-            // Set address
-            String str = new String();
-            if (address != null && address.length() > 0) {
-                partypes1[0] = str.getClass();
-                Method meth1 = cls.getMethod("setAddress", partypes1);
-                Object arglist1[] = new Object[1];
-                arglist1[0] = address;
-                meth1.invoke(retobj, arglist1);
-            }
-            // Set port number
-            Class partypes2 [] = new Class[1];
-            partypes2[0] = Integer.TYPE;
-            Method meth2 = cls.getMethod("setPort", partypes2);
-            Object arglist2[] = new Object[1];
-            arglist2[0] = new Integer(port);
-            meth2.invoke(retobj, arglist2);
-            // Set scheme
-            Class partypes3 [] = new Class[1];
-            partypes3[0] = str.getClass();
-            Method meth3 = cls.getMethod("setScheme", partypes3);
-            Object arglist3[] = new Object[1];
-            arglist3[0] = new String("https");
-            meth3.invoke(retobj, arglist3);
-            // Set secure
-            Class partypes4 [] = new Class[1];
-            partypes4[0] = Boolean.TYPE;
-            Method meth4 = cls.getMethod("setSecure", partypes4);
-            Object arglist4[] = new Object[1];
-            arglist4[0] = new Boolean(true);
-            meth4.invoke(retobj, arglist4);
-            // Set className
-            Class partypes5 [] = new Class[2];
-            partypes5[0] = str.getClass();
-            partypes5[1] = str.getClass();
-            Method meth5 = cls.getMethod("setProperty", partypes5);
-            Object arglist5[] = new Object[2];
-            arglist5[0] = new String("className");
-            arglist5[1] = new String(cls.getName());
-            meth5.invoke(retobj, arglist5);
-            
-        } catch (Exception e) {
-            throw new MBeanException(e);
-        }
-
-        try {
-            // Add the new instance to its parent component
-            ObjectName pname = new ObjectName(parent);
-            Server server = ServerFactory.getServer();
-            Service service = server.findService(pname.getKeyProperty("name"));
-            service.addConnector((Connector)retobj);
-        } catch (Exception e) {
-            // FIXME
-            // disply error message 
-            // the user needs to use keytool to configure SSL first
-            // addConnector will fail otherwise
-            return null;
-        }
-        
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("CoyoteConnector");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), (Connector)retobj);
-        return (oname.toString());
-
+        return createConnector(parent, address, port, false, true);
     }
-
 
     /**
      * Create a new JDBC Realm.
@@ -478,35 +367,31 @@ public class MBeanFactory extends BaseModelMBean {
      *
      * @exception Exception if an MBean cannot be created or registered
      */
-    public String createJDBCRealm(String parent)
+    public String createJDBCRealm(String parent, String driverName, 
+            String connectionName, String connectionPassword,
+            String connectionURL)
         throws Exception {
 
         // Create a new JDBCRealm instance
         JDBCRealm realm = new JDBCRealm();
+        realm.setDriverName(driverName);
+        realm.setConnectionName(connectionName);
+        realm.setConnectionPassword(connectionPassword);
+        realm.setConnectionURL(connectionURL);
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setRealm(realm);
-        } else if (type.equals("Engine")) {
-            engine.setRealm(realm);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setRealm(realm);
-        }
-
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        // Add the new instance to its parent component
+        containerBase.setRealm(realm);
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("JDBCRealm");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), realm);
-        return (oname.toString());
+        ObjectName oname = realm.getObjectName();
+
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
+        }   
 
     }
 
@@ -515,41 +400,74 @@ public class MBeanFactory extends BaseModelMBean {
      * Create a new JNDI Realm.
      *
      * @param parent MBean Name of the associated parent component
+     * @param connectionURL URL to connect to directory
+     * @param connectionName Username to use to establish connection
+     * @param connectionPassword Password to authenticate with
      *
      * @exception Exception if an MBean cannot be created or registered
      */
-    public String createJNDIRealm(String parent)
+    public String createJNDIRealm(String parent, String connectionURL,
+            String connectionName,String connectionPassword)
         throws Exception {
 
          // Create a new JNDIRealm instance
         JNDIRealm realm = new JNDIRealm();
-
+        realm.setConnectionURL(connectionURL);
+        realm.setConnectionName(connectionName);
+        realm.setConnectionPassword(connectionPassword);
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setRealm(realm);
-        } else if (type.equals("Engine")) {
-            engine.setRealm(realm);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setRealm(realm);
-        }
-
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        // Add the new instance to its parent component
+        containerBase.setRealm(realm);
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("JNDIRealm");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), realm);
-        return (oname.toString());
+        ObjectName oname = realm.getObjectName();
+
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
+        }   
+
 
     }
+    
+  /**
+     * Create a new JAAS Realm.
+     *
+     * @param parent MBean Name of the associated parent component
+     *
+     * @exception Exception if an MBean cannot be created or registered
+     */
+    public String createJAASRealm(String parent,String appName,String userClassNames,String roleClassNames,String useContextClassLoader)
+        throws Exception {
 
+         // Create a new JAASRealm instance
+        JAASRealm realm = new JAASRealm();
+        realm.setUserClassNames(userClassNames);
+        realm.setRoleClassNames(roleClassNames);
+        if("true".equals(useContextClassLoader) ||
+                "TRUE".equals(useContextClassLoader)){
+            realm.setUseContextClassLoader(true);
+        } else {
+            realm.setUseContextClassLoader(false);
+        }
+        // Add the new instance to its parent component
+        ObjectName pname = new ObjectName(parent);
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        // Add the new instance to its parent component
+        containerBase.setRealm(realm);
+        // Return the corresponding MBean name
+        ObjectName oname = realm.getObjectName();
+
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
+        }   
+
+
+    }
 
     /**
      * Create a new Memory Realm.
@@ -566,27 +484,16 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setRealm(realm);
-        } else if (type.equals("Engine")) {
-            engine.setRealm(realm);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setRealm(realm);
-        }
-
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        // Add the new instance to its parent component
+        containerBase.setRealm(realm);
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("MemoryRealm");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), realm);
-        return (oname.toString());
+        ObjectName oname = realm.getObjectName();
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
+        }   
 
     }
 
@@ -606,26 +513,9 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            ((StandardContext)context).addValve(valve);
-        } else if (type.equals("Engine")) {
-            ((StandardEngine)engine).addValve(valve);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            ((StandardHost)host).addValve(valve);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("RemoteAddrValve");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), valve);
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        containerBase.addValve(valve);
+        ObjectName oname = valve.getObjectName();
         return (oname.toString());
 
     }
@@ -646,28 +536,11 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            ((StandardContext)context).addValve(valve);
-        } else if (type.equals("Engine")) {
-            ((StandardEngine)engine).addValve(valve);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            ((StandardHost)host).addValve(valve);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("RemoteHostValve");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), valve);
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        containerBase.addValve(valve);
+        ObjectName oname = valve.getObjectName();
         return (oname.toString());
-
+        
     }
 
 
@@ -686,26 +559,9 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            ((StandardContext)context).addValve(valve);
-        } else if (type.equals("Engine")) {
-            ((StandardEngine)engine).addValve(valve);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            ((StandardHost)host).addValve(valve);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("RequestDumperValve");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), valve);
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        containerBase.addValve(valve);
+        ObjectName oname = valve.getObjectName();
         return (oname.toString());
 
     }
@@ -726,30 +582,45 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            ((StandardContext)context).addValve(valve);
-        } else if (type.equals("Engine")) {
-            ((StandardEngine)engine).addValve(valve);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            ((StandardHost)host).addValve(valve);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("SingleSignOn");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), valve);
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        containerBase.addValve(valve);
+        ObjectName oname = valve.getObjectName();
         return (oname.toString());
 
     }
+    
+    
+   /**
+     * Create a new StandardContext.
+     *
+     * @param parent MBean Name of the associated parent component
+     * @param path The context path for this Context
+     * @param docBase Document base directory (or WAR) for this Context
+     *
+     * @exception Exception if an MBean cannot be created or registered
+     */
+    public String createStandardContext(String parent, 
+                                        String path,
+                                        String docBase)
+        throws Exception {
+                                            
+        // XXX for backward compatibility. Remove it once supported by the admin
+        return 
+            createStandardContext(parent,path,docBase,false,false,false,false);                                  
+    }
 
+    /**
+     * Given a context path, get the config file name.
+     */
+    private String getConfigFile(String path) {
+        String basename = null;
+        if (path.equals("")) {
+            basename = "ROOT";
+        } else {
+            basename = path.substring(1).replace('/', '#');
+        }
+        return (basename);
+    }
 
    /**
      * Create a new StandardContext.
@@ -760,33 +631,60 @@ public class MBeanFactory extends BaseModelMBean {
      *
      * @exception Exception if an MBean cannot be created or registered
      */
-    public String createStandardContext(String parent, String path,
-                                        String docBase)
+    public String createStandardContext(String parent, 
+                                        String path,
+                                        String docBase,
+                                        boolean xmlValidation,
+                                        boolean xmlNamespaceAware,
+                                        boolean tldValidation,
+                                        boolean tldNamespaceAware)
         throws Exception {
-        
+
         // Create a new StandardContext instance
-        StandardContext context = new StandardContext();    
+        StandardContext context = new StandardContext();
         path = getPathStr(path);
         context.setPath(path);
         context.setDocBase(docBase);
+        context.setXmlValidation(xmlValidation);
+        context.setXmlNamespaceAware(xmlNamespaceAware);
+        context.setTldValidation(tldValidation);
+        context.setTldNamespaceAware(tldNamespaceAware);
+        
         ContextConfig contextConfig = new ContextConfig();
         context.addLifecycleListener(contextConfig);
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
+        ObjectName deployer = new ObjectName(pname.getDomain()+
+                                             ":type=Deployer,host="+
+                                             pname.getKeyProperty("host"));
+        if(mserver.isRegistered(deployer)) {
+            String contextPath = context.getPath();
+            mserver.invoke(deployer, "addServiced",
+                           new Object [] {contextPath},
+                           new String [] {"java.lang.String"});
+            String configPath = (String)mserver.getAttribute(deployer,
+                                                             "configBaseName");
+            String baseName = getConfigFile(contextPath);
+            File configFile = new File(new File(configPath), baseName+".xml");
+            context.setConfigFile(configFile.getAbsolutePath());
+            mserver.invoke(deployer, "manageApp",
+                           new Object[] {context},
+                           new String[] {"org.apache.catalina.Context"});
+            mserver.invoke(deployer, "removeServiced",
+                           new Object [] {contextPath},
+                           new String [] {"java.lang.String"});
+        } else {
+            log.warn("Deployer not found for "+pname.getKeyProperty("host"));
+            Service service = getService(pname);
+            Engine engine = (Engine) service.getContainer();
+            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
+            host.addChild(context);
+        }
 
-        // Add context to the host
-        host.addChild(context);
-        
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("StandardContext");
+        ObjectName oname = context.getJmxName();
 
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), context);
         return (oname.toString());
 
     }
@@ -796,31 +694,40 @@ public class MBeanFactory extends BaseModelMBean {
      * Create a new StandardEngine.
      *
      * @param parent MBean Name of the associated parent component
-     * @param name Unique name of this Engine
+     * @param engineName Unique name of this Engine
      * @param defaultHost Default hostname of this Engine
+     * @param serviceName Unique name of this Service
      *
      * @exception Exception if an MBean cannot be created or registered
      */
-    public String createStandardEngine(String parent, String name,
-                                       String defaultHost)
+
+    public Vector createStandardEngineService(String parent, 
+            String engineName, String defaultHost, String serviceName)
         throws Exception {
 
+        // Create a new StandardService instance
+        StandardService service = new StandardService();
+        service.setName(serviceName);
         // Create a new StandardEngine instance
         StandardEngine engine = new StandardEngine();
-        engine.setName(name);
+        engine.setName(engineName);
         engine.setDefaultHost(defaultHost);
-
-        // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("name"));
+        // Need to set engine before adding it to server in order to set domain
         service.setContainer(engine);
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("StandardEngine");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), engine);
-        return (oname.toString());
+        // Add the new instance to its parent component
+        Server server = ServerFactory.getServer();
+        server.addService(service);
+        Vector onames = new Vector();
+        // FIXME service & engine.getObjectName
+        //ObjectName oname = engine.getObjectName();
+        ObjectName oname = 
+            MBeanUtils.createObjectName(engineName, engine);
+        onames.add(0, oname);
+        //oname = service.getObjectName();
+        oname = 
+            MBeanUtils.createObjectName(engineName, service);
+        onames.add(1, oname);
+        return (onames);
 
     }
 
@@ -832,16 +739,22 @@ public class MBeanFactory extends BaseModelMBean {
      * @param name Unique name of this Host
      * @param appBase Application base directory name
      * @param autoDeploy Should we auto deploy?
+     * @param deployOnStartup Deploy on server startup?
      * @param deployXML Should we deploy Context XML config files property?
-     * @param liveDeploy Should we live deploy?
      * @param unpackWARs Should we unpack WARs when auto deploying?
+     * @param xmlNamespaceAware Should we turn on/off XML namespace awareness?
+     * @param xmlValidation Should we turn on/off XML validation?        
      *
      * @exception Exception if an MBean cannot be created or registered
      */
     public String createStandardHost(String parent, String name,
-                                     String appBase, boolean autoDeploy,
-                                     boolean deployXML, boolean liveDeploy,
-                                     boolean unpackWARs)
+                                     String appBase,
+                                     boolean autoDeploy,
+                                     boolean deployOnStartup,
+                                     boolean deployXML,                                       
+                                     boolean unpackWARs,
+                                     boolean xmlNamespaceAware,
+                                     boolean xmlValidation)
         throws Exception {
 
         // Create a new StandardHost instance
@@ -849,22 +762,24 @@ public class MBeanFactory extends BaseModelMBean {
         host.setName(name);
         host.setAppBase(appBase);
         host.setAutoDeploy(autoDeploy);
+        host.setDeployOnStartup(deployOnStartup);
         host.setDeployXML(deployXML);
-        host.setLiveDeploy(liveDeploy);
         host.setUnpackWARs(unpackWARs);
+        host.setXmlNamespaceAware(xmlNamespaceAware);
+        host.setXmlValidation(xmlValidation);
+  
+        // add HostConfig for active reloading
+        HostConfig hostConfig = new HostConfig();
+        host.addLifecycleListener(hostConfig);
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
+        Service service = getService(pname);
         Engine engine = (Engine) service.getContainer();
         engine.addChild(host);
 
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("StandardHost");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), host);
-        return (oname.toString());
+        return (host.getObjectName().toString());
 
     }
 
@@ -884,36 +799,17 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        String type = pname.getKeyProperty("type");
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if ((type != null) && (type.equals("Context"))) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setManager(manager);
-        } else if ((type != null) && (type.equals("DefaultContext"))) {
-            String hostName = pname.getKeyProperty("host");
-            DefaultContext defaultContext = null;
-            if (hostName == null) {
-                defaultContext = engine.getDefaultContext();
-            } else {
-                Host host = (Host)engine.findChild(hostName);
-                defaultContext = host.getDefaultContext();
-            }
-            if (defaultContext != null ){
-                manager.setDefaultContext(defaultContext);
-                defaultContext.setManager(manager);
-            }
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        if (containerBase != null) {
+            containerBase.setManager(manager);
+        } 
+        ObjectName oname = manager.getObjectName();
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
         }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("StandardManager");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), manager);
-        return (oname.toString());
-
+        
     }
 
 
@@ -925,7 +821,7 @@ public class MBeanFactory extends BaseModelMBean {
      *
      * @exception Exception if an MBean cannot be created or registered
      */
-    public String createStandardService(String parent, String name)
+    public String createStandardService(String parent, String name, String domain)
         throws Exception {
 
         // Create a new StandardService instance
@@ -937,94 +833,12 @@ public class MBeanFactory extends BaseModelMBean {
         server.addService(service);
 
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("StandardService");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), service);
-        return (oname.toString());
+        return (service.getObjectName().toString());
 
     }
 
 
 
-    /**
-     * Create a new System Error Logger.
-     *
-     * @param parent MBean Name of the associated parent component
-     *
-     * @exception Exception if an MBean cannot be created or registered
-     */
-    public String createSystemErrLogger(String parent)
-        throws Exception {
-
-        // Create a new SystemErrLogger instance
-        SystemErrLogger logger = new SystemErrLogger();
-
-        // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {        
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setLogger(logger);
-        } else if (type.equals("Engine")) {
-            engine.setLogger(logger);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setLogger(logger);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("SystemErrLogger");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), logger);
-        return (oname.toString());
-
-    }
-
-
-    /**
-     * Create a new System Output Logger.
-     *
-     * @param parent MBean Name of the associated parent component
-     *
-     * @exception Exception if an MBean cannot be created or registered
-     */
-    public String createSystemOutLogger(String parent)
-        throws Exception {
-
-        // Create a new SystemOutLogger instance
-        SystemOutLogger logger = new SystemOutLogger();
-
-        // Add the new instance to its parent component
-        ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setLogger(logger);
-        } else if (type.equals("Engine")) {
-            engine.setLogger(logger);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setLogger(logger);
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("SystemOutLogger");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), logger);
-        return (oname.toString());
-    }
-
-    
     /**
      * Create a new  UserDatabaseRealm.
      *
@@ -1040,33 +854,26 @@ public class MBeanFactory extends BaseModelMBean {
          // Create a new UserDatabaseRealm instance
         UserDatabaseRealm realm = new UserDatabaseRealm();
         realm.setResourceName(resourceName);
+        
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        String type = pname.getKeyProperty("type");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if (type.equals("Context")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setRealm(realm);
-        } else if (type.equals("Engine")) {
-            engine.setRealm(realm);
-        } else if (type.equals("Host")) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            host.setRealm(realm);
-        }
-
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        // Add the new instance to its parent component
+        containerBase.setRealm(realm);
         // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("UserDatabaseRealm");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), realm);
-        return (oname.toString());
-        
+        ObjectName oname = realm.getObjectName();
+        // FIXME getObjectName() returns null
+        //ObjectName oname = 
+        //    MBeanUtils.createObjectName(pname.getDomain(), realm);
+        if (oname != null) {
+            return (oname.toString());
+        } else {
+            return null;
+        }   
+
     }
 
-    
+
     /**
      * Create a new Web Application Loader.
      *
@@ -1082,43 +889,23 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Add the new instance to its parent component
         ObjectName pname = new ObjectName(parent);
-        Server server = ServerFactory.getServer();
-        String type = pname.getKeyProperty("type");
-        Service service = server.findService(pname.getKeyProperty("service"));
-        Engine engine = (Engine) service.getContainer();
-        if ((type != null) && (type.equals("Context"))) {
-            Host host = (Host) engine.findChild(pname.getKeyProperty("host"));
-            String pathStr = getPathStr(pname.getKeyProperty("path"));
-            Context context = (Context) host.findChild(pathStr);
-            context.setLoader(loader);
-        } else if ((type != null) && (type.equals("DefaultContext"))) {
-            String hostName = pname.getKeyProperty("host");
-            DefaultContext defaultContext = null;
-            if (hostName == null) {
-                defaultContext = engine.getDefaultContext();
-            } else {
-                Host host = (Host)engine.findChild(hostName);
-                defaultContext = host.getDefaultContext();
-            }
-            if (defaultContext != null ){
-                loader.setDefaultContext(defaultContext);
-                defaultContext.setLoader(loader);
-            }
-        }
-
-        // Return the corresponding MBean name
-        ManagedBean managed = registry.findManagedBean("WebappLoader");
-        ObjectName oname =
-            MBeanUtils.createObjectName(managed.getDomain(), loader);
+        ContainerBase containerBase = getParentContainerFromParent(pname);
+        if (containerBase != null) {
+            containerBase.setLoader(loader);
+        } 
+        // FIXME add Loader.getObjectName
+        //ObjectName oname = loader.getObjectName();
+        ObjectName oname = 
+            MBeanUtils.createObjectName(pname.getDomain(), loader);
         return (oname.toString());
-
+        
     }
 
 
     /**
      * Remove an existing Connector.
      *
-     * @param name MBean Name of the comonent to remove
+     * @param name MBean Name of the component to remove
      *
      * @exception Exception if a component cannot be removed
      */
@@ -1126,36 +913,29 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        Server server = ServerFactory.getServer();
-        String serviceName = oname.getKeyProperty("service");
-        Service service = server.findService(serviceName);
+        Service service = getService(oname);
         String port = oname.getKeyProperty("port");
-        String address = oname.getKeyProperty("address");
-        
+        //String address = oname.getKeyProperty("address");
+
         Connector conns[] = (Connector[]) service.findConnectors();
 
         for (int i = 0; i < conns.length; i++) {
-            Class cls = conns[i].getClass();
-            Method getAddrMeth = cls.getMethod("getAddress", null);
-            Object addrObj = getAddrMeth.invoke(conns[i], null);
-            String connAddress = null;
-            if (addrObj != null) {
-                connAddress = addrObj.toString();
-            } 
-            Method getPortMeth = cls.getMethod("getPort", null);
-            Object portObj = getPortMeth.invoke(conns[i], null);
-            String connPort = new String();
-            if (portObj != null) {
-                connPort = portObj.toString();
-            }
-            if (((address.equals("null")) && (connAddress==null)) && port.equals(connPort)) {
+            String connAddress = String.valueOf(conns[i].getProperty("address"));
+            String connPort = ""+conns[i].getPort();
+
+            // if (((address.equals("null")) &&
+            if ((connAddress==null) && port.equals(connPort)) {
                 service.removeConnector(conns[i]);
+                conns[i].destroy();
                 break;
-            } else if (address.equals(connAddress) && port.equals(connPort)) {
+            }
+            // } else if (address.equals(connAddress))
+            if (port.equals(connPort)) {
                 // Remove this component from its parent component
                 service.removeConnector(conns[i]);
+                conns[i].destroy();
                 break;
-            } 
+            }
         }
 
     }
@@ -1164,25 +944,50 @@ public class MBeanFactory extends BaseModelMBean {
     /**
      * Remove an existing Context.
      *
-     * @param name MBean Name of the comonent to remove
+     * @param contextName MBean Name of the comonent to remove
      *
      * @exception Exception if a component cannot be removed
      */
-    public void removeContext(String name) throws Exception {
+    public void removeContext(String contextName) throws Exception {
 
         // Acquire a reference to the component to be removed
-        ObjectName oname = new ObjectName(name);
-        String serviceName = oname.getKeyProperty("service");
-        String hostName = oname.getKeyProperty("host");
-        String contextName = getPathStr(oname.getKeyProperty("path"));
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
-        Engine engine = (Engine) service.getContainer();
-        Host host = (Host) engine.findChild(hostName);
-        Context context = (Context) host.findChild(contextName);
+        ObjectName oname = new ObjectName(contextName);
+        String domain = oname.getDomain();
+        StandardService service = (StandardService) getService(oname);
 
-        // Remove this component from its parent component
-        host.removeChild(context);
+        Engine engine = (Engine) service.getContainer();
+        String name = oname.getKeyProperty("name");
+        name = name.substring(2);
+        int i = name.indexOf("/");
+        String hostName = name.substring(0,i);
+        String path = name.substring(i);
+        ObjectName deployer = new ObjectName(domain+":type=Deployer,host="+
+                                             hostName);
+        String pathStr = getPathStr(path);
+        if(mserver.isRegistered(deployer)) {
+            mserver.invoke(deployer,"addServiced",
+                           new Object[]{pathStr},
+                           new String[] {"java.lang.String"});
+            mserver.invoke(deployer,"unmanageApp",
+                           new Object[] {pathStr},
+                           new String[] {"java.lang.String"});
+            mserver.invoke(deployer,"removeServiced",
+                           new Object[] {pathStr},
+                           new String[] {"java.lang.String"});
+        } else {
+            log.warn("Deployer not found for "+hostName);
+            Host host = (Host) engine.findChild(hostName);
+            Context context = (Context) host.findChild(pathStr);
+            // Remove this component from its parent component
+            host.removeChild(context);
+            if(context instanceof StandardContext)
+            try {
+                ((StandardContext)context).destroy();
+            } catch (Exception e) {
+                log.warn("Error during context [" + context.getName() + "] destroy ", e);
+           }
+   
+        }
 
     }
 
@@ -1198,79 +1003,19 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        String serviceName = oname.getKeyProperty("service");
         String hostName = oname.getKeyProperty("host");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
+        Service service = getService(oname);
         Engine engine = (Engine) service.getContainer();
         Host host = (Host) engine.findChild(hostName);
 
         // Remove this component from its parent component
-        engine.removeChild(host);
-
-    }
-
-
-    /**
-     * Remove an existing Logger.
-     *
-     * @param name MBean Name of the comonent to remove
-     *
-     * @exception Exception if a component cannot be removed
-     */
-    public void removeLogger(String name) throws Exception {
-
-        // Acquire a reference to the component to be removed
-        ObjectName oname = new ObjectName(name);
-        String serviceName = oname.getKeyProperty("service");
-        String hostName = oname.getKeyProperty("host");
-        
-        String path = oname.getKeyProperty("path");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
-        StandardEngine engine = (StandardEngine) service.getContainer();
-        if (hostName == null) {             // if logger's container is Engine
-            Logger logger = engine.getLogger();
-            Container container = logger.getContainer();
-            if (container instanceof StandardEngine) {
-                String sname =
-                    ((StandardEngine)container).getService().getName();
-                if (sname.equals(serviceName)) {
-                    engine.setLogger(null);
-                }
-            }
-        } else if (path == null) {      // if logger's container is Host
-            StandardHost host = (StandardHost) engine.findChild(hostName);
-            Logger logger = host.getLogger();
-            Container container = logger.getContainer();
-            if (container instanceof StandardHost) {
-                String hn = ((StandardHost)container).getName();
-                StandardEngine se =
-                    (StandardEngine) ((StandardHost)container).getParent();
-                String sname = se.getService().getName();
-                if (sname.equals(serviceName) && hn.equals(hostName)) {
-                    host.setLogger(null);
-                }
-            }
-        } else {                // logger's container is Context
-            StandardHost host = (StandardHost) engine.findChild(hostName);
-            path = getPathStr(path);
-            StandardContext context = (StandardContext) host.findChild(path);
-            Logger logger = context.getLogger();
-            Container container = logger.getContainer();
-            if (container instanceof StandardContext) {
-                String pathName = ((StandardContext)container).getName();
-                StandardHost sh =
-                    (StandardHost)((StandardContext)container).getParent();
-                String hn = sh.getName();;
-                StandardEngine se = (StandardEngine)sh.getParent();
-                String sname = se.getService().getName();
-                if ((sname.equals(serviceName) && hn.equals(hostName)) &&
-                        pathName.equals(path)) {
-                    context.setLogger(null);
-                }
-            }
+        if(host!=null) {
+            if(host instanceof StandardHost)
+                ((StandardHost)host).destroy();
+            else
+                engine.removeChild(host);
         }
+
     }
 
 
@@ -1283,34 +1028,11 @@ public class MBeanFactory extends BaseModelMBean {
      */
     public void removeLoader(String name) throws Exception {
 
-        // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        String type = oname.getKeyProperty("type");
-        String serviceName = oname.getKeyProperty("service");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
-        Engine engine = (Engine) service.getContainer();  
-        String hostName = oname.getKeyProperty("host");
-        if ((type != null) && (type.equals("Loader"))) {      
-            String contextName = getPathStr(oname.getKeyProperty("path"));
-            Host host = (Host) engine.findChild(hostName);
-            Context context = (Context) host.findChild(contextName);
-            // Remove this component from its parent component
-            context.setLoader(null);
-        } else if ((type != null) && (type.equals("DefaultLoader"))) {
-            DefaultContext defaultContext = null;
-            if (hostName == null) {    
-                defaultContext = engine.getDefaultContext();
-            } else {
-                Host host = (Host) engine.findChild(hostName);
-                defaultContext = host.getDefaultContext();
-            }
-            if (defaultContext != null) {
-                // Remove this component from its parent component
-                defaultContext.setLoader(null);
-            }
-        }
-    
+        // Acquire a reference to the component to be removed
+        ContainerBase container = getParentContainerFromChild(oname);    
+        container.setLoader(null);
+        
     }
 
 
@@ -1323,37 +1045,14 @@ public class MBeanFactory extends BaseModelMBean {
      */
     public void removeManager(String name) throws Exception {
 
-        // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        String type = oname.getKeyProperty("type");
-        String serviceName = oname.getKeyProperty("service");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
-        Engine engine = (Engine) service.getContainer();  
-        String hostName = oname.getKeyProperty("host");
-        if ((type != null) && (type.equals("Manager"))) {      
-            String contextName = getPathStr(oname.getKeyProperty("path"));
-            Host host = (Host) engine.findChild(hostName);
-            Context context = (Context) host.findChild(contextName);
-            // Remove this component from its parent component
-            context.setManager(null);
-        } else if ((type != null) && (type.equals("DefaultManager"))) {
-            DefaultContext defaultContext = null;
-            if (hostName == null) {    
-                defaultContext = engine.getDefaultContext();
-            } else {
-                Host host = (Host) engine.findChild(hostName);
-                defaultContext = host.getDefaultContext();
-            }
-            if (defaultContext != null) {
-                // Remove this component from its parent component
-                defaultContext.setManager(null);
-            }
-        }
+        // Acquire a reference to the component to be removed
+        ContainerBase container = getParentContainerFromChild(oname);    
+        container.setManager(null);
 
     }
 
-    
+
     /**
      * Remove an existing Realm.
      *
@@ -1363,59 +1062,13 @@ public class MBeanFactory extends BaseModelMBean {
      */
     public void removeRealm(String name) throws Exception {
 
-        // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        String serviceName = oname.getKeyProperty("service");
-        String hostName = oname.getKeyProperty("host");
-        String path = oname.getKeyProperty("path");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
-        StandardEngine engine = (StandardEngine) service.getContainer();
-        if (hostName == null) {             // if realm's container is Engine
-            Realm realm = engine.getRealm();
-            Container container = realm.getContainer();
-            if (container instanceof StandardEngine) {
-                String sname =
-                    ((StandardEngine)container).getService().getName();
-                if (sname.equals(serviceName)) {
-                    engine.setRealm(null);
-                }
-            }
-        } else if (path == null) {      // if realm's container is Host
-            StandardHost host = (StandardHost) engine.findChild(hostName);
-            Realm realm = host.getRealm();
-            Container container = realm.getContainer();
-            if (container instanceof StandardHost) {
-                String hn = ((StandardHost)container).getName();
-                StandardEngine se =
-                    (StandardEngine) ((StandardHost)container).getParent();
-                String sname = se.getService().getName();
-                if (sname.equals(serviceName) && hn.equals(hostName)) {
-                    host.setRealm(null);
-                }
-            }
-        } else {                // realm's container is Context
-            StandardHost host = (StandardHost) engine.findChild(hostName);
-            path = getPathStr(path);
-            StandardContext context = (StandardContext) host.findChild(path);
-            Realm realm = context.getRealm();
-            Container container = realm.getContainer();
-            if (container instanceof StandardContext) {
-                String pathName = ((StandardContext)container).getName();
-                StandardHost sh =
-                    (StandardHost)((StandardContext)container).getParent();
-                String hn = sh.getName();;
-                StandardEngine se = (StandardEngine)sh.getParent();
-                String sname = se.getService().getName();
-                if ((sname.equals(serviceName) && hn.equals(hostName)) &&
-                        pathName.equals(path)) {
-                    context.setRealm(null);
-                }
-            }
-        }
+        // Acquire a reference to the component to be removed
+        ContainerBase container = getParentContainerFromChild(oname); 
+        container.setRealm(null);
     }
 
-    
+
     /**
      * Remove an existing Service.
      *
@@ -1427,7 +1080,7 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        String serviceName = oname.getKeyProperty("name");
+        String serviceName = oname.getKeyProperty("serviceName");
         Server server = ServerFactory.getServer();
         Service service = server.findService(serviceName);
 
@@ -1448,70 +1101,16 @@ public class MBeanFactory extends BaseModelMBean {
 
         // Acquire a reference to the component to be removed
         ObjectName oname = new ObjectName(name);
-        String serviceName = oname.getKeyProperty("service");
-        String hostName = oname.getKeyProperty("host");
-        String path = oname.getKeyProperty("path");
-        String sequence = oname.getKeyProperty("sequence");
-        Server server = ServerFactory.getServer();
-        Service service = server.findService(serviceName);
-        StandardEngine engine = (StandardEngine) service.getContainer();
-        if (hostName == null) {             // if valve's container is Engine
-            Valve [] valves = engine.getValves();
-            for (int i = 0; i < valves.length; i++) {
-                Container container = ((ValveBase)valves[i]).getContainer();
-                if (container instanceof StandardEngine) {
-                    String sname =
-                        ((StandardEngine)container).getService().getName();
-                    Integer sequenceInt = new Integer(valves[i].hashCode());
-                    if (sname.equals(serviceName) &&
-                        sequence.equals(sequenceInt.toString())){
-                        engine.removeValve(valves[i]);
-                        break;
-                    }
-                }
-            }
-        } else if (path == null) {      // if valve's container is Host
-            StandardHost host = (StandardHost) engine.findChild(hostName);
-            Valve [] valves = host.getValves();
-            for (int i = 0; i < valves.length; i++) {
-                Container container = ((ValveBase)valves[i]).getContainer();
-                if (container instanceof StandardHost) {
-                    String hn = ((StandardHost)container).getName();
-                    StandardEngine se =
-                        (StandardEngine) ((StandardHost)container).getParent();
-                    String sname = se.getService().getName();
-                    Integer sequenceInt = new Integer(valves[i].hashCode());
-                    if ((sname.equals(serviceName) && hn.equals(hostName)) &&
-                        sequence.equals(sequenceInt.toString())){
-                        host.removeValve(valves[i]);
-                        break;
-                    }
-                }
-            }
-        } else {                // valve's container is Context
-            StandardHost host = (StandardHost) engine.findChild(hostName);
-            path = getPathStr(path);
-            StandardContext context = (StandardContext) host.findChild(path);
-            Valve [] valves = context.getValves();
-            for (int i = 0; i < valves.length; i++) {
-                Container container = ((ValveBase)valves[i]).getContainer();
-                if (container instanceof StandardContext) {
-                    String pathName = ((StandardContext)container).getName();
-                    StandardHost sh =
-                        (StandardHost)((StandardContext)container).getParent();
-                    String hn = sh.getName();;
-                    StandardEngine se = (StandardEngine)sh.getParent();
-                    String sname = se.getService().getName();
-                    Integer sequenceInt = new Integer(valves[i].hashCode());
-                    if (((sname.equals(serviceName) && hn.equals(hostName)) &&
-                        pathName.equals(path)) &&
-                        sequence.equals(sequenceInt.toString())){
-                        context.removeValve(valves[i]);
-                        break;
-                    }
-                }
+        ContainerBase container = getParentContainerFromChild(oname);
+        Valve[] valves = (Valve[])container.getValves();
+        for (int i = 0; i < valves.length; i++) {
+            ObjectName voname = ((ValveBase) valves[i]).getObjectName();
+            if (voname.equals(oname)) {
+                container.removeValve(valves[i]);
             }
         }
     }
 
 }
+
+

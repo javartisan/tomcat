@@ -20,7 +20,7 @@
 
 <!--
         "Coyote" connector framework for Jakarta Tomcat
-        $Id: build.xml 572115 2007-09-02 19:22:38Z markt $
+        $Id: build.xml 1226780 2012-01-03 13:47:18Z rjung $
 -->
 
 
@@ -205,7 +205,7 @@
   <target name="static" depends="prepare"
    description="Copy static files to build directory">
     <tstamp/>
-    <copy  todir="${build.home}/conf" filtering="on">
+    <copy  todir="${build.home}/conf" filtering="on" encoding="ISO-8859-1">
       <fileset dir="${conf.home}" includes="*.MF"/>
     </copy>
   </target>
@@ -218,13 +218,14 @@
            destdir="${build.home}/classes"
              debug="${compile.debug}"
        deprecation="${compile.deprecation}"
-          optimize="${compile.optimize}">
+          optimize="${compile.optimize}"
+          encoding="ISO-8859-1">
       <classpath refid="compile.classpath"/>
       <exclude name="org/apache/coyote/tomcat5/**" />
       <exclude name="org/apache/coyote/tomcat4/**" />
       <exclude name="org/apache/coyote/tomcat3/**" />
     </javac>
-    <copy    todir="${build.home}/classes" filtering="on">
+    <copy    todir="${build.home}/classes" filtering="on" encoding="ISO-8859-1">
       <fileset dir="${source.home}" excludes="**/*.java"/>
     </copy>
   </target>
@@ -237,7 +238,8 @@
            destdir="${build.home}/classes"
              debug="${compile.debug}"
        deprecation="${compile.deprecation}"
-          optimize="${compile.optimize}">
+          optimize="${compile.optimize}"
+          encoding="ISO-8859-1">
       <classpath refid="compile.classpath"/>
       <include name="org/apache/coyote/tomcat5/**" />
     </javac>
@@ -245,7 +247,6 @@
 
   <target name="jar.tomcat5" depends="compile.tomcat5" >
     <jar  jarfile="${tomcat-coyote.jar}"
-         index="true"
          basedir="${build.home}/classes"
          manifest="${build.home}/conf/MANIFEST.MF"
          excludes="**/tomcat3/*" >
@@ -262,11 +263,12 @@
            destdir="${build.home}/classes"
              debug="${compile.debug}"
        deprecation="${compile.deprecation}"
-          optimize="${compile.optimize}">
+          optimize="${compile.optimize}"
+          encoding="ISO-8859-1">
       <classpath refid="compile.classpath"/>
       <include name="org/apache/coyote/tomcat4/**" />
     </javac>
-    <copy    todir="${build.home}/classes" filtering="on">
+    <copy    todir="${build.home}/classes" filtering="on" encoding="ISO-8859-1">
       <fileset dir="${source.home}" excludes="**/*.java"/>
     </copy>
   </target>
@@ -277,11 +279,12 @@
            destdir="${build.home}/classes"
              debug="${compile.debug}"
        deprecation="${compile.deprecation}"
-          optimize="${compile.optimize}">
+          optimize="${compile.optimize}"
+          encoding="ISO-8859-1">
       <classpath refid="compile.classpath.tomcat33"/>
       <include name="org/apache/coyote/tomcat3/**" />
     </javac>
-    <copy    todir="${build.home}/classes" filtering="on">
+    <copy    todir="${build.home}/classes" filtering="on" encoding="ISO-8859-1">
       <fileset dir="${source.home}" excludes="**/*.java"/>
     </copy>
   </target>
@@ -290,7 +293,6 @@
        description="Build shared Coyote jar"> 
     <property name="tomcat-coyote.jar" value="${build.home}/lib/tomcat-${component.name}.jar" />
     <jar    jarfile="${tomcat-coyote.jar}"
-            index="true"
             manifest="${build.home}/conf/MANIFEST.MF">
       <fileset dir="${build.home}/classes" >
         <exclude name="**/tomcat3/*"/>
@@ -305,7 +307,6 @@
        description="Build Tomcat 4 Adapter jar" if="tomcat4.detect">
     <property name="tomcat4-coyote.jar" value="${build.home}/lib/tomcat4-${component.name}.jar" />
     <jar jarfile="${tomcat4-coyote.jar}"
-         index="true"
          basedir="${build.home}/classes"
          manifest="${build.home}/conf/MANIFEST.MF"
          includes="org/apache/coyote/tomcat4/**" />
@@ -315,7 +316,6 @@
        description="Build Tomcat 3.3 Adapter jar" if="tomcat33.detect">
     <property name="tomcat33-coyote.jar" value="${build.home}/lib/tomcat33-${component.name}.jar" />
     <jar jarfile="${tomcat33-coyote.jar}"
-         index="true"
          basedir="${build.home}/classes"
          manifest="${build.home}/conf/MANIFEST.MF"
          includes="org/apache/coyote/tomcat3/**" /> 
@@ -332,10 +332,11 @@
            destdir="${build.home}/tests"
              debug="${compile.debug}"
        deprecation="${compile.deprecation}"
-          optimize="${compile.optimize}">
+          optimize="${compile.optimize}"
+          encoding="ISO-8859-1">
       <classpath refid="test.classpath"/>
     </javac>
-    <copy    todir="${build.home}/tests" filtering="on">
+    <copy    todir="${build.home}/tests" filtering="on" encoding="ISO-8859-1">
       <fileset dir="${test.home}" excludes="**/*.java"/>
     </copy>
   </target>
@@ -362,7 +363,7 @@
                 version="true"
                doctitle="&lt;h1&gt;${component.title}&lt;/h1&gt;"
             windowtitle="${component.title} (Version ${component.version})"
-                 bottom="Copyright (c) 2001 - Apache Software Foundation">
+                 bottom="Copyright (c) 2001-2012 - Apache Software Foundation">
       <classpath refid="compile.classpath"/>
     </javadoc>
   </target>

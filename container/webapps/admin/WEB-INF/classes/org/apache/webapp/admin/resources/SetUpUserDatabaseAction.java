@@ -24,9 +24,6 @@ import javax.management.ObjectName;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -42,7 +39,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * being added, or a non-null value for an existing UserDatabase.</p>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SetUpUserDatabaseAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -55,12 +52,6 @@ public final class SetUpUserDatabaseAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mserver = null;
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -91,20 +82,19 @@ public final class SetUpUserDatabaseAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Set up the form bean based on the creating or editing state
         String objectName = request.getParameter("objectName");
+        String domain = request.getParameter("domain");
         
         UserDatabaseForm userDatabaseForm = new UserDatabaseForm();
         userDatabaseForm.setFactory
                             (SaveUserDatabaseAction.USERDB_FACTORY);
         userDatabaseForm.setType
-                            (ResourceUtils.USERDB_CLASS);            
+                            (ResourceUtils.USERDB_CLASS);  
+        userDatabaseForm.setDomain(domain);               
 
         if (objectName == null) {
             userDatabaseForm.setNodeLabel

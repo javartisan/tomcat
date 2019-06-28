@@ -1,12 +1,13 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,24 +24,21 @@ import org.apache.jasper.JasperException;
  * the PageInfo object.
  *
  * @author Kin-man Chung
+ * @author Mark Roth
  */
 
-public class Collector {
+class Collector {
 
     /**
-     * A visitor for collection info on the page
-     * Info collected so far:
-     *   Maximum tag nestings.
-     *   Whether a page or a tag element (and its body) contains any scripting
-     *       elements.
+     * A visitor for collecting information on the page and the body of
+     * the custom tags.
      */
     static class CollectVisitor extends Node.Visitor {
 
-        private int maxTagNesting = 0;
-        private int curTagNesting = 0;
         private boolean scriptingElementSeen = false;
         private boolean usebeanSeen = false;
         private boolean includeActionSeen = false;
+        private boolean paramActionSeen = false;
         private boolean setPropertySeen = false;
         private boolean hasScriptingVars = false;
 
@@ -48,6 +46,7 @@ public class Collector {
             if (n.getValue().isExpression()) {
                 scriptingElementSeen = true;
             }
+            paramActionSeen = true;
         }
 
         public void visit(Node.IncludeAction n) throws JasperException {
@@ -77,7 +76,7 @@ public class Collector {
                 scriptingElementSeen = true;
             }
             usebeanSeen = true;
-            visitBody(n);
+                visitBody(n);
         }
 
         public void visit(Node.PlugIn n) throws JasperException {
@@ -91,12 +90,17 @@ public class Collector {
         }
 
         public void visit(Node.CustomTag n) throws JasperException {
+            // Check to see what kinds of element we see as child elements
+            checkSeen( n.getChildInfo(), n );
+        }
 
-            curTagNesting++;
-            if (curTagNesting > maxTagNesting) {
-                maxTagNesting = curTagNesting;
-            }
-
+        /**
+         * Check all child nodes for various elements and update the given
+         * ChildInfo object accordingly.  Visits body in the process.
+         */
+        private void checkSeen( Node.ChildInfo ci, Node n )
+            throws JasperException
+        {
             // save values collected so far
             boolean scriptingElementSeenSave = scriptingElementSeen;
             scriptingElementSeen = false;
@@ -104,12 +108,54 @@ public class Collector {
             usebeanSeen = false;
             boolean includeActionSeenSave = includeActionSeen;
             includeActionSeen = false;
+            boolean paramActionSeenSave = paramActionSeen;
+            paramActionSeen = false;
             boolean setPropertySeenSave = setPropertySeen;
             setPropertySeen = false;
             boolean hasScriptingVarsSave = hasScriptingVars;
             hasScriptingVars = false;
 
             // Scan attribute list for expressions
+            if( n instanceof Node.CustomTag ) {
+                Node.CustomTag ct = (Node.CustomTag)n;
+                Node.JspAttribute[] attrs = ct.getJspAttributes();
+                for (int i = 0; attrs != null && i < attrs.length; i++) {
+                    if (attrs[i].isExpression()) {
+                        scriptingElementSeen = true;
+                        break;
+                    }
+                }
+            }
+
+            visitBody(n);
+
+            if( (n instanceof Node.CustomTag) && !hasScriptingVars) {
+                Node.CustomTag ct = (Node.CustomTag)n;
+                hasScriptingVars = ct.getVariableInfos().length > 0 ||
+                    ct.getTagVariableInfos().length > 0;
+            }
+
+            // Record if the tag element and its body contains any scriptlet.
+            ci.setScriptless(! scriptingElementSeen);
+            ci.setHasUseBean(usebeanSeen);
+            ci.setHasIncludeAction(includeActionSeen);
+            ci.setHasParamAction(paramActionSeen);
+            ci.setHasSetProperty(setPropertySeen);
+            ci.setHasScriptingVars(hasScriptingVars);
+
+            // Propagate value of scriptingElementSeen up.
+            scriptingElementSeen = scriptingElementSeen || scriptingElementSeenSave;
+            usebeanSeen = usebeanSeen || usebeanSeenSave;
+            setPropertySeen = setPropertySeen || setPropertySeenSave;
+            includeActionSeen = includeActionSeen || includeActionSeenSave;
+            paramActionSeen = paramActionSeen || paramActionSeenSave;
+            hasScriptingVars = hasScriptingVars || hasScriptingVarsSave;
+        }
+
+        public void visit(Node.JspElement n) throws JasperException {
+            if (n.getNameAttribute().isExpression())
+                scriptingElementSeen = true;
+
             Node.JspAttribute[] attrs = n.getJspAttributes();
             for (int i = 0; i < attrs.length; i++) {
                 if (attrs[i].isExpression()) {
@@ -117,33 +163,15 @@ public class Collector {
                     break;
                 }
             }
-
             visitBody(n);
+        }
 
-            if (!hasScriptingVars) {
-                // For some reason, varInfos is null when var is not defined
-                // in TEI, but tagVarInfos is empty array when var is not
-                // defined in tld.
-                hasScriptingVars = n.getVariableInfos() != null || 
-                        (n.getTagVariableInfos() != null
-                         && n.getTagVariableInfos().length > 0);
-            }
+        public void visit(Node.JspBody n) throws JasperException {
+            checkSeen( n.getChildInfo(), n );
+        }
 
-            // Record if the tag element and its body contains any scriptlet.
-            n.setScriptless(! scriptingElementSeen);
-            n.setHasUsebean(usebeanSeen);
-            n.setHasIncludeAction(includeActionSeen);
-            n.setHasSetProperty(setPropertySeen);
-            n.setHasScriptingVars(hasScriptingVars);
-
-            // Propagate value of scriptingElementSeen up.
-            scriptingElementSeen = scriptingElementSeen || scriptingElementSeenSave;
-            usebeanSeen = usebeanSeen || usebeanSeenSave;
-            setPropertySeen = setPropertySeen || setPropertySeenSave;
-            includeActionSeen = includeActionSeen || includeActionSeenSave;
-            hasScriptingVars = hasScriptingVars || hasScriptingVarsSave;
-
-            curTagNesting--;
+        public void visit(Node.NamedAttribute n) throws JasperException {
+            checkSeen( n.getChildInfo(), n );
         }
 
         public void visit(Node.Declaration n) throws JasperException {
@@ -159,15 +187,15 @@ public class Collector {
         }
 
         public void updatePageInfo(PageInfo pageInfo) {
-            pageInfo.setMaxTagNesting(maxTagNesting);
             pageInfo.setScriptless(! scriptingElementSeen);
         }
     }
 
-    public static void collect(Compiler compiler, Node.Nodes page)
-                throws JasperException {
 
-        CollectVisitor collectVisitor = new CollectVisitor();
+    public static void collect(Compiler compiler, Node.Nodes page)
+        throws JasperException {
+
+    CollectVisitor collectVisitor = new CollectVisitor();
         page.visit(collectVisitor);
         collectVisitor.updatePageInfo(compiler.getPageInfo());
 

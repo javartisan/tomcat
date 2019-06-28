@@ -30,7 +30,7 @@ import java.lang.reflect.Proxy;
  *
  * @author Craig R. McClanahan
  * @author Bip Thelin
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: CustomObjectInputStream.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public final class CustomObjectInputStream
@@ -41,6 +41,7 @@ public final class CustomObjectInputStream
      * The class loader we will use to resolve classes.
      */
     private ClassLoader classLoader = null;
+
 
     /**
      * Construct a new instance of CustomObjectInputStream
@@ -58,6 +59,7 @@ public final class CustomObjectInputStream
         this.classLoader = classLoader;
     }
 
+
     /**
      * Load the local class equivalent of the specified stream class
      * description, by using the class loader assigned to this Context.
@@ -69,10 +71,21 @@ public final class CustomObjectInputStream
      */
     public Class resolveClass(ObjectStreamClass classDesc)
         throws ClassNotFoundException, IOException {
-
-        return Class.forName(classDesc.getName(), false, classLoader);
+        try {
+            return Class.forName(classDesc.getName(), false, classLoader);
+        } catch (ClassNotFoundException e) {
+            try {
+                // Try also the superclass because of primitive types
+                return super.resolveClass(classDesc);
+            } catch (ClassNotFoundException e2) {
+                // Rethrow original exception, as it can have more information
+                // about why the class was not found. BZ 48007
+                throw e;
+            }
+        }
     }
-    
+
+
     /**
      * Return a proxy class that implements the interfaces named in a proxy
      * class descriptor. Do this using the class loader assigned to this
@@ -91,4 +104,5 @@ public final class CustomObjectInputStream
             throw new ClassNotFoundException(null, e);
         }
     }
+
 }

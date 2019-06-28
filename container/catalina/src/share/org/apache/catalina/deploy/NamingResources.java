@@ -23,6 +23,9 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.io.Serializable;
+
+import org.apache.catalina.ServerFactory;
 
 
 /**
@@ -30,10 +33,10 @@ import java.util.Hashtable;
  * Naming Context and their associated JNDI context.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NamingResources.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class NamingResources {
+public class NamingResources implements Serializable {
 
 
     // ----------------------------------------------------------- Constructors
@@ -82,6 +85,13 @@ public final class NamingResources {
 
 
     /**
+     * The message destination referencess for this web application,
+     * keyed by name.
+     */
+    private HashMap mdrs = new HashMap();
+
+
+    /**
      * The resource environment references for this web application,
      * keyed by name.
      */
@@ -101,10 +111,10 @@ public final class NamingResources {
 
 
     /**
-     * The resource parameters for this web application, keyed by name.
+     * The transaction for this webapp.
      */
-    private HashMap resourceParams = new HashMap();
-
+    private ContextTransaction transaction = null;
+    
 
     /**
      * The property change support for this component.
@@ -130,6 +140,22 @@ public final class NamingResources {
         this.container = container;
     }
 
+    
+    /**
+     * Set the transaction object.
+     */
+    public void setTransaction(ContextTransaction transaction) {
+        this.transaction = transaction;
+    }
+    
+
+    /**
+     * Get the transaction object.
+     */
+    public ContextTransaction getTransaction() {
+        return transaction;
+    }
+    
 
     /**
      * Add an EJB resource reference for this web application.
@@ -161,36 +187,38 @@ public final class NamingResources {
     public void addEnvironment(ContextEnvironment environment) {
 
         if (entries.containsKey(environment.getName())) {
-            return;
-        } else {
-            entries.put(environment.getName(), environment.getType());
+            ContextEnvironment ce = findEnvironment(environment.getName());
+            ContextResourceLink rl = findResourceLink(environment.getName());
+            if (ce != null) {
+                if (ce.getOverride()) {
+                    removeEnvironment(environment.getName());
+                } else {
+                    return;
+                }
+            } else if (rl != null) {
+                // Link. Need to look at the global resources
+                NamingResources global =
+                    ServerFactory.getServer().getGlobalNamingResources();
+                if (global.findEnvironment(rl.getGlobal()) != null) {
+                    if (global.findEnvironment(rl.getGlobal()).getOverride()) {
+                        removeResourceLink(environment.getName());
+                    } else {
+                        return;
+                    }
+                }
+            } else {
+                // It exists but it isn't an env or a res link...
+                return;
+            }
         }
+        
+        entries.put(environment.getName(), environment.getType());
 
         synchronized (envs) {
             environment.setNamingResources(this);
             envs.put(environment.getName(), environment);
         }
         support.firePropertyChange("environment", null, environment);
-
-    }
-
-
-    /**
-     * Add resource parameters for this web application.
-     *
-     * @param resourceParameters New resource parameters
-     */
-    public void addResourceParams(ResourceParams resourceParameters) {
-
-        synchronized (resourceParams) {
-            if (resourceParams.containsKey(resourceParameters.getName())) {
-                return;
-            }
-            resourceParameters.setNamingResources(this);
-            resourceParams.put(resourceParameters.getName(),
-                               resourceParameters);
-        }
-        support.firePropertyChange("resourceParams", null, resourceParameters);
 
     }
 
@@ -213,6 +241,28 @@ public final class NamingResources {
             localEjbs.put(ejb.getName(), ejb);
         }
         support.firePropertyChange("localEjb", null, ejb);
+
+    }
+
+
+    /**
+     * Add a message destination reference for this web application.
+     *
+     * @param mdr New message destination reference
+     */
+    public void addMessageDestinationRef(MessageDestinationRef mdr) {
+
+        if (entries.containsKey(mdr.getName())) {
+            return;
+        } else {
+            entries.put(mdr.getName(), mdr.getType());
+        }
+
+        synchronized (mdrs) {
+            mdr.setNamingResources(this);
+            mdrs.put(mdr.getName(), mdr);
+        }
+        support.firePropertyChange("messageDestinationRef", null, mdr);
 
     }
 
@@ -254,22 +304,21 @@ public final class NamingResources {
     /**
      * Add a resource environment reference for this web application.
      *
-     * @param name The resource environment reference name
-     * @param type The resource environment reference type
+     * @param resource The resource
      */
-    public void addResourceEnvRef(String name, String type) {
+    public void addResourceEnvRef(ContextResourceEnvRef resource) {
 
-        if (entries.containsKey(name)) {
+        if (entries.containsKey(resource.getName())) {
             return;
         } else {
-            entries.put(name, type);
+            entries.put(resource.getName(), resource.getType());
         }
 
-        synchronized (resourceEnvRefs) {
-            resourceEnvRefs.put(name, type);
+        synchronized (localEjbs) {
+            resource.setNamingResources(this);
+            resourceEnvRefs.put(resource.getName(), resource);
         }
-        support.firePropertyChange("resourceEnvRef", null,
-                                   name + ":" + type);
+        support.firePropertyChange("resourceEnvRef", null, resource);
 
     }
 
@@ -389,6 +438,36 @@ public final class NamingResources {
 
 
     /**
+     * Return the message destination reference with the specified name,
+     * if any; otherwise, return <code>null</code>.
+     *
+     * @param name Name of the desired message destination reference
+     */
+    public MessageDestinationRef findMessageDestinationRef(String name) {
+
+        synchronized (mdrs) {
+            return ((MessageDestinationRef) mdrs.get(name));
+        }
+
+    }
+
+
+    /**
+     * Return the defined message destination references for this application.
+     * If there are none, a zero-length array is returned.
+     */
+    public MessageDestinationRef[] findMessageDestinationRefs() {
+
+        synchronized (mdrs) {
+            MessageDestinationRef results[] =
+                new MessageDestinationRef[mdrs.size()];
+            return ((MessageDestinationRef[]) mdrs.values().toArray(results));
+        }
+
+    }
+
+
+    /**
      * Return the resource reference with the specified name, if any;
      * otherwise return <code>null</code>.
      *
@@ -454,10 +533,10 @@ public final class NamingResources {
      *
      * @param name Name of the desired resource environment reference
      */
-    public String findResourceEnvRef(String name) {
+    public ContextResourceEnvRef findResourceEnvRef(String name) {
 
         synchronized (resourceEnvRefs) {
-            return ((String) resourceEnvRefs.get(name));
+            return ((ContextResourceEnvRef) resourceEnvRefs.get(name));
         }
 
     }
@@ -468,42 +547,11 @@ public final class NamingResources {
      * web application.  If none have been specified, a zero-length
      * array is returned.
      */
-    public String[] findResourceEnvRefs() {
+    public ContextResourceEnvRef[] findResourceEnvRefs() {
 
         synchronized (resourceEnvRefs) {
-            String results[] = new String[resourceEnvRefs.size()];
-            return ((String[]) resourceEnvRefs.keySet().toArray(results));
-        }
-
-    }
-
-
-    /**
-     * Return the resource parameters with the specified name, if any;
-     * otherwise return <code>null</code>.
-     *
-     * @param name Name of the desired resource parameters
-     */
-    public ResourceParams findResourceParams(String name) {
-
-        synchronized (resourceParams) {
-            return ((ResourceParams) resourceParams.get(name));
-        }
-
-    }
-
-
-    /**
-     * Return the resource parameters with the specified name, if any;
-     * otherwise return <code>null</code>.
-     */
-    public ResourceParams[] findResourceParams() {
-
-        synchronized (resourceParams) {
-            ResourceParams results[] = 
-                new ResourceParams[resourceParams.size()];
-            return ((ResourceParams[]) resourceParams.values()
-                    .toArray(results));
+            ContextResourceEnvRef results[] = new ContextResourceEnvRef[resourceEnvRefs.size()];
+            return ((ContextResourceEnvRef[]) resourceEnvRefs.values().toArray(results));
         }
 
     }
@@ -583,6 +631,28 @@ public final class NamingResources {
 
 
     /**
+     * Remove any message destination reference with the specified name.
+     *
+     * @param name Name of the message destination resource reference to remove
+     */
+    public void removeMessageDestinationRef(String name) {
+
+        entries.remove(name);
+
+        MessageDestinationRef mdr = null;
+        synchronized (mdrs) {
+            mdr = (MessageDestinationRef) mdrs.remove(name);
+        }
+        if (mdr != null) {
+            support.firePropertyChange("messageDestinationRef",
+                                       mdr, null);
+            mdr.setNamingResources(null);
+        }
+
+    }
+
+
+    /**
      * Remove a property change listener from this component.
      *
      * @param listener The listener to remove
@@ -652,26 +722,6 @@ public final class NamingResources {
         if (resourceLink != null) {
             support.firePropertyChange("resourceLink", resourceLink, null);
             resourceLink.setNamingResources(null);
-        }
-
-    }
-
-
-    /**
-     * Remove any resource parameters with the specified name.
-     *
-     * @param name Name of the resource parameters to remove
-     */
-    public void removeResourceParams(String name) {
-
-        ResourceParams resourceParameters = null;
-        synchronized (resourceParams) {
-            resourceParameters = (ResourceParams) resourceParams.remove(name);
-        }
-        if (resourceParameters != null) {
-            support.firePropertyChange("resourceParams", resourceParameters,
-                                       null);
-            resourceParameters.setNamingResources(null);
         }
 
     }

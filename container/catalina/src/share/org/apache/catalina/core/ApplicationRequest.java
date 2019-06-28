@@ -21,8 +21,10 @@ package org.apache.catalina.core;
 
 import java.util.Enumeration;
 import java.util.HashMap;
+
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletRequestWrapper;
+
 import org.apache.catalina.Globals;
 import org.apache.catalina.util.Enumerator;
 import org.apache.catalina.util.StringManager;
@@ -41,7 +43,7 @@ import org.apache.catalina.util.StringManager;
  * keep these two classes in synchronization when making changes!
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationRequest.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 class ApplicationRequest extends ServletRequestWrapper {
@@ -54,9 +56,11 @@ class ApplicationRequest extends ServletRequestWrapper {
      * The set of attribute names that are special for request dispatchers.
      */
     protected static final String specials[] =
-    { Globals.REQUEST_URI_ATTR, Globals.CONTEXT_PATH_ATTR,
-      Globals.SERVLET_PATH_ATTR, Globals.PATH_INFO_ATTR,
-      Globals.QUERY_STRING_ATTR };
+    { Globals.INCLUDE_REQUEST_URI_ATTR, Globals.INCLUDE_CONTEXT_PATH_ATTR,
+      Globals.INCLUDE_SERVLET_PATH_ATTR, Globals.INCLUDE_PATH_INFO_ATTR,
+      Globals.INCLUDE_QUERY_STRING_ATTR, Globals.FORWARD_REQUEST_URI_ATTR, 
+      Globals.FORWARD_CONTEXT_PATH_ATTR, Globals.FORWARD_SERVLET_PATH_ATTR, 
+      Globals.FORWARD_PATH_INFO_ATTR, Globals.FORWARD_QUERY_STRING_ATTR };
 
 
     // ----------------------------------------------------------- Constructors

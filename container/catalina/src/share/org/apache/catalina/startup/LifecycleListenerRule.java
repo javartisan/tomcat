@@ -21,8 +21,7 @@ package org.apache.catalina.startup;
 
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleListener;
-import org.apache.commons.digester.Digester;
-import org.apache.commons.digester.Rule;
+import org.apache.tomcat.util.digester.Rule;
 import org.xml.sax.Attributes;
 
 
@@ -41,16 +40,13 @@ public class LifecycleListenerRule extends Rule {
     /**
      * Construct a new instance of this Rule.
      *
-     * @param digester Digester we are associated with
      * @param listenerClass Default name of the LifecycleListener
      *  implementation class to be created
      * @param attributeName Name of the attribute that optionally
      *  includes an override name of the LifecycleListener class
      */
-    public LifecycleListenerRule(Digester digester, String listenerClass,
-                                 String attributeName) {
+    public LifecycleListenerRule(String listenerClass, String attributeName) {
 
-        super(digester);
         this.listenerClass = listenerClass;
         this.attributeName = attributeName;
 
@@ -83,7 +79,8 @@ public class LifecycleListenerRule extends Rule {
      *
      * @exception Exception if a processing error occurs
      */
-    public void begin(Attributes attributes) throws Exception {
+    public void begin(String namespace, String name, Attributes attributes)
+        throws Exception {
 
         // Instantiate a new LifecyleListener implementation object
         String className = listenerClass;

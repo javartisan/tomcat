@@ -18,20 +18,19 @@
 
 package org.apache.naming;
 
-import java.util.Vector;
-import java.util.Enumeration;
+import java.util.Iterator;
 
+import javax.naming.Binding;
 import javax.naming.CompositeName;
 import javax.naming.Context;
-import javax.naming.NamingException;
 import javax.naming.NamingEnumeration;
-import javax.naming.Binding;
+import javax.naming.NamingException;
 
 /**
  * Naming enumeration implementation.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NamingContextBindingsEnumeration.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class NamingContextBindingsEnumeration 
@@ -41,18 +40,10 @@ public class NamingContextBindingsEnumeration
     // ----------------------------------------------------------- Constructors
 
 
-    public NamingContextBindingsEnumeration(Vector entries, Context ctx) {
-        enumeration = entries.elements();
+    public NamingContextBindingsEnumeration(Iterator entries, Context ctx) {
+    	iterator = entries;
         this.ctx = ctx;
     }
-
-
-    public NamingContextBindingsEnumeration(Enumeration enumeration,
-            Context ctx) {
-        this.enumeration = enumeration;
-        this.ctx = ctx;
-    }
-
 
     // -------------------------------------------------------------- Variables
 
@@ -60,13 +51,13 @@ public class NamingContextBindingsEnumeration
     /**
      * Underlying enumeration.
      */
-    protected Enumeration enumeration;
+    protected Iterator iterator;
+
     
     /**
      * The context for which this enumeration is being generated.
      */
     private Context ctx;
-    
 
 
     // --------------------------------------------------------- Public Methods
@@ -86,7 +77,7 @@ public class NamingContextBindingsEnumeration
      */
     public boolean hasMore()
         throws NamingException {
-        return enumeration.hasMoreElements();
+        return iterator.hasNext();
     }
 
 
@@ -99,19 +90,20 @@ public class NamingContextBindingsEnumeration
 
 
     public boolean hasMoreElements() {
-        return enumeration.hasMoreElements();
+        return iterator.hasNext();
     }
+
 
     public Object nextElement() {
         try {
             return nextElementInternal();
         } catch (NamingException e) {
-            throw new RuntimeException(e.getMessage());
+            throw new RuntimeException(e.getMessage(), e);
         }
     }
     
     private Object nextElementInternal() throws NamingException {
-        NamingEntry entry = (NamingEntry) enumeration.nextElement();
+        NamingEntry entry = (NamingEntry) iterator.next();
         
         // If the entry is a reference, resolve it
         if (entry.type == NamingEntry.REFERENCE
@@ -122,13 +114,16 @@ public class NamingContextBindingsEnumeration
             } catch (NamingException e) {
                 throw e;
             } catch (Exception e) {
-                throw new NamingException(e.getMessage());
+                NamingException ne = new NamingException(e.getMessage());
+                ne.initCause(e);
+                throw ne;
             }
         }
         
         return new Binding(entry.name, entry.value.getClass().getName(), 
                            entry.value, true);
     }
+
 
 }
 

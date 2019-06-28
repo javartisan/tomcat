@@ -34,7 +34,8 @@ import javax.management.ObjectName;
  * is returned.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Amy Roh
+ * @version $Id: Lists.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class Lists {
@@ -51,24 +52,6 @@ public class Lists {
 
     // ------------------------------------------------------- Static Variables
 
-
-    /**
-     * Precomputed list of debug level labels and values.
-     */
-    private static List debugLevels = new ArrayList();
-
-    static {
-        debugLevels.add(new LabelValueBean("0", "0"));
-        debugLevels.add(new LabelValueBean("1", "1"));
-        debugLevels.add(new LabelValueBean("2", "2"));
-        debugLevels.add(new LabelValueBean("3", "3"));
-        debugLevels.add(new LabelValueBean("4", "4"));
-        debugLevels.add(new LabelValueBean("5", "5"));
-        debugLevels.add(new LabelValueBean("6", "6"));
-        debugLevels.add(new LabelValueBean("7", "7"));
-        debugLevels.add(new LabelValueBean("8", "8"));
-        debugLevels.add(new LabelValueBean("9", "9"));
-    }
 
     /**
      * Precomputed list of verbosity level labels and values.
@@ -92,9 +75,9 @@ public class Lists {
             booleanValues.add(new LabelValueBean("True", "true"));
             booleanValues.add(new LabelValueBean("False", "false"));
     }
-    
+
     /**
-     * Precomputed list of clientAuth labels and values.
+     * Precomputed list of clientAuth lables and values.
      */
     private static List clientAuthValues = new ArrayList();
 
@@ -103,33 +86,10 @@ public class Lists {
             clientAuthValues.add(new LabelValueBean("False","false"));
             clientAuthValues.add(new LabelValueBean("Want","want"));
     }
-    
-    /**
-     * Precomputed list of thread priority labels and values.
-     */
-    private static List threadPriorityValues = new ArrayList();
-    
-    static {
-        threadPriorityValues.add(
-                new LabelValueBean("Min", "" + Thread.MIN_PRIORITY));
-        threadPriorityValues.add(
-                new LabelValueBean("Norm", "" + Thread.NORM_PRIORITY));
-        threadPriorityValues.add(
-                new LabelValueBean("Max", "" + Thread.MAX_PRIORITY));
-    }
+
     // --------------------------------------------------------- Public Methods
 
 
-    /**
-     * Return a <code>List</code> of {@link LabelValueBean}s for the legal
-     * settings for <code>debug</code> properties.
-     */
-    public static List getDebugLevels() {
-
-        return (debugLevels);
-
-    }
-    
     /**
      * Return a <code>List</code> of {@link LabelValueBean}s for the legal
      * settings for <code>verbosity</code> properties.
@@ -149,7 +109,6 @@ public class Lists {
         return (booleanValues);
 
     }
-
     /**
      * Return a <code>List</code> of {@link LabelValueBean}s for the legal
      * settings for <code>clientAuth</code> properties.
@@ -157,16 +116,6 @@ public class Lists {
     public static List getClientAuthValues() {
 
         return (clientAuthValues);
-
-    }
-
-    /**
-     * Return a <code>List</code> of {@link LabelValueBean}s for the legal
-     * settings for <code>threadPriority</code> properties.
-     */
-    public static List getThreadPriorityValues() {
-
-        return (threadPriorityValues);
 
     }
 
@@ -183,9 +132,7 @@ public class Lists {
         throws Exception {
 
         StringBuffer sb = new StringBuffer(service.getDomain());
-        sb.append(":type=Connector,service=");
-        sb.append(service.getKeyProperty("name"));
-        sb.append(",*");
+        sb.append(":type=Connector,*");
         ObjectName search = new ObjectName(sb.toString());
         ArrayList connectors = new ArrayList();
         Iterator names = mbserver.queryNames(search, null).iterator();
@@ -228,16 +175,21 @@ public class Lists {
         throws Exception {
 
         StringBuffer sb = new StringBuffer(host.getDomain());
-        sb.append(":type=Context,host=");
-        sb.append(host.getKeyProperty("host"));
-        sb.append(",service=");
-        sb.append(host.getKeyProperty("service"));
-        sb.append(",*");
+        sb.append(":j2eeType=WebModule,*");
         ObjectName search = new ObjectName(sb.toString());
         ArrayList contexts = new ArrayList();
         Iterator names = mbserver.queryNames(search, null).iterator();
+        String name = null;
+        ObjectName oname = null;
+        String hostPrefix = "//"+host.getKeyProperty("host");
+        String hostAttr = null;
         while (names.hasNext()) {
-            contexts.add(names.next().toString());
+            name = names.next().toString();
+            oname = new ObjectName(name);
+            hostAttr = oname.getKeyProperty("name");
+            if (hostAttr.startsWith(hostPrefix)) {
+                contexts.add(name);
+            }
         }
         Collections.sort(contexts);
         return (contexts);
@@ -279,7 +231,8 @@ public class Lists {
      */
     public static List getDefaultContexts(MBeanServer mbserver, ObjectName 
         container) throws Exception {
-        
+
+        // FIXME
         StringBuffer sb = new StringBuffer(container.getDomain());
         sb.append(":type=DefaultContext");
         String type = container.getKeyProperty("type");
@@ -290,14 +243,6 @@ public class Lists {
         if (host != null) {
             sb.append(",host=");
             sb.append(host);
-        }
-        String service = container.getKeyProperty("service");
-        if ("Service".equals(type)) {
-            service = container.getKeyProperty("name");
-        }
-        if (service != null) {
-            sb.append(",service=");
-            sb.append(service);
         }
         ObjectName search = new ObjectName(sb.toString());
         ArrayList defaultContexts = new ArrayList();
@@ -341,9 +286,7 @@ public class Lists {
         throws Exception {
 
         StringBuffer sb = new StringBuffer(service.getDomain());
-        sb.append(":type=Host,service=");
-        sb.append(service.getKeyProperty("name"));
-        sb.append(",*");
+        sb.append(":type=Host,*");
         ObjectName search = new ObjectName(sb.toString());
         ArrayList hosts = new ArrayList();
         Iterator names = mbserver.queryNames(search, null).iterator();
@@ -374,73 +317,6 @@ public class Lists {
 
 
     /**
-     * Return a list of <code>Logger</code> object name strings
-     * for the specified container (service, host, or context) object name.
-     *
-     * @param mbserver MBeanServer from which to retrieve the list
-     * @param container Object name of the container for which to select
-     *                  loggers
-     *
-     * @exception Exception if thrown while retrieving the list
-     */
-    public static List getLoggers(MBeanServer mbserver, ObjectName container)
-        throws Exception {
-
-        StringBuffer sb = new StringBuffer(container.getDomain());
-        sb.append(":type=Logger");
-        String type = container.getKeyProperty("type");
-        String path = container.getKeyProperty("path");
-        if (path != null) {
-            sb.append(",path=");
-            sb.append(path);
-        }
-        String host = container.getKeyProperty("host");
-        if ("Host".equals(type)) {
-            host = container.getKeyProperty("host");
-        }
-        if (host != null) {
-            sb.append(",host=");
-            sb.append(host);
-        }
-        String service = container.getKeyProperty("service");
-        if ("Service".equals(type)) {
-            service = container.getKeyProperty("name");
-        }
-        if (service != null) {
-            sb.append(",service=");
-            sb.append(service);
-        }
-        ObjectName search = new ObjectName(sb.toString());
-        ArrayList loggers = new ArrayList();
-        Iterator names = mbserver.queryNames(search, null).iterator();
-        while (names.hasNext()) {
-            loggers.add(names.next().toString());
-        }
-        Collections.sort(loggers);
-        return (loggers);
-
-    }
-
-
-    /**
-     * Return a list of <code>Logger</code> object name strings
-     * for the specified container (service, host, or context) object name.
-     *
-     * @param mbserver MBeanServer from which to retrieve the list
-     * @param container Object name of the container for which to select
-     *                  loggers
-     *
-     * @exception Exception if thrown while retrieving the list
-     */
-    public static List getLoggers(MBeanServer mbserver, String container)
-        throws Exception {
-
-        return (getLoggers(mbserver, new ObjectName(container)));
-
-    }
-
-
-    /**
      * Return a list of <code>Realm</code> object name strings
      * for the specified container (service, host, or context) object name.
      *
@@ -453,31 +329,7 @@ public class Lists {
     public static List getRealms(MBeanServer mbserver, ObjectName container)
         throws Exception {
 
-        StringBuffer sb = new StringBuffer(container.getDomain());
-        sb.append(":type=Realm");
-        String type = container.getKeyProperty("type");
-        String path = container.getKeyProperty("path");
-        if (path != null) {
-            sb.append(",path=");
-            sb.append(path);
-        }
-        String host = container.getKeyProperty("host");
-        if ("Host".equals(type)) {
-            host = container.getKeyProperty("host");
-        }
-        if (host != null) {
-            sb.append(",host=");
-            sb.append(host);
-        }
-        String service = container.getKeyProperty("service");
-        if ("Service".equals(type)) {
-            service = container.getKeyProperty("name");
-        }
-        if (service != null) {
-            sb.append(",service=");
-            sb.append(service);
-        }
-        ObjectName search = new ObjectName(sb.toString());
+        ObjectName search = getSearchObject(container, "Realm");
         ArrayList realms = new ArrayList();
         Iterator names = mbserver.queryNames(search, null).iterator();
         while (names.hasNext()) {
@@ -522,19 +374,21 @@ public class Lists {
         StringBuffer sb = new StringBuffer(container.getDomain());
         sb.append(":type=Valve");
         String type = container.getKeyProperty("type");
+        String j2eeType = container.getKeyProperty("j2eeType");
         sb.append(TomcatTreeBuilder.WILDCARD);
-        
-        String service = container.getKeyProperty("service");
-        String host = container.getKeyProperty("host");
-        String path = container.getKeyProperty("path");
-        
-        if ("Service".equals(type)) {
-            service = container.getKeyProperty("name");
-        }
-        if (service != null) {
-            sb.append(",service=");
-            sb.append(service);
-        }
+        String host = "";
+        String path = "";
+        String name = container.getKeyProperty("name");
+        if ((name != null) && (name.length() > 0)) {
+            // parent is context
+            name = name.substring(2);
+            int i = name.indexOf("/");
+            host = name.substring(0,i);
+            path = name.substring(i);
+        } else if ("Host".equals(type)) {
+            // parent is host
+            host = container.getKeyProperty("host");
+        }    
         
         ObjectName search = new ObjectName(sb.toString());        
         ArrayList valves = new ArrayList();
@@ -571,7 +425,7 @@ public class Lists {
                 }
             }
             
-            if ("Context".equalsIgnoreCase(type)) {
+            if ("WebModule".equalsIgnoreCase(j2eeType)) {
                 if ((path.equalsIgnoreCase(vpath)) && (host.equalsIgnoreCase(vhost))) {
                     valves.add(valve.toString());      
                 }
@@ -607,10 +461,10 @@ public class Lists {
      *
      * @exception Exception if thrown while retrieving the list
      */
-    public static List getServers(MBeanServer mbserver)
+    public static List getServers(MBeanServer mbserver, String domain)
         throws Exception {
 
-        ObjectName search = new ObjectName("Catalina:type=Server,*");
+        ObjectName search = new ObjectName(domain+":type=Server,*");
         ArrayList servers = new ArrayList();
         Iterator names = mbserver.queryNames(search, null).iterator();
         while (names.hasNext()) {
@@ -634,8 +488,9 @@ public class Lists {
     public static List getServices(MBeanServer mbserver, ObjectName server)
         throws Exception {
 
-        StringBuffer sb = new StringBuffer(server.getDomain());
-        sb.append(":type=Service,*");
+        //StringBuffer sb = new StringBuffer(server.getDomain());
+        StringBuffer sb = new StringBuffer("*:type=Service,*");
+        //sb.append(":type=Service,*");
         ObjectName search = new ObjectName(sb.toString());
         ArrayList services = new ArrayList();
         Iterator names = mbserver.queryNames(search, null).iterator();
@@ -680,15 +535,12 @@ public class Lists {
 
         // Get the admin app's service name
         StringBuffer sb = new StringBuffer(domain);
-        sb.append(":type=Context");
-        sb.append(",path=");
-        sb.append(request.getContextPath());
-        sb.append(",*");
+        sb.append(":type=Service,*");
         ObjectName search = new ObjectName(sb.toString());
         Iterator names = mbserver.queryNames(search, null).iterator();
         String service = null;
         while (names.hasNext()) {
-            service = ((ObjectName)names.next()).getKeyProperty("service");
+            service = ((ObjectName)names.next()).getKeyProperty("serviceName");
         }
         return service;
 
@@ -707,21 +559,66 @@ public class Lists {
     public static String getAdminAppHost
         (MBeanServer mbserver, String domain, HttpServletRequest request)
         throws Exception {
-
+        
         // Get the admin app's host name
         StringBuffer sb = new StringBuffer(domain);
-        sb.append(":type=Context");
-        sb.append(",path=");
-        sb.append(request.getContextPath());
-        sb.append(",*");
+        sb.append(":j2eeType=WebModule,*"); 
         ObjectName search = new ObjectName(sb.toString());
         Iterator names = mbserver.queryNames(search, null).iterator();
+        String contextPath = request.getContextPath();
         String host = null;
-        while (names.hasNext()) {
-            host = ((ObjectName)names.next()).getKeyProperty("host");
+        String name = null;
+        ObjectName oname = null;
+        while (names.hasNext()) {       
+            name = names.next().toString();
+            oname = new ObjectName(name);
+            host = oname.getKeyProperty("name");
+            host = host.substring(2);
+            int i = host.indexOf("/");
+            if (contextPath.equals(host.substring(i))) {
+                host = host.substring(0,i);
+                return host;
+            }
         }
         return host;
 
     }
 
+    
+    /**
+     * Return search object name to be used to query.
+     *
+     * @param container object name to query
+     * @param type type of the component
+     *
+     * @exception MalformedObjectNameException if thrown while retrieving the list
+     */
+    public static ObjectName getSearchObject(ObjectName container, String type)  
+            throws Exception {
+        
+        StringBuffer sb = new StringBuffer(container.getDomain());
+        sb.append(":type="+type);
+        String containerType = container.getKeyProperty("type");
+        String name = container.getKeyProperty("name");
+        if ((name != null) && (name.length() > 0)) {
+            // parent is context
+            name = name.substring(2);
+            int i = name.indexOf("/");
+            String host = name.substring(0,i);
+            String path = name.substring(i);
+            sb.append(",path=");
+            sb.append(path);
+            sb.append(",host=");
+            sb.append(host);
+        } else if ("Host".equals(containerType)) {
+            // parent is host
+            String host = container.getKeyProperty("host");
+            sb.append(",host=");
+            sb.append(host);
+        }    
+        
+        return new ObjectName(sb.toString());
+        
+    }
+    
 }

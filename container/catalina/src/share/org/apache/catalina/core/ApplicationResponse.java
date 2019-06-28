@@ -19,8 +19,11 @@
 package org.apache.catalina.core;
 
 
+import java.util.Locale;
+
 import javax.servlet.ServletResponse;
 import javax.servlet.ServletResponseWrapper;
+
 import org.apache.catalina.util.StringManager;
 
 
@@ -37,7 +40,7 @@ import org.apache.catalina.util.StringManager;
  * keep these two classes in synchronization when making changes!
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationResponse.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 class ApplicationResponse extends ServletResponseWrapper {
@@ -131,6 +134,28 @@ class ApplicationResponse extends ServletResponseWrapper {
         if (!included)
             getResponse().setContentType(type);
 
+    }
+
+
+    /**
+     * Ignore <code>setLocale()</code> calls on an included response.
+     *
+     * @param loc The new locale
+     */
+    public void setLocale(Locale loc) {
+        if (!included)
+            getResponse().setLocale(loc);
+    }
+
+
+    /**
+     * Ignore <code>setBufferSize()</code> calls on an included response.
+     *
+     * @param size The buffer size
+     */
+    public void setBufferSize(int size) {
+        if (!included)
+            getResponse().setBufferSize(size);
     }
 
 

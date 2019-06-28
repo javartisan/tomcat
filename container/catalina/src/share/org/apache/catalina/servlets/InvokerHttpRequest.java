@@ -21,7 +21,6 @@ package org.apache.catalina.servlets;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
-import org.apache.catalina.util.StringManager;
 
 
 /**
@@ -31,7 +30,7 @@ import org.apache.catalina.util.StringManager;
  * to the servlet, because a new servlet mapping will have been created.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: InvokerHttpRequest.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 class InvokerHttpRequest extends HttpServletRequestWrapper {
@@ -90,13 +89,6 @@ class InvokerHttpRequest extends HttpServletRequestWrapper {
     protected String servletPath = null;
 
 
-    /**
-     * The string manager for this package.
-     */
-    protected static StringManager sm =
-        StringManager.getManager(Constants.Package);
-
-
     // --------------------------------------------- HttpServletRequest Methods
 
 
@@ -151,7 +143,7 @@ class InvokerHttpRequest extends HttpServletRequestWrapper {
      */
     public String getInfo() {
 
-        return (InvokerHttpRequest.info);
+        return (info);
 
     }
 

@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,30 +25,29 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.URLEncoder;
-import java.text.SimpleDateFormat;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Locale;
 import java.util.TimeZone;
+
 import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-import org.apache.catalina.HttpResponse;
+
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.LifecycleSupport;
 import org.apache.catalina.util.ServerInfo;
 import org.apache.catalina.util.StringManager;
-
-import org.apache.commons.logging.LogFactory;
 import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 
 
@@ -75,6 +74,7 @@ import org.apache.commons.logging.Log;
  * <li><code>time-taken</code>:  Time (in seconds) taken to serve the request</li>
  * <li><code>x-A(XXX)</code>: Pull XXX attribute from the servlet context </li>
  * <li><code>x-C(XXX)</code>: Pull the first cookie of the name XXX </li>
+ * <li><code>x-O(XXX)</code>: Pull the all response header values XXX </li>
  * <li><code>x-R(XXX)</code>: Pull XXX attribute from the servlet request </li>
  * <li><code>x-S(XXX)</code>: Pull XXX attribute from the session </li>
  * <li><code>x-P(...)</code>:  Call request.getParameter(...)
@@ -133,10 +133,11 @@ import org.apache.commons.logging.Log;
  *
  *
  * @author Tim Funk
- * @version $Revision: 719718 $ $Date: 2008-11-21 21:22:24 +0000 (Fri, 21 Nov 2008) $
+ * @author Peter Rossbach
+ * @version $Id: ExtendedAccessLogValve.java 966908 2010-07-22 23:57:08Z rjung $
  */
 
-public final class ExtendedAccessLogValve
+public class ExtendedAccessLogValve
     extends ValveBase
     implements Lifecycle {
 
@@ -163,7 +164,7 @@ public final class ExtendedAccessLogValve
      * The descriptive information about this implementation.
      */
     protected static final String info =
-        "org.apache.catalina.valves.ExtendedAccessLogValve/1.0";
+        "org.apache.catalina.valves.ExtendedAccessLogValve/1.1";
 
 
     /**
@@ -187,10 +188,9 @@ public final class ExtendedAccessLogValve
 
 
     /**
-     * The as-of date for the currently open log file, or a zero-length
-     * string if there is no open log file.
+     * The as-of date for the currently open log file.
      */
-    private String dateStamp = "";
+    private String dateStamp = null;
 
 
     /**
@@ -206,23 +206,9 @@ public final class ExtendedAccessLogValve
 
 
     /**
-     * A date formatter to format a Date into a date in the format
-     * "yyyy-MM-dd".
+     * The Date that is used to calculate the dateStamp for the file.
      */
-    private SimpleDateFormat dateFormatter = null;
-
-
-    /**
-     * A date formatter to format a Date into a time in the format
-     * "kk:mm:ss" (kk is a 24-hour representation of the hour).
-     */
-    private SimpleDateFormat timeFormatter = null;
-
-
-    /**
-     * Time taken formatter for 3 decimal places.
-     */
-     private DecimalFormat timeTakenFormatter = null;
+    private Date dateStampDate = new Date();
 
 
     /**
@@ -254,18 +240,10 @@ public final class ExtendedAccessLogValve
     private File currentLogFile = null;
 
 
-
-    /**
-     * The system time when we last updated the Date that this valve
-     * uses for log lines.
-     */
-    private Date currentDate = null;
-
-
     /**
      * Instant when the log daily rotation was last checked.
      */
-    private long rotationLastChecked = 0L;
+    private volatile long rotationLastChecked = 0L;
 
 
     /**
@@ -315,6 +293,127 @@ public final class ExtendedAccessLogValve
      * Date format to place in log file name. Use at your own risk!
      */
     private String fileDateFormat = null;
+
+
+    /**
+     * Helper class that stores thread-local variables that are used to format a
+     * log line. Note, that an instance of this class is shared by all
+     * {@link ExtendedAccessLogValve} instances in the same thread.
+     */
+    private static class LogDateStruct {
+        /**
+         * The time for the current log line.
+         */
+        private Date date;
+
+        /**
+         * A date formatter to format a Date into a date in the format
+         * "yyyy-MM-dd".
+         */
+        private SimpleDateFormat dateFormatter;
+
+        /**
+         * Formatted date value.
+         */
+        private String dateString;
+
+        /**
+         * A date formatter to format a Date into a time in the format
+         * "kk:mm:ss" (kk is a 24-hour representation of the hour).
+         */
+        private SimpleDateFormat timeFormatter;
+
+        /**
+         * Formatted time value.
+         */
+        private String timeString;
+
+        /**
+         * Time taken formatter for 3 decimal places.
+         */
+        private DecimalFormat timeTakenFormatter;
+
+        /**
+         * GMT timezone is used to format time and date fields.
+         */
+        private static final TimeZone timezoneGMT = TimeZone.getTimeZone("GMT");
+
+        /**
+         * Formatting symbols for DecimalFormat. Should use dot (and not comma)
+         * as the decimal point.
+         */
+        private static final DecimalFormatSymbols decimalsUS = new DecimalFormatSymbols(
+                Locale.US);
+
+        public LogDateStruct() {
+            date = new Date();
+        }
+
+        /**
+         * Updates the current time value. The time is updated only to be
+         * accurate within one second.
+         * 
+         * @param systime
+         */
+        public void setTime(long systime) {
+            // Only update once per second, max.
+            long diff = systime - date.getTime();
+            if (diff > 1000 || diff < -1000) {
+                date.setTime(systime);
+                timeString = dateString = null;
+            }
+        }
+
+        /**
+         * Formats the date value.
+         * 
+         * @return
+         */
+        public String formatDate() {
+            if (dateString == null) {
+                if (dateFormatter == null) {
+                    dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
+                    dateFormatter.setTimeZone(timezoneGMT);
+                }
+                dateString = dateFormatter.format(date);
+            }
+            return dateString;
+        }
+
+        /**
+         * Formats the time value.
+         * 
+         * @return
+         */
+        public String formatTime() {
+            if (timeString == null) {
+                if (timeFormatter == null) {
+                    timeFormatter = new SimpleDateFormat("HH:mm:ss");
+                    timeFormatter.setTimeZone(timezoneGMT);
+                }
+                timeString = timeFormatter.format(date);
+            }
+            return timeString;
+        }
+
+        /**
+         * Formats the time taken value.
+         * 
+         * @return
+         */
+        public String formatTimeTaken(long runTime) {
+            if (timeTakenFormatter == null) {
+                timeTakenFormatter = new DecimalFormat("0.000", decimalsUS);
+            }
+            return timeTakenFormatter.format(runTime / 1000d);
+        }
+    }
+
+    private static final ThreadLocal logDateLocal = new ThreadLocal() {
+        protected Object initialValue() {
+            return new LogDateStruct();
+        }
+    };
 
 
     // ------------------------------------------------------------- Properties
@@ -517,14 +616,11 @@ public final class ExtendedAccessLogValve
      *
      * @param request Request being processed
      * @param response Response being processed
-     * @param context The valve context used to invoke the next valve
-     *  in the current processing pipeline
      *
      * @exception IOException if an input/output error has occurred
      * @exception ServletException if a servlet error has occurred
      */
-    public void invoke(Request request, Response response,
-                       ValveContext context)
+    public void invoke(Request request, Response response)
         throws IOException, ServletException {
 
         // Pass this request on to the next valve in our pipeline
@@ -532,7 +628,7 @@ public final class ExtendedAccessLogValve
         long runTime;
         long startTime=System.currentTimeMillis();
 
-        context.invokeNext(request, response);
+        getNext().invoke(request, response);
 
         endTime = System.currentTimeMillis();
         runTime = endTime-startTime;
@@ -543,7 +639,9 @@ public final class ExtendedAccessLogValve
         }
 
 
-        Date date = getDate(endTime);
+        LogDateStruct logDate = (LogDateStruct) logDateLocal.get();
+        logDate.setTime(endTime);
+
         StringBuffer result = new StringBuffer();
 
         for (int i=0; fieldInfos!=null && i<fieldInfos.length; i++) {
@@ -584,13 +682,13 @@ public final class ExtendedAccessLogValve
                     break;
                 case FieldInfo.DATA_SPECIAL:
                     if (FieldInfo.SPECIAL_DATE==fieldInfos[i].location)
-                        result.append(dateFormatter.format(date));
+                        result.append(logDate.formatDate());
                     else if (FieldInfo.SPECIAL_TIME_TAKEN==fieldInfos[i].location)
-                        result.append(timeTakenFormatter.format(runTime/1000d));
+                        result.append(logDate.formatTimeTaken(runTime));
                     else if (FieldInfo.SPECIAL_TIME==fieldInfos[i].location)
-                        result.append(timeFormatter.format(date));
+                        result.append(logDate.formatTime());
                     else if (FieldInfo.SPECIAL_BYTES==fieldInfos[i].location) {
-                        int length = response.getContentCount();
+                        long length = response.getContentCountLong() ;
                         if (length > 0)
                             result.append(length);
                         else
@@ -608,7 +706,7 @@ public final class ExtendedAccessLogValve
                 result.append(fieldInfos[i].postWhiteSpace);
             }
         }
-        log(result.toString(), date);
+        log(result.toString(), endTime);
 
     }
 
@@ -634,8 +732,8 @@ public final class ExtendedAccessLogValve
             }
 
             /* Make sure date is correct */
-            currentDate = new Date(System.currentTimeMillis());
-            dateStamp = fileDateFormatter.format(currentDate);
+            dateStampDate.setTime(System.currentTimeMillis());
+            dateStamp = fileDateFormatter.format(dateStampDate);
 
             open();
             return true;
@@ -656,27 +754,22 @@ public final class ExtendedAccessLogValve
      */
      private String getClientToServer(FieldInfo fieldInfo, Request request) {
 
-        ServletRequest sr = request.getRequest();
-        HttpServletRequest hsr = null;
-        if (sr instanceof HttpServletRequest)
-            hsr = (HttpServletRequest)sr;
-
         switch(fieldInfo.location) {
             case FieldInfo.FIELD_METHOD:
-                return hsr.getMethod();
+                return request.getMethod();
             case FieldInfo.FIELD_URI:
-                if (null==hsr.getQueryString())
-                    return hsr.getRequestURI();
+                if (null==request.getQueryString())
+                    return request.getRequestURI();
                 else
-                    return hsr.getRequestURI() + "?" + hsr.getQueryString();
+                    return request.getRequestURI() + "?" + request.getQueryString();
             case FieldInfo.FIELD_URI_STEM:
-                return hsr.getRequestURI();
+                return request.getRequestURI();
             case FieldInfo.FIELD_URI_QUERY:
-                if (null==hsr.getQueryString())
+                if (null==request.getQueryString())
                     return "-";
-                return hsr.getQueryString();
+                return request.getQueryString();
             case FieldInfo.FIELD_HEADER:
-                return wrap(hsr.getHeader(fieldInfo.value));
+                return wrap(request.getHeader(fieldInfo.value));
             default:
                 ;
         }
@@ -693,14 +786,13 @@ public final class ExtendedAccessLogValve
      *  @return The appropriate value.
      */
     private String getServerToClient(FieldInfo fieldInfo, Response response) {
-        HttpResponse r = (HttpResponse)response;
         switch(fieldInfo.location) {
             case FieldInfo.FIELD_STATUS:
-                return "" + r.getStatus();
+                return "" + response.getStatus();
             case FieldInfo.FIELD_COMMENT:
                 return "?"; /* Not coded yet*/
             case FieldInfo.FIELD_HEADER:
-                return wrap(r.getHeader(fieldInfo.value));
+                return wrap(response.getHeader(fieldInfo.value));
             default:
                 ;
         }
@@ -709,7 +801,29 @@ public final class ExtendedAccessLogValve
 
     }
 
+    /**
+     * write a specific response header - x-O{xxx}
+     */
+    protected String responseHeader(Request request,String header) {
+        Response response = request.getResponse() ;
+        if (null != response) {
+            String[] values = response.getHeaderValues(header);
+            if(values.length > 0) {
+                StringBuffer buf = new StringBuffer();
+                for (int i = 0; i < values.length; i++) {
+                    String string = values[i];
+                    buf.append(string) ;
+                    if(i+1<values.length)
+                        buf.append(",");
 
+                }
+                return buf.toString() ;
+            }
+        }
+        return "-" ;
+    }
+    
+    
     /**
      * Get app specific data.
      * @param fieldInfo The field to decode
@@ -718,26 +832,23 @@ public final class ExtendedAccessLogValve
      */
     private String getAppSpecific(FieldInfo fieldInfo, Request request) {
 
-        ServletRequest sr = request.getRequest();
-        HttpServletRequest hsr = null;
-        if (sr instanceof HttpServletRequest)
-            hsr = (HttpServletRequest)sr;
-
         switch(fieldInfo.xType) {
             case FieldInfo.X_PARAMETER:
-                return wrap(urlEncode(sr.getParameter(fieldInfo.value)));
+                return wrap(urlEncode(request.getParameter(fieldInfo.value)));
             case FieldInfo.X_REQUEST:
-                return wrap(sr.getAttribute(fieldInfo.value));
+                return wrap(request.getAttribute(fieldInfo.value));
+            case FieldInfo.X_RESPONSE:
+                return wrap(responseHeader(request,fieldInfo.value));
             case FieldInfo.X_SESSION:
                 HttpSession session = null;
-                if (hsr!=null){
-                    session = hsr.getSession(false);
+                if (request!=null){
+                    session = request.getSession(false);
                     if (session!=null)
                         return wrap(session.getAttribute(fieldInfo.value));
                 }
                 break;
             case FieldInfo.X_COOKIE:
-                Cookie[] c = hsr.getCookies();
+                Cookie[] c = request.getCookies();
                 for (int i=0; c != null && i < c.length; i++){
                     if (fieldInfo.value.equals(c[i].getName())){
                         return wrap(c[i].getValue());
@@ -748,31 +859,31 @@ public final class ExtendedAccessLogValve
                                 .getAttribute(fieldInfo.value));
             case FieldInfo.X_SERVLET_REQUEST:
                 if (fieldInfo.location==FieldInfo.X_LOC_AUTHTYPE) {
-                    return wrap(hsr.getAuthType());
+                    return wrap(request.getAuthType());
                 } else if (fieldInfo.location==FieldInfo.X_LOC_REMOTEUSER) {
-                    return wrap(hsr.getRemoteUser());
+                    return wrap(request.getRemoteUser());
                 } else if (fieldInfo.location==
                             FieldInfo.X_LOC_REQUESTEDSESSIONID) {
-                    return wrap(hsr.getRequestedSessionId());
+                    return wrap(request.getRequestedSessionId());
                 } else if (fieldInfo.location==
                             FieldInfo.X_LOC_REQUESTEDSESSIONIDFROMCOOKIE) {
-                    return wrap(""+hsr.isRequestedSessionIdFromCookie());
+                    return wrap(""+request.isRequestedSessionIdFromCookie());
                 } else if (fieldInfo.location==
                             FieldInfo.X_LOC_REQUESTEDSESSIONIDVALID) {
-                    return wrap(""+hsr.isRequestedSessionIdValid());
+                    return wrap(""+request.isRequestedSessionIdValid());
                 } else if (fieldInfo.location==FieldInfo.X_LOC_CONTENTLENGTH) {
-                    return wrap(""+hsr.getContentLength());
+                    return wrap(""+request.getCoyoteRequest().getContentLengthLong());
                 } else if (fieldInfo.location==
                             FieldInfo.X_LOC_CHARACTERENCODING) {
-                    return wrap(hsr.getCharacterEncoding());
+                    return wrap(request.getCharacterEncoding());
                 } else if (fieldInfo.location==FieldInfo.X_LOC_LOCALE) {
-                    return wrap(hsr.getLocale());
+                    return wrap(request.getLocale());
                 } else if (fieldInfo.location==FieldInfo.X_LOC_PROTOCOL) {
-                    return wrap(hsr.getProtocol());
+                    return wrap(request.getProtocol());
                 } else if (fieldInfo.location==FieldInfo.X_LOC_SCHEME) {
-                    return wrap(hsr.getScheme());
+                    return wrap(request.getScheme());
                 } else if (fieldInfo.location==FieldInfo.X_LOC_SECURE) {
-                    return wrap(""+hsr.isSecure());
+                    return wrap(""+request.isSecure());
                 }
                 break;
             default:
@@ -864,26 +975,23 @@ public final class ExtendedAccessLogValve
      * has changed since the previous log call.
      *
      * @param message Message to be logged
-     * @param date the current Date object (so this method doesn't need to
-     *        create a new one)
+     * @param systime The current time
      */
-    private void log(String message, Date date) {
+    private void log(String message, long systime) {
 
-        if (rotatable){
+        if (rotatable) {
             // Only do a logfile switch check once a second, max.
-            long systime = System.currentTimeMillis();
             if ((systime - rotationLastChecked) > 1000) {
+                synchronized (this) {
+                    systime = System.currentTimeMillis();
+                    if ((systime - rotationLastChecked) > 1000) {
+                        rotationLastChecked = systime;
 
-                // We need a new currentDate
-                currentDate = new Date(systime);
-                rotationLastChecked = systime;
+                        // Check for a change of date
+                        dateStampDate.setTime(systime);
+                        String tsDate = fileDateFormatter.format(dateStampDate);
 
-                // Check for a change of date
-                String tsDate = fileDateFormatter.format(currentDate);
-
-                // If the date has changed, switch log files
-                if (!dateStamp.equals(tsDate)) {
-                    synchronized (this) {
+                        // If the date has changed, switch log files
                         if (!dateStamp.equals(tsDate)) {
                             close();
                             dateStamp = tsDate;
@@ -895,18 +1003,19 @@ public final class ExtendedAccessLogValve
         }
 
         /* In case something external rotated the file instead */
-        if (checkExists){
+        if (checkExists) {
             synchronized (this) {
-                if (currentLogFile!=null && !currentLogFile.exists()) {
+                if (currentLogFile != null && !currentLogFile.exists()) {
                     try {
                         close();
-                    } catch (Throwable e){
+                    } catch (Throwable e) {
                         log.info("at least this wasn't swallowed", e);
                     }
 
                     /* Make sure date is correct */
-                    currentDate = new Date(System.currentTimeMillis());
-                    dateStamp = fileDateFormatter.format(currentDate);
+                    systime = System.currentTimeMillis();
+                    dateStampDate.setTime(systime);
+                    dateStamp = fileDateFormatter.format(dateStampDate);
 
                     open();
                 }
@@ -914,8 +1023,10 @@ public final class ExtendedAccessLogValve
         }
 
         // Log this message
-        if (writer != null) {
-            writer.println(message);
+        synchronized (this) {
+            if (writer != null) {
+                writer.println(message);
+            }
         }
 
     }
@@ -958,29 +1069,6 @@ public final class ExtendedAccessLogValve
             writer = null;
             currentLogFile = null;
         }
-
-    }
-
-
-    /**
-     * This method returns a Date object that is accurate to within one
-     * second.  If a thread calls this method to get a Date and it's been
-     * less than 1 second since a new Date was created, this method
-     * simply gives out the same Date again so that the system doesn't
-     * spend time creating Date objects unnecessarily.
-     */
-    private Date getDate(long systime) {
-        /* Avoid extra call to System.currentTimeMillis(); */
-        if (0==systime) {
-            systime = System.currentTimeMillis();
-        }
-
-        // Only create a new Date once per second, max.
-        if ((systime - currentDate.getTime()) > 1000) {
-            currentDate.setTime(systime);
-        }
-
-        return currentDate;
 
     }
 
@@ -1040,18 +1128,15 @@ public final class ExtendedAccessLogValve
         lifecycle.fireLifecycleEvent(START_EVENT, null);
         started = true;
 
-        // Initialize the timeZone, Date formatters, and currentDate
-        TimeZone tz = TimeZone.getTimeZone("GMT");
-        dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
-        dateFormatter.setTimeZone(tz);
-        timeFormatter = new SimpleDateFormat("HH:mm:ss");
-        timeFormatter.setTimeZone(tz);
-        currentDate = new Date(System.currentTimeMillis());
+        // Initialize the fileDate formatter, and dateStamp
         if (fileDateFormat==null || fileDateFormat.length()==0)
             fileDateFormat = "yyyy-MM-dd";
-        fileDateFormatter = new SimpleDateFormat(fileDateFormat);
-        dateStamp = fileDateFormatter.format(currentDate);
-        timeTakenFormatter = new DecimalFormat("0.000");
+
+        synchronized (this) {
+            fileDateFormatter = new SimpleDateFormat(fileDateFormat);
+            dateStampDate.setTime(System.currentTimeMillis());
+            dateStamp = fileDateFormatter.format(dateStampDate);
+        }
 
         /* Everybody say ick ... ick */
         try {
@@ -1275,6 +1360,7 @@ public final class ExtendedAccessLogValve
       * x-A(...) - Value in servletContext
       * x-S(...) - Value in session
       * x-R(...) - Value in servletRequest
+      * x-O(...) - Header value in servletResponse
       * @param fields The pattern to decode
       * @param i The string index where we are decoding.
       * @param fieldInfo Where to store the results
@@ -1297,6 +1383,9 @@ public final class ExtendedAccessLogValve
                 break;
             case 'C':
                 fieldInfo.xType = FieldInfo.X_COOKIE;
+                break;
+            case 'O':
+                fieldInfo.xType = FieldInfo.X_RESPONSE;
                 break;
             case 'R':
                 fieldInfo.xType = FieldInfo.X_REQUEST;
@@ -1340,7 +1429,7 @@ public final class ExtendedAccessLogValve
             } else if ("requestedSessionIdFromCookie".equals(fieldInfo.value)){
                 fieldInfo.location = FieldInfo.X_LOC_REQUESTEDSESSIONIDFROMCOOKIE;
             } else if ("requestedSessionIdValid".equals(fieldInfo.value)){
-                fieldInfo.location = FieldInfo.X_LOC_REQUESTEDSESSIONID;
+                fieldInfo.location = FieldInfo.X_LOC_REQUESTEDSESSIONIDVALID;
             } else if ("contentLength".equals(fieldInfo.value)){
                 fieldInfo.location = FieldInfo.X_LOC_CONTENTLENGTH;
             } else if ("characterEncoding".equals(fieldInfo.value)){
@@ -1414,6 +1503,7 @@ class FieldInfo {
     static final short X_APP     = 4; /* For x app specific */
     static final short X_SERVLET_REQUEST = 5; /* For x app specific */
     static final short X_PARAMETER = 6; /* For x app specific */
+    static final short X_RESPONSE = 7; /* For x app specific */
 
     static final short X_LOC_AUTHTYPE                       = 1;
     static final short X_LOC_REMOTEUSER                     = 2;

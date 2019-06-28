@@ -25,6 +25,7 @@ import javax.management.MBeanException;
 import javax.management.ReflectionException;
 import javax.management.RuntimeOperationsException;
 import javax.management.modelmbean.InvalidTargetObjectTypeException;
+
 import org.apache.catalina.deploy.ContextResourceLink;
 import org.apache.catalina.deploy.NamingResources;
 import org.apache.commons.modeler.BaseModelMBean;
@@ -35,7 +36,7 @@ import org.apache.commons.modeler.BaseModelMBean;
  * <code>org.apache.catalina.deploy.ContextResourceLink</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ContextResourceLinkMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class ContextResourceLinkMBean extends BaseModelMBean {

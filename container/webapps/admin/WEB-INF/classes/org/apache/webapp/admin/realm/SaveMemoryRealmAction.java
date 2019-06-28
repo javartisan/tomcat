@@ -28,27 +28,25 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.TreeControl;
 import org.apache.webapp.admin.TreeControlNode;
-import org.apache.webapp.admin.logger.DeleteLoggerAction;
+import org.apache.webapp.admin.valve.ValveUtil;
 
 /**
  * The <code>Action</code> that completes <em>Add Realm</em> and
  * <em>Edit Realm</em> transactions for Memory realm.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveMemoryRealmAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveMemoryRealmAction extends Action {
@@ -69,12 +67,6 @@ public final class SaveMemoryRealmAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -102,10 +94,8 @@ public final class SaveMemoryRealmAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -129,7 +119,7 @@ public final class SaveMemoryRealmAction extends Action {
             try {
 
                 String parent = rform.getParentObjectName();                
-                String objectName = DeleteLoggerAction.getObjectName(parent,
+                String objectName = ValveUtil.getObjectName(parent,
                                     TomcatTreeBuilder.REALM_TYPE);
                 
                 ObjectName pname = new ObjectName(parent);
@@ -139,13 +129,12 @@ public final class SaveMemoryRealmAction extends Action {
                 // Parent in this case needs to be the container mBean for the service 
                 try {                                                        
                     if ("Service".equalsIgnoreCase(pname.getKeyProperty("type"))) {
-                        sb.append(":type=Engine,service=");
-                        sb.append(pname.getKeyProperty("name"));
+                        sb.append(":type=Engine");
                         parent = sb.toString();
                     }
                 } catch (Exception e) {
                     String message =
-                        resources.getMessage("error.engineName.bad",
+                        resources.getMessage(locale, "error.engineName.bad",
                                          sb.toString());
                     getServlet().log(message);
                     response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -163,9 +152,9 @@ public final class SaveMemoryRealmAction extends Action {
                     return (new ActionForward(mapping.getInput()));
                 }
 
+                String domain = oname.getDomain();
                 // Look up our MBeanFactory MBean
-                ObjectName fname =
-                    new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+                ObjectName fname = TomcatTreeBuilder.getMBeanFactory();
 
                 // Create a new StandardRealm object
                 values = new String[1];
@@ -183,7 +172,7 @@ public final class SaveMemoryRealmAction extends Action {
                     if (parentNode != null) {
                         String nodeLabel = rform.getNodeLabel();                        
                         String encodedName =
-                            URLEncoder.encode(rObjectName);
+                            URLEncoder.encode(rObjectName,TomcatTreeBuilder.URL_ENCODING);
                         TreeControlNode childNode =
                             new TreeControlNode(rObjectName,
                                                 "Realm.gif",
@@ -191,7 +180,7 @@ public final class SaveMemoryRealmAction extends Action {
                                                 "EditRealm.do?select=" +
                                                 encodedName,
                                                 "content",
-                                                true);
+                                                true, domain);
                         parentNode.addChild(childNode);
                         // FIXME - force a redisplay
                     } else {
@@ -223,16 +212,6 @@ public final class SaveMemoryRealmAction extends Action {
         try {
 
             ObjectName roname = new ObjectName(rObjectName);
-
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(rform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(roname,
-                                  new Attribute("debug", new Integer(debug)));
 
             attribute = "pathname";
             mBServer.setAttribute(roname,

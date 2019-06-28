@@ -23,9 +23,6 @@ import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -41,7 +38,7 @@ import javax.management.ObjectName;
  * and writes them out to server.xml
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: CommitChangesAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class CommitChangesAction extends Action {
@@ -50,6 +47,7 @@ public final class CommitChangesAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
+
 
     // --------------------------------------------------------- Public Methods
 
@@ -84,13 +82,13 @@ public final class CommitChangesAction extends Action {
         }
 
        // Acquire the resources that we need
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        Locale locale = getLocale(request);
         MessageResources resources = getResources(request);
         
        ObjectName sname = null;    
         try {
-           sname = new ObjectName(TomcatTreeBuilder.SERVER_TYPE);
+           sname = new ObjectName(TomcatTreeBuilder.DEFAULT_DOMAIN +
+                                    TomcatTreeBuilder.SERVER_TYPE);
         } catch (Exception e) {
             String message = "Could not get Server Object";
             getServlet().log(message);
@@ -98,7 +96,7 @@ public final class CommitChangesAction extends Action {
             return (null);
         }
         
-       String operation = "store";
+       String operation = "storeConfig";
        try {           
             mBServer.invoke(sname, operation, null, null);            
         } catch (Throwable t) {
@@ -112,6 +110,8 @@ public final class CommitChangesAction extends Action {
             return (null);            
         }
  
+
+        getServlet().log("Debugging -- changes saved to conf/server.xml");
         // Forward control back to the banner
         return (mapping.findForward("Banner"));
 

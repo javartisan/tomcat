@@ -23,7 +23,6 @@ import java.util.Locale;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpSessionBindingEvent;
 import javax.servlet.http.HttpSessionBindingListener;
-
 import org.apache.struts.Globals;
 import org.apache.struts.action.ActionForm;
 
@@ -33,7 +32,7 @@ import org.apache.struts.action.ActionForm;
  * bean is added as a session attribute.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SetLocaleForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SetLocaleForm

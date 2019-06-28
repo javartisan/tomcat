@@ -22,31 +22,23 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
-import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.Lists;
 
 /**
  * The <code>Action</code> that sets up <em>Add Host</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AddHostAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class AddHostAction extends Action {
-    
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-    
-    
+
     // --------------------------------------------------------- Public Methods
-    
+
     /**
      * Process the specified HTTP request, and create the corresponding HTTP
      * response (or forward to another web component that will create it).
@@ -67,37 +59,34 @@ public class AddHostAction extends Action {
     HttpServletRequest request,
     HttpServletResponse response)
     throws IOException, ServletException {
-        
+
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        
+
         // the service Name is needed to retrieve the engine mBean to
         // which the new host mBean will be added.
-        String serviceName = request.getParameter("serviceName");
-        
+        String serviceName = request.getParameter("select");
+
         // Fill in the form values for display and editing
         HostForm hostFm = new HostForm();
         session.setAttribute("hostForm", hostFm);
         hostFm.setAdminAction("Create");
         hostFm.setObjectName("");
         hostFm.setHostName("");
-        hostFm.setDebugLvl("0");
         hostFm.setServiceName(serviceName);
         hostFm.setAppBase("");
         hostFm.setAutoDeploy("true");
         hostFm.setDeployXML("true");
-        hostFm.setLiveDeploy("true");
-        hostFm.setUnpackWARs("true");
-        hostFm.setDebugLvlVals(Lists.getDebugLevels());
-        hostFm.setBooleanVals(Lists.getBooleanValues());        
-        
+        hostFm.setDeployOnStartup("true");
+        hostFm.setUnpackWARs("true");   
+        hostFm.setXmlNamespaceAware("false");
+        hostFm.setXmlValidation("false");
+        hostFm.setBooleanVals(Lists.getBooleanValues());
+
         // Forward to the host display page
         return (mapping.findForward("Host"));
-        
+
     }
-    
-    
+
+
 }

@@ -31,7 +31,7 @@ import org.apache.naming.ResourceEnvRef;
  * Object factory for Resources env.
  * 
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceEnvFactory.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class ResourceEnvFactory
@@ -78,17 +78,31 @@ public class ResourceEnvFactory
                     try {
                         factoryClass = tcl.loadClass(factoryClassName);
                     } catch(ClassNotFoundException e) {
+                        NamingException ex = new NamingException
+                            ("Could not load resource factory class");
+                        ex.initCause(e);
+                        throw ex;
                     }
                 } else {
                     try {
                         factoryClass = Class.forName(factoryClassName);
                     } catch(ClassNotFoundException e) {
+                        NamingException ex = new NamingException
+                            ("Could not load resource factory class");
+                        ex.initCause(e);
+                        throw ex;
                     }
                 }
                 if (factoryClass != null) {
                     try {
                         factory = (ObjectFactory) factoryClass.newInstance();
                     } catch(Throwable t) {
+                        if (t instanceof NamingException)
+                            throw (NamingException) t;
+                        NamingException ex = new NamingException
+                            ("Could not create resource factory instance");
+                        ex.initCause(t);
+                        throw ex;
                     }
                 }
             }

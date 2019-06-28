@@ -20,7 +20,7 @@ package org.apache.tomcat.jni;
 /** Poll
  *
  * @author Mladen Turk
- * @version $Revision: 466585 $, $Date: 2006-10-21 23:16:34 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Poll.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 public class Poll {
@@ -79,7 +79,6 @@ public class Poll {
      * descriptor is signalled in apr_pollset_poll().
      * @param pollset The pollset to which to add the descriptor
      * @param sock The sockets to add
-     * @param data Client data to add
      * @param reqevents requested events
      */
     public static native int add(long pollset, long sock,

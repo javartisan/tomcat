@@ -25,9 +25,9 @@ import javax.management.MBeanException;
 import javax.management.ReflectionException;
 import javax.management.RuntimeOperationsException;
 import javax.management.modelmbean.InvalidTargetObjectTypeException;
+
 import org.apache.catalina.deploy.ContextResource;
 import org.apache.catalina.deploy.NamingResources;
-import org.apache.catalina.deploy.ResourceParams;
 import org.apache.commons.modeler.BaseModelMBean;
 
 
@@ -36,7 +36,7 @@ import org.apache.commons.modeler.BaseModelMBean;
  * <code>org.apache.catalina.deploy.ContextResource</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ContextResourceMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class ContextResourceMBean extends BaseModelMBean {
@@ -111,20 +111,10 @@ public class ContextResourceMBean extends BaseModelMBean {
         } else if ("type".equals(name)) {
             return (cr.getType());
         } else {
-            NamingResources nr = cr.getNamingResources(); 
-            if (nr == null) {
-                throw new AttributeNotFoundException
-                    ("Cannot find naming resource "+cr.getName());
-            }
-            ResourceParams rp = nr.findResourceParams(cr.getName());
-            if (rp == null) {
-                throw new AttributeNotFoundException
-                    ("Cannot find resource param "+cr.getName());
-            }
-            value = (String) rp.getParameters().get(name);
+            value = (String) cr.getProperty(name);
             if (value == null) {
                 throw new AttributeNotFoundException
-                    ("Cannot find attribute "+name+rp);
+                    ("Cannot find attribute "+name);
             }
         }
         
@@ -182,19 +172,7 @@ public class ContextResourceMBean extends BaseModelMBean {
         } else if ("type".equals(name)) {
             cr.setType((String)value);
         } else {
-            ResourceParams rp = 
-                cr.getNamingResources().findResourceParams(cr.getName());
-            if (rp != null) {
-                String valueStr = ""+value;
-                rp.addParameter(name, valueStr);
-                cr.getNamingResources().removeResourceParams(cr.getName());
-            } else {
-                rp = new ResourceParams();
-                rp.setName(cr.getName());
-                String valueStr = ""+value;
-                rp.addParameter(name, valueStr);
-            }
-            cr.getNamingResources().addResourceParams(rp);
+            cr.setProperty(name, ""+value);
         }
         
         // cannot use side-efects.  It's removed and added back each time 

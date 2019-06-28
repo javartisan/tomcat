@@ -19,30 +19,31 @@
 package org.apache.webapp.admin.host;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+
 import java.util.List;
 
 /**
  * Form bean for the host page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: HostForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class HostForm extends ActionForm {
-    
+
     // ----------------------------------------------------- Instance Variables
-        
+
     /**
      * The administrative action represented by this form.
      */
     private String adminAction = "Edit";
 
     /**
-     * The object name of the Service this bean refers to.
+     * The object name of this Host bean refers to.
      */
     private String objectName = null;
 
@@ -51,26 +52,21 @@ public final class HostForm extends ActionForm {
      * and is picked up from the node of the tree that is clicked on.
      */
     private String nodeLabel = null;
-    
+
     /**
      * The text for the hostName.
      */
     private String hostName = null;
-    
+
     /**
-     * The name of the service this host belongs to.
+     * The object name of the service this host belongs to.
      */
     private String serviceName = null;
-    
+
     /**
      * The directory for the appBase.
      */
     private String appBase = null;
-    
-    /**
-     * The text for the debug level.
-     */
-    private String debugLvl = "0";
 
     /**
      * Boolean for autoDeploy.
@@ -83,30 +79,35 @@ public final class HostForm extends ActionForm {
     private String deployXML = "true";
 
     /**
-     * Boolean for liveDeploy.
+     * Boolean for deployOnStartup.
      */
-    private String liveDeploy = "true";
+    private String deployOnStartup = "true";
     
     /**
      * Boolean for unpack WARs.
      */
-    private String unpackWARs = "true";
-    
-    /**
-     * Set of valid values for debug level.
-     */
-    private List debugLvlVals = null;
-    
+    private String unpackWARs = "false";
+
     /*
      * Represent boolean (true, false) values for unpackWARs etc.
      */
     private List booleanVals = null;
-    
+
     /*
      * Represent aliases as a List.
-     */    
+     */
     private List aliasVals = null;
-   
+
+    /**
+     * Boolean for xmlNamespaceAware.
+     */
+    private String xmlNamespaceAware = "false";
+
+    /**
+     * Boolean for xmlValidation.
+     */
+    private String xmlValidation = "false";
+
     // ------------------------------------------------------------- Properties
 
     /**
@@ -146,8 +147,8 @@ public final class HostForm extends ActionForm {
         this.objectName = objectName;
 
     }
-
     
+
     /**
      * Return the object name of the service this host belongs to.
      */
@@ -166,63 +167,52 @@ public final class HostForm extends ActionForm {
         this.serviceName = serviceName;
 
     }
-    
+
     /**
      * Return the label of the node that was clicked.
      */
     public String getNodeLabel() {
-        
+
         return this.nodeLabel;
-        
+
     }
-    
+
     /**
      * Set the node label.
      */
     public void setNodeLabel(String nodeLabel) {
-        
+
         this.nodeLabel = nodeLabel;
-        
+
     }
-    
+
     /**
      * Return the host name.
      */
     public String getHostName() {
-        
+
         return this.hostName;
-        
+
     }
-    
+
     /**
      * Set the host name.
      */
     public void setHostName(String hostName) {
-        
+
         this.hostName = hostName;
-        
+
     }
-    
+
     /**
      * Return the appBase.
      */
     public String getAppBase() {
-        
-        return this.appBase;
-        
-    }
-    
-    
-    /**
-     * Set the appBase.
-     */
-    
-    public void setAppBase(String appBase) {
-        
-        this.appBase = appBase;
-        
-    }
 
+        return this.appBase;
+
+    }
+    
     /**
      * Return the autoDeploy.
      */
@@ -262,119 +252,129 @@ public final class HostForm extends ActionForm {
     }
 
     /**
-     * Return the liveDeploy.
+     * Return the deployOnStartup.
      */
-    public String getLiveDeploy() {
+    public String getDeployOnStartup() {
         
-        return this.liveDeploy;
+        return this.deployOnStartup;
         
     }
     
     /**
-     * Set the liveDeploy.
+     * Set the deployOnStartup.
      */
     
-    public void setLiveDeploy(String liveDeploy) {
+    public void setDeployOnStartup(String deployOnStartup) {
         
-        this.liveDeploy = liveDeploy;
+        this.deployOnStartup = deployOnStartup;
         
     }
-    
+
+    /**
+     * Set the appBase.
+     */
+
+    public void setAppBase(String appBase) {
+
+        this.appBase = appBase;
+
+    }
+
     /**
      * Return the unpackWARs.
      */
     public String getUnpackWARs() {
-        
+
         return this.unpackWARs;
-        
+
     }
-    
+
     /**
      * Set the unpackWARs.
      */
-    
+
     public void setUnpackWARs(String unpackWARs) {
-        
+
         this.unpackWARs = unpackWARs;
-        
+
     }
-    
-    /**
-     * Return the debugVals.
-     */
-    public List getDebugLvlVals() {
-        
-        return this.debugLvlVals;
-        
-    }
-    
-    /**
-     * Set the debugVals.
-     */
-    public void setDebugLvlVals(List debugLvlVals) {
-        
-        this.debugLvlVals = debugLvlVals;
-        
-    }
-    
-    
-    /**
-     * Return the Debug Level Text.
-     */
-    
-    public String getDebugLvl() {
-        
-        return this.debugLvl;
-        
-    }
-    
-    /**
-     * Set the Debug Level Text.
-     */
-    public void setDebugLvl(String debugLvl) {
-        
-        this.debugLvl = debugLvl;
-        
-    }
-    
+
     /**
      * Return the booleanVals.
      */
     public List getBooleanVals() {
-        
+
         return this.booleanVals;
-        
+
     }
-    
+
     /**
      * Set the booleanVals.
      */
     public void setBooleanVals(List booleanVals) {
-        
+
         this.booleanVals = booleanVals;
-        
+
     }
-    
+
     /**
      * Return the List of alias Vals.
      */
     public List getAliasVals() {
-        
+
         return this.aliasVals;
-        
+
     }
-    
+
     /**
      * Set the alias Vals.
      */
     public void setAliasVals(List aliasVals) {
-        
+
         this.aliasVals = aliasVals;
-        
+
     }
-    
+
+    /**
+     * Return the xmlNamespaceAware.
+     */
+    public String getXmlNamespaceAware() {
+
+        return this.xmlNamespaceAware;
+
+    }
+
+    /**
+     * Set the xmlNamespaceAware.
+     */
+
+    public void setXmlNamespaceAware(String xmlNamespaceAware) {
+
+        this.xmlNamespaceAware = xmlNamespaceAware;
+
+    }
+
+    /**
+     * Return the xmlValidation.
+     */
+    public String getXmlValidation() {
+
+        return this.xmlValidation;
+
+    }
+
+    /**
+     * Set the xmlValidation.
+     */
+
+    public void setXmlValidation(String xmlValidation) {
+
+        this.xmlValidation = xmlValidation;
+
+    }
+
     // --------------------------------------------------------- Public Methods
-    
+
     /**
      * Reset all properties to their default values.
      *
@@ -382,19 +382,18 @@ public final class HostForm extends ActionForm {
      * @param request The servlet request we are processing
      */
     public void reset(ActionMapping mapping, HttpServletRequest request) {
-        
+
         this.objectName = null;        
         this.serviceName = null;
         this.hostName = null;
         this.appBase = null;
         this.autoDeploy = "true";
         this.deployXML = "true";
-        this.liveDeploy = "true";
-        this.debugLvl = "0";
+        this.deployOnStartup = "true";
         this.unpackWARs = "true";
-        
+
     }
-    
+
      /**
      * Render this object as a String.
      */
@@ -402,16 +401,14 @@ public final class HostForm extends ActionForm {
 
         StringBuffer sb = new StringBuffer("HostForm[adminAction=");
         sb.append(adminAction);
-        sb.append(",debugLvl=");
-        sb.append(debugLvl);
         sb.append(",appBase=");
         sb.append(appBase);
         sb.append(",autoDeploy=");
         sb.append(autoDeploy);
         sb.append(",deployXML=");
         sb.append(deployXML);
-        sb.append(",liveDeploy=");
-        sb.append(liveDeploy);
+        sb.append(",deployOnStartup=");
+        sb.append(deployOnStartup);
         sb.append(",unpackWARs=");
         sb.append(unpackWARs);
         sb.append("',objectName='");
@@ -435,30 +432,25 @@ public final class HostForm extends ActionForm {
      * @param mapping The mapping used to select this instance
      * @param request The servlet request we are processing
      */
-    
+
     public ActionErrors validate(ActionMapping mapping,
     HttpServletRequest request) {
-        
+
         ActionErrors errors = new ActionErrors();
-        
-        String submit = request.getParameter("submit");
-        
+
         // front end validation when save is clicked.
-        if (submit != null) {
-            
-            // hostName cannot be null
-            if ((hostName== null) || (hostName.length() < 1)) {
-                errors.add("hostName", new ActionMessage("error.hostName.required"));
-            }
-            
-            // appBase cannot be null
-            if ((appBase == null) || (appBase.length() < 1)) {
-                errors.add("appBase", new ActionMessage("error.appBase.required"));
-            }
-            
-        }        
+        // hostName cannot be null
+        if ((hostName== null) || (hostName.length() < 1)) {
+            errors.add("hostName", new ActionMessage("error.hostName.required"));
+        }
+
+        // appBase cannot be null
+        if ((appBase == null) || (appBase.length() < 1)) {
+            errors.add("appBase", new ActionMessage("error.appBase.required"));
+        }
+
         return errors;
-        
+
     }
-    
+
 }

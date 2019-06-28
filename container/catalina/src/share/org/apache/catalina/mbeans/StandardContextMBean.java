@@ -17,12 +17,13 @@
 
 package org.apache.catalina.mbeans;
 
-import java.net.URLDecoder;
 import java.util.ArrayList;
-import javax.management.MalformedObjectNameException;
+
 import javax.management.MBeanException;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.management.RuntimeOperationsException;
+
 import org.apache.catalina.core.StandardContext;
 import org.apache.catalina.deploy.ContextEnvironment;
 import org.apache.catalina.deploy.ContextResource;
@@ -31,13 +32,14 @@ import org.apache.catalina.deploy.NamingResources;
 import org.apache.commons.modeler.BaseModelMBean;
 import org.apache.commons.modeler.ManagedBean;
 import org.apache.commons.modeler.Registry;
+import org.apache.tomcat.util.compat.JdkCompat;
 
 /**
  * <p>A <strong>ModelMBean</strong> implementation for the
  * <code>org.apache.catalina.core.StandardContext</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardContextMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class StandardContextMBean extends BaseModelMBean {
@@ -62,6 +64,15 @@ public class StandardContextMBean extends BaseModelMBean {
 
     }
     
+
+    // ----------------------------------------------------- Class Variables
+
+
+    /**
+     * JDK compatibility support
+     */
+    private static final JdkCompat jdkCompat = JdkCompat.getJdkCompat();
+
 
     // ----------------------------------------------------- Instance Variables
     
@@ -90,6 +101,15 @@ public class StandardContextMBean extends BaseModelMBean {
     
     }
     
+    /**
+     * Return the naming resources associated with this web application.
+     */
+    public void reload() {
+        
+        ((StandardContext)this.resource).reload();
+    
+    }
+    
     
     /**
      * Return the MBean Names of the set of defined environment entries for  
@@ -104,8 +124,10 @@ public class StandardContextMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), envs[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for environment " + envs[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -127,8 +149,10 @@ public class StandardContextMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), resources[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for resource " + resources[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
@@ -150,13 +174,36 @@ public class StandardContextMBean extends BaseModelMBean {
                     MBeanUtils.createObjectName(managed.getDomain(), links[i]);
                 results.add(oname.toString());
             } catch (MalformedObjectNameException e) {
-                throw new IllegalArgumentException
+                IllegalArgumentException iae = new IllegalArgumentException
                     ("Cannot create object name for resource " + links[i]);
+                jdkCompat.chainException(iae, e);
+                throw iae;
             }
         }
         return ((String[]) results.toArray(new String[results.size()]));
 
     }
+
+
+    /**
+     * Return the naming resources associated with this web application.
+     */
+    public javax.naming.directory.DirContext getStaticResources() {
+
+        return ((StandardContext)this.resource).getResources();
+
+    }
+
+
+    /**
+     * Return the naming resources associated with this web application.
+     */
+    public String[] getWelcomeFiles() {
+
+        return ((StandardContext)this.resource).findWelcomeFiles();
+
+    }
+
 
     // ------------------------------------------------------------- Operations
 
@@ -283,7 +330,7 @@ public class StandardContextMBean extends BaseModelMBean {
      */
     public void removeResource(String resourceName) {
 
-        resourceName = URLDecoder.decode(resourceName);
+        resourceName = ObjectName.unquote(resourceName);
         NamingResources nresources = getNamingResources();
         if (nresources == null) {
             return;
@@ -304,7 +351,7 @@ public class StandardContextMBean extends BaseModelMBean {
      */
     public void removeResourceLink(String resourceLinkName) {
 
-        resourceLinkName = URLDecoder.decode(resourceLinkName);
+        resourceLinkName = ObjectName.unquote(resourceLinkName);
         NamingResources nresources = getNamingResources();
         if (nresources == null) {
             return;

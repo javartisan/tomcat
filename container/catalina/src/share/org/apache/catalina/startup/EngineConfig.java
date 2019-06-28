@@ -23,8 +23,6 @@ import org.apache.catalina.Engine;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleEvent;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Logger;
-import org.apache.catalina.core.StandardEngine;
 import org.apache.catalina.util.StringManager;
 
 
@@ -33,58 +31,30 @@ import org.apache.catalina.util.StringManager;
  * of that Engine, and the associated defined contexts.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EngineConfig.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
-public final class EngineConfig
+public class EngineConfig
     implements LifecycleListener {
 
+
+    protected static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( EngineConfig.class );
 
     // ----------------------------------------------------- Instance Variables
 
 
     /**
-     * The debugging detail level for this component.
-     */
-    private int debug = 0;
-
-
-    /**
      * The Engine we are associated with.
      */
-    private Engine engine = null;
+    protected Engine engine = null;
 
 
     /**
      * The string resources for this package.
      */
-    private static final StringManager sm =
+    protected static final StringManager sm =
         StringManager.getManager(Constants.Package);
-
-
-    // ------------------------------------------------------------- Properties
-
-
-    /**
-     * Return the debugging detail level for this component.
-     */
-    public int getDebug() {
-
-        return (this.debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level for this component.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-
-        this.debug = debug;
-
-    }
 
 
     // --------------------------------------------------------- Public Methods
@@ -100,13 +70,8 @@ public final class EngineConfig
         // Identify the engine we are associated with
         try {
             engine = (Engine) event.getLifecycle();
-            if (engine instanceof StandardEngine) {
-                int engineDebug = ((StandardEngine) engine).getDebug();
-                if (engineDebug > this.debug)
-                    this.debug = engineDebug;
-            }
         } catch (ClassCastException e) {
-            log(sm.getString("engineConfig.cce", event.getLifecycle()), e);
+            log.error(sm.getString("engineConfig.cce", event.getLifecycle()), e);
             return;
         }
 
@@ -119,56 +84,16 @@ public final class EngineConfig
     }
 
 
-    // -------------------------------------------------------- Private Methods
-
-
-    /**
-     * Log a message on the Logger associated with our Engine (if any)
-     *
-     * @param message Message to be logged
-     */
-    private void log(String message) {
-
-        Logger logger = null;
-        if (engine != null)
-            logger = engine.getLogger();
-        if (logger != null)
-            logger.log("EngineConfig: " + message);
-        else
-            System.out.println("EngineConfig: " + message);
-
-    }
-
-
-    /**
-     * Log a message on the Logger associated with our Engine (if any)
-     *
-     * @param message Message to be logged
-     * @param throwable Associated exception
-     */
-    private void log(String message, Throwable throwable) {
-
-        Logger logger = null;
-        if (engine != null)
-            logger = engine.getLogger();
-        if (logger != null)
-            logger.log("EngineConfig: " + message, throwable);
-        else {
-            System.out.println("EngineConfig: " + message);
-            System.out.println("" + throwable);
-            throwable.printStackTrace(System.out);
-        }
-
-    }
+    // -------------------------------------------------------- Protected Methods
 
 
     /**
      * Process a "start" event for this Engine.
      */
-    private void start() {
+    protected void start() {
 
-        if (debug > 0)
-            log(sm.getString("engineConfig.start"));
+        if (engine.getLogger().isDebugEnabled())
+            engine.getLogger().debug(sm.getString("engineConfig.start"));
 
     }
 
@@ -176,10 +101,10 @@ public final class EngineConfig
     /**
      * Process a "stop" event for this Engine.
      */
-    private void stop() {
+    protected void stop() {
 
-        if (debug > 0)
-            log(sm.getString("engineConfig.stop"));
+        if (engine.getLogger().isDebugEnabled())
+            engine.getLogger().debug(sm.getString("engineConfig.stop"));
 
     }
 

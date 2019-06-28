@@ -18,15 +18,15 @@
 package org.apache.webapp.admin.realm;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the User Database realm page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: UserDatabaseRealmForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class UserDatabaseRealmForm extends RealmForm {
@@ -81,8 +81,6 @@ public final class UserDatabaseRealmForm extends RealmForm {
 
         StringBuffer sb = new StringBuffer("UserDatabaseRealmForm[adminAction=");
         sb.append(getAdminAction());
-        sb.append(",debugLvl=");
-        sb.append(getDebugLvl());
         sb.append(",resource=");
         sb.append(getResource());
         sb.append("',objectName='");
@@ -110,15 +108,12 @@ public final class UserDatabaseRealmForm extends RealmForm {
         
         ActionErrors errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        
         // front end validation when save is clicked.
-        if (submit != null) {
-            if ((resource == null) || (resource.length() < 1)) {
-                errors.add("resource",
-                new ActionMessage("error.resource.required"));
-            }
+        if ((resource == null) || (resource.length() < 1)) {
+            errors.add("resource",
+            new ActionMessage("error.resource.required"));
         }
+
         return errors;
     }
 }

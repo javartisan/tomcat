@@ -21,9 +21,9 @@ import java.util.List;
 import java.util.ArrayList;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 import org.apache.webapp.admin.LabelValueBean;
 
 import java.lang.reflect.Constructor;
@@ -32,7 +32,7 @@ import java.lang.reflect.Constructor;
  * Form bean for the individual environment entry page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EnvEntryForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -170,22 +170,22 @@ public final class EnvEntryForm extends BaseForm {
     
        
     /**
-     * The service of this environment entry.
+     * The domain of this environment entry.
      */
-    private String service = null;
+    private String domain = null;
     
     /**
-     * Return the service of the environment entry this bean refers to.
+     * Return the domain of the environment entry this bean refers to.
      */
-    public String getService() {
-        return this.service;
+    public String getDomain() {
+        return this.domain;
     }
 
     /**
-     * Set the service of the environment entry this bean refers to.
+     * Set the domain of the environment entry this bean refers to.
      */
-    public void setService(String service) {
-        this.service = service;
+    public void setDomain(String domain) {
+        this.domain = domain;
     }
     
     /**
@@ -264,39 +264,39 @@ public final class EnvEntryForm extends BaseForm {
         // name is a required field
         if ((name == null) || (name.length() < 1)) {
             errors.add("name",
-                    new ActionMessage("resources.error.name.required"));
+                       new ActionMessage("resources.error.name.required"));
         }
-        
+
         // value is a required field
         if ((value == null) || (value.length() < 1)) {
             errors.add("value",
-                    new ActionMessage("resources.error.value.required"));
+                       new ActionMessage("resources.error.value.required"));
         }
-        
+
         // Quotes not allowed in name
         if ((name != null) && (name.indexOf('"') >= 0)) {
             errors.add("name",
-                    new ActionMessage("users.error.quotes"));
+                       new ActionMessage("users.error.quotes"));
         }
-        
+
         // Quotes not allowed in value
         if ((value != null) && (value.indexOf('"') > 0)) {
             errors.add("value",
-                    new ActionMessage("users.error.quotes"));
+                       new ActionMessage("users.error.quotes"));
         }
-        
+
         // Quotes not allowed in description
         if ((description != null) && (description.indexOf('"') > 0)) {
             errors.add("description",
-                    new ActionMessage("users.error.quotes"));
+                       new ActionMessage("users.error.quotes"));
         }
         
-        // if checked, override will be sent as a request parameter
+        // if cehcked, override will be sent as a request parameter
         override = (request.getParameter("override") != null);
         
         if (validateType(entryType, value)) {
-            errors.add("value",
-                    new ActionMessage("resources.error.value.mismatch"));
+               errors.add("value",
+                       new ActionMessage("resources.error.value.mismatch"));
         }
 
         return (errors);

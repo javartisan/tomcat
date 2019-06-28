@@ -24,12 +24,11 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
-import org.apache.struts.util.MessageResources;
+import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.LabelValueBean;
 import org.apache.webapp.admin.Lists;
 
@@ -37,15 +36,10 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Add Connector</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: AddConnectorAction.java 992363 2010-09-03 16:40:16Z markt $
  */
 
 public class AddConnectorAction extends Action {
-    
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
     
     // --------------------------------------------------------- Public Methods
@@ -73,13 +67,10 @@ public class AddConnectorAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
         
         // the service Name is needed to retrieve the engine mBean to
         // which the new connector mBean will be added.
-        String serviceName = request.getParameter("serviceName");
+        String serviceName = request.getParameter("select");
         
         // Fill in the form values for display and editing
         ConnectorForm connectorFm = new ConnectorForm();
@@ -92,73 +83,85 @@ public class AddConnectorAction extends Action {
             type = "HTTP";    // default type is HTTP
         connectorFm.setConnectorType(type);
         connectorFm.setServiceName(serviceName);
-        if ("HTTPS".equalsIgnoreCase(type)) {
+        if ("HTTPS-JSSE".equalsIgnoreCase(type) ||
+                "HTTPS-APR".equalsIgnoreCase(type)) {
             connectorFm.setScheme("https");
-            connectorFm.setSecure("true");
         } else {
             connectorFm.setScheme("http");       
-            connectorFm.setSecure("false");
         }
-        connectorFm.setEnableLookups("true");
-        connectorFm.setPortText("");
-        connectorFm.setRedirectPortText("-1");
-
         connectorFm.setAcceptCountText("10");
-        connectorFm.setAddress("");
-        connectorFm.setAllowTraceText("false");
-        connectorFm.setBufferSizeText("2048");
-        connectorFm.setCompressableMimeType("text/html,text/xml,text/plain");
         connectorFm.setCompression("off");
         connectorFm.setConnLingerText("-1");
         connectorFm.setConnTimeOutText("60000");
-        connectorFm.setDebugLvl("0");
+        connectorFm.setConnUploadTimeOutText("300000");
+        connectorFm.setBufferSizeText("2048");
         connectorFm.setDisableUploadTimeout("false");
-        connectorFm.setMaxHttpHeaderSizeText("4096");
-        connectorFm.setMaxKeepAliveReqsText("-1");
-        connectorFm.setMaxSpareProcessorsText("50");
-        connectorFm.setMaxProcessorsText("200");
-        connectorFm.setMinProcessorsText("4");
-        connectorFm.setNoCompressionUA("");
-        connectorFm.setRestrictedUA("");
-        connectorFm.setServer("");
-        connectorFm.setSocketBufferText("9000");
-        connectorFm.setStrategy("lf");
+        connectorFm.setEnableLookups("true");
+        connectorFm.setAddress("");
+        connectorFm.setPortText("");
+        connectorFm.setRedirectPortText("-1");
+        connectorFm.setMinProcessorsText("5");
+        connectorFm.setMaxProcessorsText("20");
+        connectorFm.setMaxKeepAliveText("100");
+        connectorFm.setMaxSpare("50");
+        connectorFm.setMaxThreads("200");
+        connectorFm.setMinSpare("4");
+        connectorFm.setThreadPriority(String.valueOf(Thread.NORM_PRIORITY));
+        connectorFm.setSecure("false");
         connectorFm.setTcpNoDelay("true");
-        connectorFm.setThreadPriorityText("" + Thread.NORM_PRIORITY);
-        connectorFm.setTomcatAuthentication("true");
-        
-        //supported only by HTTPS
+        connectorFm.setXpoweredBy("false");
+
+        //supported only by HTTPS-JSSE
         connectorFm.setAlgorithm("SunX509");
-        connectorFm.setCiphers("");
         connectorFm.setClientAuthentication("false");
+        connectorFm.setCiphers("");
         connectorFm.setKeyStoreFileName("");
         connectorFm.setKeyStorePassword("");
         connectorFm.setKeyStoreType("JKS");
+        connectorFm.setTrustStoreFileName("");
+        connectorFm.setTrustStorePassword("");
+        connectorFm.setTrustStoreType("JKS");
         connectorFm.setSslProtocol("TLS");
-                       
+
+        //supported only by HTTPS-APR
+        connectorFm.setSSLEngine("");
+        connectorFm.setSSLProtocol("");
+        connectorFm.setSSLCipherSuite("");
+        connectorFm.setSSLCertificateFile("");
+        connectorFm.setSSLCertificateKeyFile("");
+        connectorFm.setSSLPassword("");
+        connectorFm.setSSLVerifyClient("none");
+        connectorFm.setSSLVerifyDepthText("10");
+        connectorFm.setSSLCACertificateFile("");
+        connectorFm.setSSLCACertificatePath("");
+        connectorFm.setSSLCertificateChainFile("");
+        connectorFm.setSSLCARevocationFile("");
+        connectorFm.setSSLCACertificatePath("");
+
         // supported only by Coyote connectors
         connectorFm.setProxyName("");
         connectorFm.setProxyPortText("0");        
         
-        connectorFm.setDebugLvlVals(Lists.getDebugLevels());
         connectorFm.setBooleanVals(Lists.getBooleanValues());                
         connectorFm.setClientAuthVals(Lists.getClientAuthValues());
-        connectorFm.setThreadPriorityVals(Lists.getThreadPriorityValues());
         
-        String schemeTypes[]= new String[3];
+        String schemeTypes[]= new String[4];
         schemeTypes[0] = "HTTP";
-        schemeTypes[1] = "HTTPS";                
-        schemeTypes[2] = "AJP";
+        schemeTypes[1] = "HTTPS-JSSE";                
+        schemeTypes[2] = "HTTPS-APR";                
+        schemeTypes[3] = "AJP";
         
         ArrayList types = new ArrayList();    
         // the first element in the select list should be the type selected
         types.add(new LabelValueBean(type,
-                "AddConnector.do?serviceName=" + URLEncoder.encode(serviceName) 
+                "AddConnector.do?select=" + 
+                URLEncoder.encode(serviceName,TomcatTreeBuilder.URL_ENCODING) 
                 + "&type=" + type));        
          for (int i=0; i< schemeTypes.length; i++) {
             if (!type.equalsIgnoreCase(schemeTypes[i])) {
                 types.add(new LabelValueBean(schemeTypes[i],
-                "AddConnector.do?serviceName=" + URLEncoder.encode(serviceName)
+                "AddConnector.do?select=" + 
+                URLEncoder.encode(serviceName,TomcatTreeBuilder.URL_ENCODING)
                 + "&type=" + schemeTypes[i]));        
             }
         }

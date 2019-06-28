@@ -20,12 +20,14 @@ package org.apache.catalina.servlets;
 
 
 import java.io.IOException;
+
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 import javax.servlet.UnavailableException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.apache.catalina.ContainerServlet;
 import org.apache.catalina.Context;
 import org.apache.catalina.Globals;
@@ -39,7 +41,7 @@ import org.apache.catalina.util.StringManager;
  * in the web application deployment descriptor.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: InvokerServlet.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public final class InvokerServlet
@@ -224,15 +226,15 @@ public final class InvokerServlet
         String inServletPath = null;
         String inPathInfo = null;
         boolean included =
-            (request.getAttribute(Globals.REQUEST_URI_ATTR) != null);
+            (request.getAttribute(Globals.INCLUDE_REQUEST_URI_ATTR) != null);
 
         if (included) {
             inRequestURI =
-                (String) request.getAttribute(Globals.REQUEST_URI_ATTR);
+                (String) request.getAttribute(Globals.INCLUDE_REQUEST_URI_ATTR);
             inServletPath =
-                (String) request.getAttribute(Globals.SERVLET_PATH_ATTR);
+                (String) request.getAttribute(Globals.INCLUDE_SERVLET_PATH_ATTR);
             inPathInfo =
-                (String) request.getAttribute(Globals.PATH_INFO_ATTR);
+                (String) request.getAttribute(Globals.INCLUDE_PATH_INFO_ATTR);
         } else {
             inRequestURI = request.getRequestURI();
             inServletPath = request.getServletPath();

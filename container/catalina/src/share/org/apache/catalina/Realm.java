@@ -18,12 +18,14 @@
 
 package org.apache.catalina;
 
-
 import java.beans.PropertyChangeListener;
+import java.io.IOException;
 import java.security.Principal;
 import java.security.cert.X509Certificate;
 
-
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
+import org.apache.catalina.deploy.SecurityConstraint;
 /**
  * A <b>Realm</b> is a read-only facade for an underlying security realm
  * used to authenticate individual users, and identify the security roles
@@ -32,7 +34,7 @@ import java.security.cert.X509Certificate;
  * Container.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Realm.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Realm {
@@ -65,7 +67,7 @@ public interface Realm {
 
     // --------------------------------------------------------- Public Methods
 
-
+    
     /**
      * Add a property change listener to this component.
      *
@@ -123,8 +125,45 @@ public interface Realm {
      *  the array being the certificate of the client itself.
      */
     public Principal authenticate(X509Certificate certs[]);
+    
+    
+    /**
+     * Execute a periodic task, such as reloading, etc. This method will be
+     * invoked inside the classloading context of this container. Unexpected
+     * throwables will be caught and logged.
+     */
+    public void backgroundProcess();
 
 
+    /**
+     * Return the SecurityConstraints configured to guard the request URI for
+     * this request, or <code>null</code> if there is no such constraint.
+     *
+     * @param request Request we are processing
+     */
+    public SecurityConstraint [] findSecurityConstraints(Request request,
+                                                     Context context);
+    
+    
+    /**
+     * Perform access control based on the specified authorization constraint.
+     * Return <code>true</code> if this constraint is satisfied and processing
+     * should continue, or <code>false</code> otherwise.
+     *
+     * @param request Request we are processing
+     * @param response Response we are creating
+     * @param constraint Security constraint we are enforcing
+     * @param context The Context to which client of this class is attached.
+     *
+     * @exception IOException if an input/output error occurs
+     */
+    public boolean hasResourcePermission(Request request,
+                                         Response response,
+                                         SecurityConstraint [] constraint,
+                                         Context context)
+        throws IOException;
+    
+    
     /**
      * Return <code>true</code> if the specified Principal has the specified
      * security role, within the context of this Realm; otherwise return
@@ -135,7 +174,23 @@ public interface Realm {
      */
     public boolean hasRole(Principal principal, String role);
 
-
+        /**
+     * Enforce any user data constraint required by the security constraint
+     * guarding this request URI.  Return <code>true</code> if this constraint
+     * was not violated and processing should continue, or <code>false</code>
+     * if we have created a response already.
+     *
+     * @param request Request we are processing
+     * @param response Response we are creating
+     * @param constraint Security constraint being checked
+     *
+     * @exception IOException if an input/output error occurs
+     */
+    public boolean hasUserDataPermission(Request request,
+                                         Response response,
+                                         SecurityConstraint []constraint)
+        throws IOException;
+    
     /**
      * Remove a property change listener from this component.
      *

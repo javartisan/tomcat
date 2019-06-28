@@ -43,7 +43,7 @@ import javax.servlet.jsp.tagext.BodyTagSupport;
  * <strong>FIXME</strong> - Internationalize the exception messages!
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: TableTag.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class TableTag extends BodyTagSupport {
@@ -198,35 +198,62 @@ public class TableTag extends BodyTagSupport {
                 String dataStyle = (String) dataStyles.get(i);
                 String styleId = (String) styleIds.get(i);
                 
-                if (header)
+                if (header) {
                     out.println("<tr class=\"header-row\" >");
-                else out.println("<tr>");
+                    out.println("  <th scope=\"col\" width=\"27%\"> ");
                 
-                out.println("  <td width=\"27%\"> ");
+                    out.print("    <div align=\"left\"");
+                    if (labelStyle != null)
+                        out.print( " class=\"" + labelStyle +"\"");
+                    out.print(">");
+                    if (styleId != null) {
+                        out.print("<label for=\"" + styleId + "\">");
+                    }
+                    out.print(label);
+                    if (styleId != null) {
+                        out.print("</label>");
+                    }
+                    out.println("    </div>");
+                    out.println("  </th>");
                 
-                out.print("    <div align=\"left\"");
-                if (labelStyle != null)
-                    out.print( " class=\"" + labelStyle +"\"");
-                out.print(">");
-                if (styleId != null) {
-                    out.print("<label for=\"" + styleId + "\">");
+                    out.println("  <th scope=\"col\" width=\"73%\"> ");
+                    out.print("    <div align=\"left\"" );
+                    if (dataStyle != null)
+                        out.print(" class=\"" + dataStyle + "\"");
+                    out.print(">");
+                    out.print(data);
+                    out.println("    </div>");
+                    out.print("  </th>");
+                    out.println("</tr>");
+                } else {
+                    out.println("<tr>");
+                
+                    out.println("  <td scope=\"row\" width=\"27%\"> ");
+                
+                    out.print("    <div align=\"left\"");
+                    if (labelStyle != null)
+                        out.print( " class=\"" + labelStyle +"\"");
+                    out.print(">");
+                    if (styleId != null) {
+                        out.print("<label for=\"" + styleId + "\">");
+                    }
+                    out.print(label);
+                    if (styleId != null) {
+                        out.print("</label>");
+                    }
+                    out.println("    </div>");
+                    out.println("  </td>");
+                
+                    out.println("  <td width=\"73%\"> ");
+                    out.print("    <div align=\"left\"" );
+                    if (dataStyle != null)
+                        out.print(" class=\"" + dataStyle + "\"");
+                    out.print(">");
+                    out.print(data);
+                    out.println("    </div>");
+                    out.print("  </td>");
+                    out.println("</tr>");
                 }
-                out.print(label);
-                if (styleId != null) {
-                    out.print("</label>");
-                }
-                out.println("    </div>");
-                out.println("  </td>");
-                
-                out.println("  <td width=\"73%\"> ");
-                out.print("    <div align=\"left\"" );
-                if (dataStyle != null)
-                    out.print(" class=\"" + dataStyle + "\"");
-                out.print(">");
-                out.print(data);
-                out.println("    </div>");
-                out.print("  </td>");
-                out.println("</tr>");
                 
                 /*
                 if (!header) {

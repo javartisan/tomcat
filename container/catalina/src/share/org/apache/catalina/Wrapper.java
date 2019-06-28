@@ -44,7 +44,7 @@ import javax.servlet.UnavailableException;
  * <code>IllegalArgumentException</code>.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Wrapper.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Wrapper extends Container {
@@ -133,6 +133,19 @@ public interface Wrapper extends Container {
 
 
     /**
+     * Gets the names of the methods supported by the underlying servlet.
+     *
+     * This is the same set of methods included in the Allow response header
+     * in response to an OPTIONS request method processed by the underlying
+     * servlet.
+     *
+     * @return Array of names of the methods supported by the underlying
+     * servlet
+     */
+    public String[] getServletMethods() throws ServletException;
+
+
+    /**
      * Is this servlet currently unavailable?
      */
     public boolean isUnavailable();
@@ -156,6 +169,14 @@ public interface Wrapper extends Container {
      * @param listener The new listener
      */
     public void addInstanceListener(InstanceListener listener);
+
+
+    /**
+     * Add a mapping associated with the Wrapper.
+     * 
+     * @param mapping The new wrapper mapping
+     */
+    public void addMapping(String mapping);
 
 
     /**
@@ -213,6 +234,12 @@ public interface Wrapper extends Container {
 
 
     /**
+     * Return the mappings associated with this wrapper.
+     */
+    public String[] findMappings();
+
+
+    /**
      * Return the security role link for the specified security role
      * reference name, if any; otherwise return <code>null</code>.
      *
@@ -226,6 +253,12 @@ public interface Wrapper extends Container {
      * this servlet, if any; otherwise return a zero-length array.
      */
     public String[] findSecurityReferences();
+
+
+    /**
+     * Increment the error count value used when monitoring.
+     */
+    public void incrementErrorCount();
 
 
     /**
@@ -255,6 +288,14 @@ public interface Wrapper extends Container {
      * @param listener The listener to remove
      */
     public void removeInstanceListener(InstanceListener listener);
+
+
+    /**
+     * Remove a mapping associated with the wrapper.
+     *
+     * @param mapping The pattern to remove
+     */
+    public void removeMapping(String mapping);
 
 
     /**

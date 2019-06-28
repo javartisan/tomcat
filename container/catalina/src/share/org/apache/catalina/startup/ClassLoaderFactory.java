@@ -22,7 +22,10 @@ package org.apache.catalina.startup;
 import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
+
 import org.apache.catalina.loader.StandardClassLoader;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 
 /**
@@ -41,45 +44,18 @@ import org.apache.catalina.loader.StandardClassLoader;
  * </ul>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ClassLoaderFactory.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public final class ClassLoaderFactory {
 
 
-    // ------------------------------------------------------- Static Variables
+    private static Log log = LogFactory.getLog(ClassLoaderFactory.class);
 
-
-    /**
-     * Debugging detail level for processing the startup.
-     */
-    private static int debug = 0;
-
-
-    // ------------------------------------------------------ Static Properties
-
-
-    /**
-     * Return the debugging detail level.
-     */
-    public static int getDebug() {
-
-        return (debug);
-
-    }
-
-
-    /**
-     * Set the debugging detail level.
-     *
-     * @param newDebug The new debugging detail level
-     */
-    public static void setDebug(int newDebug) {
-
-        debug = newDebug;
-
-    }
-
+    protected static final Integer IS_DIR = new Integer(0);
+    protected static final Integer IS_JAR = new Integer(1);
+    protected static final Integer IS_GLOB = new Integer(2);
+    protected static final Integer IS_URL = new Integer(3);
 
     // --------------------------------------------------------- Public Methods
 
@@ -103,9 +79,37 @@ public final class ClassLoaderFactory {
                                                 File packed[],
                                                 ClassLoader parent)
         throws Exception {
+        return createClassLoader(unpacked, packed, null, parent);
+    }
 
-        if (debug >= 1)
-            log("Creating new class loader");
+
+    /**
+     * Create and return a new class loader, based on the configuration
+     * defaults and the specified directory paths:
+     *
+     * @param unpacked Array of pathnames to unpacked directories that should
+     *  be added to the repositories of the class loader, or <code>null</code> 
+     * for no unpacked directories to be considered
+     * @param packed Array of pathnames to directories containing JAR files
+     *  that should be added to the repositories of the class loader, 
+     * or <code>null</code> for no directories of JAR files to be considered
+     * @param urls Array of URLs to remote repositories, designing either JAR 
+     *  resources or uncompressed directories that should be added to 
+     *  the repositories of the class loader, or <code>null</code> for no 
+     *  directories of JAR files to be considered
+     * @param parent Parent class loader for the new class loader, or
+     *  <code>null</code> for the system class loader.
+     *
+     * @exception Exception if an error occurs constructing the class loader
+     */
+    public static ClassLoader createClassLoader(File unpacked[],
+                                                File packed[],
+                                                URL urls[],
+                                                ClassLoader parent)
+        throws Exception {
+
+        if (log.isDebugEnabled())
+            log.debug("Creating new class loader");
 
         // Construct the "class path" for this class loader
         ArrayList list = new ArrayList();
@@ -114,13 +118,13 @@ public final class ClassLoaderFactory {
         if (unpacked != null) {
             for (int i = 0; i < unpacked.length; i++)  {
                 File file = unpacked[i];
-                if (!file.isDirectory() || !file.exists() || !file.canRead())
+                if (!file.exists() || !file.canRead())
                     continue;
-                if (debug >= 1)
-                    log("  Including directory " + file.getAbsolutePath());
-                URL url = new URL("file", null,
-                                  file.getCanonicalPath() + File.separator);
-                list.add(url.toString());
+                file = new File(file.getCanonicalPath() + File.separator);
+                URL url = file.toURL();
+                if (log.isDebugEnabled())
+                    log.debug("  Including directory " + url);
+                list.add(url);
             }
         }
 
@@ -137,58 +141,120 @@ public final class ClassLoaderFactory {
                     if (!filename.endsWith(".jar"))
                         continue;
                     File file = new File(directory, filenames[j]);
-                    if (debug >= 1)
-                        log("  Including jar file " + file.getAbsolutePath());
-                    URL url = new URL("file", null,
-                                      file.getCanonicalPath());
-                    list.add(url.toString());
+                    if (log.isDebugEnabled())
+                        log.debug("  Including jar file " + file.getAbsolutePath());
+                    URL url = file.toURL();
+                    list.add(url);
                 }
             }
         }
 
         // Construct the class loader itself
-        String array[] = (String[]) list.toArray(new String[list.size()]);
+        URL[] array = (URL[]) list.toArray(new URL[list.size()]);
         StandardClassLoader classLoader = null;
         if (parent == null)
             classLoader = new StandardClassLoader(array);
         else
             classLoader = new StandardClassLoader(array, parent);
-        classLoader.setDelegate(true);
         return (classLoader);
 
     }
 
 
-    // -------------------------------------------------------- Private Methods
-
-
     /**
-     * Log a message for this class.
+     * Create and return a new class loader, based on the configuration
+     * defaults and the specified directory paths:
      *
-     * @param message Message to be logged
+     * @param locations Array of strings containing class directories, jar files,
+     *  jar directories or URLS that should be added to the repositories of
+     *  the class loader. The type is given by the member of param types.
+     * @param types Array of types for the members of param locations.
+     *  Possible values are IS_DIR (class directory), IS_JAR (single jar file),
+     *  IS_GLOB (directory of jar files) and IS_URL (URL).
+     * @param parent Parent class loader for the new class loader, or
+     *  <code>null</code> for the system class loader.
+     *
+     * @exception Exception if an error occurs constructing the class loader
      */
-    private static void log(String message) {
+    public static ClassLoader createClassLoader(String locations[],
+                                                Integer types[],
+                                                ClassLoader parent)
+        throws Exception {
 
-        System.out.print("ClassLoaderFactory:  ");
-        System.out.println(message);
+        if (log.isDebugEnabled())
+            log.debug("Creating new class loader");
+
+        // Construct the "class path" for this class loader
+        ArrayList list = new ArrayList();
+
+        if (locations != null && types != null && locations.length == types.length) {
+            for (int i = 0; i < locations.length; i++)  {
+                String location = locations[i];
+                if ( types[i] == IS_URL ) {
+                    URL url = new URL(location);
+                    if (log.isDebugEnabled())
+                        log.debug("  Including URL " + url);
+                    list.add(url);
+                } else if ( types[i] == IS_DIR ) {
+                    File directory = new File(location);
+                    directory = new File(directory.getCanonicalPath());
+                    if (!directory.exists() || !directory.isDirectory() ||
+                        !directory.canRead())
+                         continue;
+                    URL url = directory.toURL();
+                    if (log.isDebugEnabled())
+                        log.debug("  Including directory " + url);
+                    list.add(url);
+                } else if ( types[i] == IS_JAR ) {
+                    File file=new File(location);
+                    file = new File(file.getCanonicalPath());
+                    if (!file.exists() || !file.canRead())
+                        continue;
+                    URL url = file.toURL();
+                    if (log.isDebugEnabled())
+                        log.debug("  Including jar file " + url);
+                    list.add(url);
+                } else if ( types[i] == IS_GLOB ) {
+                    File directory=new File(location);
+                    if (!directory.exists() || !directory.isDirectory() ||
+                        !directory.canRead())
+                        continue;
+                    if (log.isDebugEnabled())
+                        log.debug("  Including directory glob "
+                            + directory.getAbsolutePath());
+                    String filenames[] = directory.list();
+                    for (int j = 0; j < filenames.length; j++) {
+                        String filename = filenames[j].toLowerCase();
+                        if (!filename.endsWith(".jar"))
+                            continue;
+                        File file = new File(directory, filenames[j]);
+                        file = new File(file.getCanonicalPath());
+                        if (!file.exists() || !file.canRead())
+                            continue;
+                        if (log.isDebugEnabled())
+                            log.debug("    Including glob jar file "
+                                + file.getAbsolutePath());
+                        URL url = file.toURL();
+                        list.add(url);
+                    }
+                }
+            }
+        }
+
+        // Construct the class loader itself
+        URL[] array = (URL[]) list.toArray(new URL[list.size()]);
+        if (log.isDebugEnabled())
+            for (int i = 0; i < array.length; i++) {
+                log.debug("  location " + i + " is " + array[i]);
+            }
+        StandardClassLoader classLoader = null;
+        if (parent == null)
+            classLoader = new StandardClassLoader(array);
+        else
+            classLoader = new StandardClassLoader(array, parent);
+        return (classLoader);
 
     }
-
-
-    /**
-     * Log a message and exception for this class.
-     *
-     * @param message Message to be logged
-     * @param exception Exception to be logged
-     */
-    private static void log(String message, Throwable exception) {
-
-        log(message);
-        exception.printStackTrace(System.out);
-
-    }
-
-
 
 
 }

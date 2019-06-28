@@ -25,8 +25,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -44,7 +42,7 @@ import org.apache.webapp.admin.Lists;
  * The <code>Action</code> that sets up <em>Edit Service</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditServiceAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class EditServiceAction extends Action {
@@ -54,12 +52,6 @@ public class EditServiceAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
 
     // --------------------------------------------------------- Public Methods
@@ -87,10 +79,8 @@ public class EditServiceAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -108,7 +98,7 @@ public class EditServiceAction extends Action {
             sname = new ObjectName(request.getParameter("select"));
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.serviceName.bad",
+                resources.getMessage(locale, "error.serviceName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -116,12 +106,11 @@ public class EditServiceAction extends Action {
         }
         try {
             sb = new StringBuffer(sname.getDomain());
-            sb.append(":type=Engine,service=");
-            sb.append(sname.getKeyProperty("name"));
+            sb.append(":type=Engine");
             ename = new ObjectName(sb.toString());
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.engineName.bad",
+                resources.getMessage(locale, "error.engineName.bad",
                                      sb.toString());
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -136,7 +125,7 @@ public class EditServiceAction extends Action {
                                   mBServer, sname.getDomain(),request);
          } catch (Exception e) {
             String message =
-                resources.getMessage("error.serviceName.bad",
+                resources.getMessage(locale, "error.serviceName.bad",
                                  adminService);
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -150,12 +139,13 @@ public class EditServiceAction extends Action {
         serviceFm.setAdminAction("Edit");
         serviceFm.setObjectName(sname.toString());
         serviceFm.setEngineObjectName(ename.toString());
-        sb = new StringBuffer("Service (");
-        sb.append(sname.getKeyProperty("name"));
+        sb = new StringBuffer();
+        sb.append(resources.getMessage(locale, "server.service.treeBuilder.subtreeNode"));
+        sb.append(" (");
+        sb.append(sname.getKeyProperty("serviceName"));
         sb.append(")");
         serviceFm.setNodeLabel(sb.toString());
         serviceFm.setAdminServiceName(adminService);
-        serviceFm.setDebugLvlVals(Lists.getDebugLevels());
         String attribute = null;
         try {
 
@@ -166,9 +156,6 @@ public class EditServiceAction extends Action {
             attribute = "name";
             serviceFm.setEngineName
                 ((String) mBServer.getAttribute(ename, attribute));
-            attribute = "debug";
-            serviceFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(ename, attribute)).toString());
             attribute = "defaultHost";
             serviceFm.setDefaultHost
                 ((String) mBServer.getAttribute(ename, attribute));
@@ -177,13 +164,14 @@ public class EditServiceAction extends Action {
             attribute = "hosts";
             ArrayList hosts = new ArrayList();
             hosts.add(new LabelValueBean
-                      (resources.getMessage("list.none"), ""));
+                      (resources.getMessage(locale, "list.none"), ""));
             Iterator items = Lists.getHosts(mBServer, sname).iterator();
             while (items.hasNext()) {
                 ObjectName hname = new ObjectName((String) items.next());
                 String name = hname.getKeyProperty("host");
-                if (name!=null)
+                if (name!=null) {
                     hosts.add(new LabelValueBean(name, name));
+                }
             }
             serviceFm.setHostNameVals(hosts);
 

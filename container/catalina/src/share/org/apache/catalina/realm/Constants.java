@@ -24,11 +24,22 @@ package org.apache.catalina.realm;
  *
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Constants.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public final class Constants {
 
     public static final String Package = "org.apache.catalina.realm";
+    
+        // Authentication methods for login configuration
+    public static final String FORM_METHOD = "FORM";
+
+    // Form based authentication constants
+    public static final String FORM_ACTION = "/j_security_check";
+
+    // User data constraints for transport guarantee
+    public static final String NONE_TRANSPORT = "NONE";
+    public static final String INTEGRAL_TRANSPORT = "INTEGRAL";
+    public static final String CONFIDENTIAL_TRANSPORT = "CONFIDENTIAL";
 
 }

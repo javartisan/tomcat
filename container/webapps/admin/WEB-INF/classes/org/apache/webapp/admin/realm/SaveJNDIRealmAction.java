@@ -28,20 +28,18 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.TreeControl;
 import org.apache.webapp.admin.TreeControlNode;
-import org.apache.webapp.admin.logger.DeleteLoggerAction;
+import org.apache.webapp.admin.valve.ValveUtil;
 
 /**
  * The <code>Action</code> that completes <em>Add Realm</em> and
@@ -49,7 +47,7 @@ import org.apache.webapp.admin.logger.DeleteLoggerAction;
  *
  * @author Manveen Kaur
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveJNDIRealmAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveJNDIRealmAction extends Action {
@@ -62,6 +60,9 @@ public final class SaveJNDIRealmAction extends Action {
      */
     private String createStandardRealmTypes[] =
     { "java.lang.String",     // parent
+      "java.lang.String",     // connection URL
+      "java.lang.String",     // connection name
+      "java.lang.String",     // connection password
     };
 
 
@@ -69,12 +70,6 @@ public final class SaveJNDIRealmAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -103,10 +98,8 @@ public final class SaveJNDIRealmAction extends Action {
 
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
 
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -130,7 +123,7 @@ public final class SaveJNDIRealmAction extends Action {
             try {
 
                 String parent = rform.getParentObjectName();
-                String objectName = DeleteLoggerAction.getObjectName(parent,
+                String objectName = ValveUtil.getObjectName(parent,
                                     TomcatTreeBuilder.REALM_TYPE);
 
                 ObjectName pname = new ObjectName(parent);
@@ -140,8 +133,7 @@ public final class SaveJNDIRealmAction extends Action {
                 // Parent in this case needs to be the container mBean for the service
                 try {
                     if ("Service".equalsIgnoreCase(pname.getKeyProperty("type"))) {
-                        sb.append(":type=Engine,service=");
-                        sb.append(pname.getKeyProperty("name"));
+                        sb.append(":type=Engine");
                         parent = sb.toString();
                     }
                 } catch (Exception e) {
@@ -164,18 +156,27 @@ public final class SaveJNDIRealmAction extends Action {
                     return (new ActionForward(mapping.getInput()));
                 }
 
+                String domain = oname.getDomain();
                 // Look up our MBeanFactory MBean
-                ObjectName fname =
-                    new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
+                ObjectName fname = 
+                    TomcatTreeBuilder.getMBeanFactory();
 
                 // Create a new StandardRealm object
-                values = new String[1];
+                values = new String[4];
                 values[0] = parent;
+                values[1] = rform.getConnectionURL();
+                values[2] = rform.getConnectionName();
+                values[3] = rform.getConnectionPassword();
                 operation = "createJNDIRealm";
                 rObjectName = (String)
                     mBServer.invoke(fname, operation,
                                     values, createStandardRealmTypes);
 
+                if (rObjectName==null) {
+                    request.setAttribute("warning", "error.jndirealm");
+                    return (mapping.findForward("Save Unsuccessful"));
+                }
+                
                 // Add the new Realm to our tree control node
                 TreeControl control = (TreeControl)
                     session.getAttribute("treeControlTest");
@@ -184,7 +185,7 @@ public final class SaveJNDIRealmAction extends Action {
                     if (parentNode != null) {
                         String nodeLabel = rform.getNodeLabel();
                         String encodedName =
-                            URLEncoder.encode(rObjectName);
+                            URLEncoder.encode(rObjectName,TomcatTreeBuilder.URL_ENCODING);
                         TreeControlNode childNode =
                             new TreeControlNode(rObjectName,
                                                 "Realm.gif",
@@ -192,7 +193,7 @@ public final class SaveJNDIRealmAction extends Action {
                                                 "EditRealm.do?select=" +
                                                 encodedName,
                                                 "content",
-                                                true);
+                                                true, domain);
                         parentNode.addChild(childNode);
                         // FIXME - force a redisplay
                     } else {
@@ -252,16 +253,6 @@ public final class SaveJNDIRealmAction extends Action {
                 mBServer.setAttribute(roname,
                         new Attribute("contextFactory",  contextFactory));
             }
-
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(rform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(roname,
-                            new Attribute("debug", new Integer(debug)));
 
             attribute = "digest";
             String digest = rform.getDigest();

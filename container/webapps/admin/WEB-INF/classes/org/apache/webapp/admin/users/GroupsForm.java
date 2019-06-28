@@ -26,7 +26,7 @@ import org.apache.struts.action.ActionMapping;
  * Form bean for the delete groups page.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: GroupsForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 

@@ -19,10 +19,11 @@
 package org.apache.webapp.admin.connector;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+
 import java.net.InetAddress;
 import java.util.List;
 
@@ -30,7 +31,7 @@ import java.util.List;
  * Form bean for the connector page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ConnectorForm.java 992363 2010-09-03 16:40:16Z markt $
  */
 
 public final class ConnectorForm extends ActionForm {
@@ -48,7 +49,7 @@ public final class ConnectorForm extends ActionForm {
     private String objectName = null;
     
     /**
-     * The name of the service this connector belongs to.
+     * The object name of the service this connector belongs to.
      */
     private String serviceName = null;
    
@@ -57,11 +58,6 @@ public final class ConnectorForm extends ActionForm {
      */
     private String scheme = null;
 
-    /**
-     * The value of secure.
-     */
-    private String secure = null;
-    
     /**
      * The text for the connector type. 
      * Specifies if it is a CoyoteConnector or AJP13Connector etc.
@@ -73,37 +69,35 @@ public final class ConnectorForm extends ActionForm {
      */
     private String nodeLabel = null;
     
-    
     /**
      * The text for the accept Count.
      */
     private String acceptCountText = null;
     
     /**
-     * The value of Compressable MIME Type.
+     * The text for the algorithm.
      */
-    private String compressableMimeType = null;
+    private String algorithm = null;
     
     /**
-     * The value of compression
+     * The text for the ciphers.
      */
-    private String compression = null;
+    private String ciphers = null;
     
     /**
      * The text for the Connection Linger.
      */
     private String connLingerText = null;
-
+    
     /**
      * The text for the Connection Time Out.
      */
     private String connTimeOutText = null;
     
-    
     /**
-     * The text for the debug level.
+     * The text for the Connection Upload Time Out.
      */
-    private String debugLvl = "0";
+    private String connUploadTimeOutText = null;
     
     /**
      * The text for the buffer size.
@@ -111,9 +105,19 @@ public final class ConnectorForm extends ActionForm {
     private String bufferSizeText = null;
     
     /**
+     * The value of disable upload timeout.
+     */
+    private String disableUploadTimeout = "false";
+    
+    /**
      * The value of enable Lookups.
      */
     private String enableLookups = "false";
+    
+    /**
+     * The value of compression.
+     */
+    private String compression = "off";
     
     /**
      * The text for the address.
@@ -131,6 +135,31 @@ public final class ConnectorForm extends ActionForm {
     private String maxProcessorsText = null;
     
     /**
+     * The text for the maxKeepAlive.
+     */
+    private String maxKeepAliveText = null;
+    
+    /**
+     * The text for the maxSpare.
+     */
+    private String maxSpare = null;
+    
+    /**
+     * The text for the maxThreads.
+     */
+    private String maxThreads = null;
+    
+    /**
+     * The text for the minSpare.
+     */
+    private String minSpare = null;
+
+    /**
+     * The text for the threadPriority.
+     */
+    private String threadPriority = null;
+    
+    /**
      * The text for the URIEncoding.
      */
     private String uriEncodingText = null;
@@ -139,12 +168,12 @@ public final class ConnectorForm extends ActionForm {
      * The value of useBodyEncodingForURI.
      */
     private String useBodyEncodingForURI = "false";
-    
+
     /**
      * The value of allowTrace.
      */
     private String allowTrace = "false";
-    
+
     /**
      * The text for the port.
      */
@@ -187,98 +216,36 @@ public final class ConnectorForm extends ActionForm {
     private String keyStorePassword = null;
     
     /**
-     * The text for disable upload timeout.
-     */
-    private String disableUploadTimeout = "false";
-    
-    /**
-     * The maximum HTTP header size.
-     */
-    private String maxHttpHeaderSizeText = null;
-    
-    /**
-     * The maximum keep alive requests.
-     */
-    private String maxKeepAliveReqsText = null;
-    
-    /**
-     * The maximum spare processors.
-     */
-    private String maxSpareProcessorsText = null;
-    
-    /**
-     * The comma separated list of regular expressions matching user agents
-     * where compression is not to be used.
-     */
-    private String noCompressionUA = null;
-
-    /**
-     * The comma separated list of regular expressions matching user agents
-     * where keep alive is not to be used.
-     */
-    private String restrictedUA = null;
-
-    /**
-     * The server header.
-     */
-    private String server = null;
-    
-    /**
-     * The size of the socket buffer.
-     */
-    private String socketBufferText = null;
-    
-    /**
-     * The thread pooling strategy.
-     */
-    private String strategy = null;
-    
-    /**
-     * The setting for TCP_NO_DELAY. 
-     */
-    private String tcpNoDelay = "false";
-    
-    /**
-     * The setting for tomcatAuthentication. 
-     */
-    private String tomcatAuthentication = "true";
-    
-    /**
-     * The setting for thread priority.
-     */
-    private String threadPriorityText = null;
-    
-    /**
-     * The certificate encoding algorithm to use.
-     */
-    private String algorithm = null;
-    
-    /**
-     * Comma separated list of ciphers to use for HTTPS.
-     */
-    private String ciphers = null;
-    
-    /**
-     * Type of keystore of use.
+     * The keyStore Type.
      */
     private String keyStoreType = null;
-    
+
     /**
-     * Version of SSL protocol to use;
+     * The trustStore Filename.
      */
-    private String sslProtocol = null;
-    
+    private String trustStoreFileName = null;
+        
     /**
-     * Set of valid values for debug level.
+     * The trustStore Password.
      */
-    private List debugLvlVals = null;
+    private String trustStorePassword = null;
     
     /**
+     * The trustStore Type.
+     */
+    private String trustStoreType = null;
+
+    /**
+     * The text for the Ssl Protocol.
+     */
+    private String sslProtocol= null;
+    
+    /*
      * Represent boolean (true, false) values for enableLookups etc.
      */    
     private List booleanVals = null;
 
-    /**
+    /*
      * Represent supported connector types.
      */    
     private List connectorTypeVals = null;
@@ -287,11 +254,35 @@ public final class ConnectorForm extends ActionForm {
      * Represent supported clientAuth values.
      */
     private List clientAuthVals = null;
+
+    /**
+     * The value of secure.
+     */
+    private String secure = "false";
+    /**
+     * The value of tcpNoDelay.
+     */
+    private String tcpNoDelay = "true";
     
     /**
-     * Represent support thread priority values.
+     * The value of xpoweredBy.
      */
-    private List threadPriorityVals = null;
+    private String xpoweredBy = "false";
+    
+    private String SSLEngine;
+    private String SSLProtocol;
+    private String SSLCipherSuite;
+    private String SSLCertificateFile;
+    private String SSLCertificateKeyFile;
+    private String SSLPassword;
+    private String SSLVerifyClient;
+    private String SSLVerifyDepthText;
+    private String SSLCACertificateFile;
+    private String SSLCACertificatePath;
+    private String SSLCertificateChainFile;
+    private String SSLCARevocationFile;
+    private String SSLCARevocationPath;
+
     
     // ------------------------------------------------------------- Properties
     
@@ -371,23 +362,6 @@ public final class ConnectorForm extends ActionForm {
     }
     
     /**
-     * Return the secure text.
-     */
-    public String getSecure() {
-        
-        return this.secure;
-        
-    }
-    
-    /**
-     * Set the secure text/
-     */
-    public void setSecure(String secure) {
-        
-        this.secure = secure;
-    }
-    
-    /**
      * Return the Connector type.
      */
     public String getConnectorType() {
@@ -444,38 +418,41 @@ public final class ConnectorForm extends ActionForm {
     }
     
     /**
-     * Return the compressable MIME types.
+     * Return the algorithm.
      */
-    public String getCompressableMimeType() {
+    public String getAlgorithm() {
         
-        return this.compressableMimeType;
+        return this.algorithm;
+        
+    }
+    
+    
+    /**
+     * Set the algorithm.
+     */
+    
+    public void setAlgorithm(String algorithm) {
+        
+        this.algorithm = algorithm;
         
     }
     
     /**
-     * Set the compressable MIME types.
+     * Return the ciphers.
      */
-    public void setCompressableMimeType(String compressableMimeType) {
+    public String getCiphers() {
         
-        this.compressableMimeType = compressableMimeType;
+        return this.ciphers;
         
     }
     
     /**
-     * Return the compression text.
+     * Set the ciphers.
      */
-    public String getCompression() {
-        
-        return this.compression;
-        
-    }
     
-    /**
-     * Set the compression text.
-     */
-    public void setCompression(String compression) {
+    public void setCiphers(String ciphers) {
         
-        this.compression = compression;
+        this.ciphers = ciphers;
         
     }
     
@@ -497,7 +474,7 @@ public final class ConnectorForm extends ActionForm {
         this.connLingerText = connLingerText;
         
     }
-       
+    
     /**
      * Return the connTimeOutText.
      */
@@ -517,6 +494,24 @@ public final class ConnectorForm extends ActionForm {
         
     }
        
+    /**
+     * Return the connUploadTimeOutText.
+     */
+    public String getConnUploadTimeOutText() {
+        
+        return this.connUploadTimeOutText;
+        
+    }
+    
+    /**
+     * Set the connUploadTimeOutText.
+     */
+    
+    public void setConnUploadTimeOutText(String connUploadTimeOutText) {
+        
+        this.connUploadTimeOutText = connUploadTimeOutText;
+        
+    }
     /**
      * Return the bufferSizeText.
      */
@@ -546,7 +541,7 @@ public final class ConnectorForm extends ActionForm {
     }
     
     /**
-     * Set the connTimeOutText.
+     * Set the address.
      */
     
     public void setAddress(String address) {
@@ -632,7 +627,7 @@ public final class ConnectorForm extends ActionForm {
 
     }
 
-          /**
+    /**
      * Return the object name of the service this connector belongs to.
      */
     public String getKeyStorePassword() {
@@ -652,43 +647,43 @@ public final class ConnectorForm extends ActionForm {
     }
 
     /**
-     * Return the debugVals.
+     * Return the keystore type.
      */
-    public List getDebugLvlVals() {
-        
-        return this.debugLvlVals;
-        
+    public String getKeyStoreType() {
+
+        return this.keyStoreType;
+
     }
+
+
+    /**
+     * Set the keystore type.
+     */
+    public void setKeyStoreType(String keyStoreType) {
+
+        this.keyStoreType = keyStoreType;
+
+    }
+
     
     /**
-     * Set the debugVals.
+     * Return the sslProtocol
      */
-    public void setDebugLvlVals(List debugLvlVals) {
-        
-        this.debugLvlVals = debugLvlVals;
-        
+    public String getSslProtocol() {
+
+        return this.sslProtocol;
+
     }
-    
-    
+
+
     /**
-     * Return the Debug Level Text.
+     * Set the sslProtocol.
      */
-    
-    public String getDebugLvl() {
-        
-        return this.debugLvl;
-        
+    public void setSslProtocol(String sslProtocol) {
+
+        this.sslProtocol = sslProtocol;
+
     }
-    
-    /**
-     * Set the Debug Level Text.
-     */
-    public void setDebugLvl(String debugLvl) {
-        
-        this.debugLvl = debugLvl;
-        
-    }
-    
     
     /**
      * Return the Enable lookup Text.
@@ -710,6 +705,44 @@ public final class ConnectorForm extends ActionForm {
     }
     
     /**
+     * Return the disableUploadTimeout.
+     */
+    
+    public String getDisableUploadTimeout() {
+        
+        return this.disableUploadTimeout;
+        
+    }
+    
+    /**
+     * Set the disableUploadTimeout.
+     */
+    public void setDisableUploadTimeout(String disableUploadTimeout) {
+        
+        this.disableUploadTimeout = disableUploadTimeout;
+        
+    }
+    
+    /**
+     * Return the compression Text.
+     */
+    
+    public String getCompression() {
+        
+        return this.compression;
+        
+    }
+    
+    /**
+     * Set the Compression Text.
+     */
+    public void setCompression(String compression) {
+        
+        this.compression = compression;
+        
+    }
+    
+    /**
      * Return the booleanVals.
      */
     public List getBooleanVals() {
@@ -726,14 +759,13 @@ public final class ConnectorForm extends ActionForm {
         this.booleanVals = booleanVals;
         
     }
-    
+
     /**
      * Return the clientAuth values.
      */
     public List getClientAuthVals() {
         return clientAuthVals;
     }
-
     /**
      * Set the clientAuth vaues.
      */
@@ -741,21 +773,6 @@ public final class ConnectorForm extends ActionForm {
         this.clientAuthVals = clientAuthVals;
     }
     
-    /**
-     * Return the threadPriorityVals.
-     */
-    public List getThreadPriorityVals() {
-        return threadPriorityVals;
-    }
-
-
-    /**
-     * Set the threadPriorityVals.
-     */
-    public void setThreadPriorityVals(List threadPriorityVals) {
-        this.threadPriorityVals = threadPriorityVals;
-    }
-
     /**
      * Return the min Processors Text.
      */
@@ -792,6 +809,158 @@ public final class ConnectorForm extends ActionForm {
         
     }
     
+    /**
+     * Return the maxKeepAliveText.
+     */
+    public String getMaxKeepAliveText() {
+        
+        return this.maxKeepAliveText;
+        
+    }
+    
+    /**
+     * Set the maxKeepAliveText.
+     */
+    
+    public void setMaxKeepAliveText(String maxKeepAliveText) {
+        
+        this.maxKeepAliveText = maxKeepAliveText;
+        
+    }
+    
+    /**
+     * Return the maxSpare.
+     */
+    public String getMaxSpare() {
+        
+        return this.maxSpare;
+        
+    }
+    
+    /**
+     * Set the maxSpare.
+     */
+    
+    public void setMaxSpare(String maxSpare) {
+        
+        this.maxSpare = maxSpare;
+        
+    } 
+    
+    /**
+     * Return the maxThreads.
+     */
+    public String getMaxThreads() {
+        
+        return this.maxThreads;
+        
+    }
+    
+    /**
+     * Set the maxThreads.
+     */
+    
+    public void setMaxThreads(String maxThreads) {
+        
+        this.maxThreads = maxThreads;
+        
+    } 
+    
+    /**
+     * Return the minSpare.
+     */
+    public String getMinSpare() {
+        
+        return this.minSpare;
+        
+    }
+    
+    /**
+     * Set the minSpare.
+     */
+    
+    public void setMinSpare(String minSpare) {
+        
+        this.minSpare = minSpare;
+        
+    }
+
+    /**
+     * Return the threadPriority.
+     */
+    public String getThreadPriority() {
+
+      return this.threadPriority;
+
+    }
+
+    /**
+     * Set the threadPriority.
+     */
+    
+    public void setThreadPriority(String threadPriority) {
+      
+      this.threadPriority = threadPriority;
+    
+    }
+    
+    /**
+     * Return the trust store filename for this connector.
+     */
+    public String getTrustStoreFileName() {
+
+        return this.trustStoreFileName;
+
+    }
+
+
+    /**
+     * Set the trust store filename for this connector.
+     */
+    public void setTrustStoreFileName(String trustStoreFileName) {
+
+        this.trustStoreFileName = trustStoreFileName;
+
+    }
+
+    /**
+     * Return the trust store password for this connector.
+     */
+    public String getTrustStorePassword() {
+
+        return this.trustStorePassword;
+
+    }
+
+
+    /**
+     * Set the trust store password for this connector.
+     */
+    public void setTrustStorePassword(String trustStorePassword) {
+
+        this.trustStorePassword = trustStorePassword;
+
+    }
+
+    /**
+     * Return the trust store type for this connector.
+     */
+    public String getTrustStoreType() {
+
+        return this.trustStoreType;
+
+    }
+
+
+    /**
+     * Set the trust store type for this connector.
+     */
+    public void setTrustStoreType(String trustStoreType) {
+
+        this.trustStoreType = trustStoreType;
+
+    }
+
     /**
      * Return the URIEncoding text.
      */
@@ -919,229 +1088,187 @@ public final class ConnectorForm extends ActionForm {
         
     }
     
-    /**
-     * Return the disableUploadTimeout.
+     /**
+     * Return the secure Text.
      */
-    public String getDisableUploadTimeout() {
-        return disableUploadTimeout;
+    public String getSecure() {
+        
+        return this.secure;
+        
     }
-
+    
     /**
-     * Set the disableUploadTimeout.
+     * Set the secure Text.
      */
-    public void setDisableUploadTimeout(String disableUploadTimeout) {
-        this.disableUploadTimeout = disableUploadTimeout;
+    public void setSecure(String secure) {
+        
+        this.secure = secure;
+        
     }    
-
+    
     /**
-     * Return the algorithm.
-     */
-    public String getAlgorithm() {
-        return algorithm;
-    }
-
-    /**
-     * Set the algorithm.
-     */
-    public void setAlgorithm(String algorithm) {
-        this.algorithm = algorithm;
-    }
-
-    /**
-     * Return the ciphers.
-     */
-    public String getCiphers() {
-        return ciphers;
-    }
-
-    /**
-     * Set the ciphers.
-     */
-    public void setCiphers(String ciphers) {
-        this.ciphers = ciphers;
-    }
-
-    /**
-     * Return the keyStoreType.
-     */
-    public String getKeyStoreType() {
-        return keyStoreType;
-    }
-
-    /**
-     * Set the keyStoreType.
-     */
-    public void setKeyStoreType(String keystoreType) {
-        this.keyStoreType = keystoreType;
-    }
-
-    /**
-     * Return the maxHttpHeaderSizeText.
-     */
-    public String getMaxHttpHeaderSizeText() {
-        return maxHttpHeaderSizeText;
-    }
-
-    /**
-     * Set the maxHttpHeaderSizeText.
-     */
-    public void setMaxHttpHeaderSizeText(String maxHttpHeaderSize) {
-        this.maxHttpHeaderSizeText = maxHttpHeaderSize;
-    }
-
-    /**
-     * Return the maxKeepAliveReqsText.
-     */
-    public String getMaxKeepAliveReqsText() {
-        return maxKeepAliveReqsText;
-    }
-
-    /**
-     * Set the maxKeepAliveReqsText.
-     */
-    public void setMaxKeepAliveReqsText(String maxKeepAliveRequests) {
-        this.maxKeepAliveReqsText = maxKeepAliveRequests;
-    }
-
-    /**
-     * Return the maxSpareProcessorsText.
-     */
-    public String getMaxSpareProcessorsText() {
-        return maxSpareProcessorsText;
-    }
-
-    /**
-     * Set the maxSpareProcessorsText.
-     */
-    public void setMaxSpareProcessorsText(String maxSpareProcessors) {
-        this.maxSpareProcessorsText = maxSpareProcessors;
-    }
-
-    /**
-     * Return the noCompressionUA.
-     */
-    public String getNoCompressionUA() {
-        return noCompressionUA;
-    }
-
-    /**
-     * Set the noCompressionUA.
-     */
-    public void setNoCompressionUA(String noCompressionUserAgents) {
-        this.noCompressionUA = noCompressionUserAgents;
-    }
-
-    /**
-     * Return the restrictedUA.
-     */
-    public String getRestrictedUA() {
-        return restrictedUA;
-    }
-
-    /**
-     * Set the restrictedUA.
-     */
-    public void setRestrictedUA(String restrictedUserAgents) {
-        this.restrictedUA = restrictedUserAgents;
-    }
-
-    /**
-     * Return the server.
-     */
-    public String getServer() {
-        return server;
-    }
-
-    /**
-     * Set the server.
-     */
-    public void setServer(String server) {
-        this.server = server;
-    }
-
-    /**
-     * Return the socketBufferText.
-     */
-    public String getSocketBufferText() {
-        return socketBufferText;
-    }
-
-    /**
-     * Set the socketBufferText.
-     */
-    public void setSocketBufferText(String socketBuffer) {
-        this.socketBufferText = socketBuffer;
-    }
-
-    /**
-     * Return the sslProtocol.
-     */
-    public String getSslProtocol() {
-        return sslProtocol;
-    }
-
-    /**
-     * Set the sslProtocol.
-     */
-    public void setSslProtocol(String sslProtocol) {
-        this.sslProtocol = sslProtocol;
-    }
-
-    /**
-     * Return the strategy.
-     */
-    public String getStrategy() {
-        return strategy;
-    }
-
-    /**
-     * Set the strategy.
-     */
-    public void setStrategy(String strategy) {
-        this.strategy = strategy;
-    }
-
-    /**
-     * Return the tcpNoDelay.
+     * Return the tcpNoDelay Text.
      */
     public String getTcpNoDelay() {
-        return tcpNoDelay;
+        
+        return this.tcpNoDelay;
+        
     }
-
+    
     /**
-     * Set the tcpNoDelay.
+     * Set the tcpNoDelay Text.
      */
     public void setTcpNoDelay(String tcpNoDelay) {
+        
         this.tcpNoDelay = tcpNoDelay;
+        
+    }   
+    
+    /**
+     * Return the xpoweredBy Text.
+     */
+    public String getXpoweredBy() {
+        
+        return this.xpoweredBy;
+        
+    }
+    
+    /**
+     * Set the xpoweredBy Text.
+     */
+    public void setXpoweredBy(String xpoweredBy) {
+        
+        this.xpoweredBy = xpoweredBy;
+        
+    }
+    
+        public String getSSLEngine() {
+        return SSLEngine;
     }
 
-    /**
-     * Return the threadPriorityText.
-     */
-    public String getThreadPriorityText() {
-        return threadPriorityText;
-    }
 
-    /**
-     * Set the threadPriorityText.
-     */
-    public void setThreadPriorityText(String threadPriority) {
-        this.threadPriorityText = threadPriority;
-    }
-
-    /**
-     * Returns the tomcatAuthentication.
-     */
-    public String getTomcatAuthentication() {
-        return tomcatAuthentication;
+    public void setSSLEngine(String sSLEngine) {
+        SSLEngine = sSLEngine;
     }
 
 
-    /**
-     * Set the tomcatAuthentication.
-     */
-    public void setTomcatAuthentication(String tomcatAuthentication) {
-        this.tomcatAuthentication = tomcatAuthentication;
+    public String getSSLProtocol() {
+        return SSLProtocol;
+    }
+
+
+    public void setSSLProtocol(String sSLProtocol) {
+        SSLProtocol = sSLProtocol;
+    }
+
+
+    public String getSSLCipherSuite() {
+        return SSLCipherSuite;
+    }
+
+
+    public void setSSLCipherSuite(String sSLCipherSuite) {
+        SSLCipherSuite = sSLCipherSuite;
+    }
+
+
+    public String getSSLCertificateFile() {
+        return SSLCertificateFile;
+    }
+
+
+    public void setSSLCertificateFile(String sSLCertificateFile) {
+        SSLCertificateFile = sSLCertificateFile;
+    }
+
+
+    public String getSSLCertificateKeyFile() {
+        return SSLCertificateKeyFile;
+    }
+
+
+    public void setSSLCertificateKeyFile(String sSLCertificateKeyFile) {
+        SSLCertificateKeyFile = sSLCertificateKeyFile;
+    }
+
+
+    public String getSSLPassword() {
+        return SSLPassword;
+    }
+
+
+    public void setSSLPassword(String sSLPassword) {
+        SSLPassword = sSLPassword;
+    }
+
+
+    public String getSSLVerifyClient() {
+        return SSLVerifyClient;
+    }
+
+
+    public void setSSLVerifyClient(String sSLVerifyClient) {
+        SSLVerifyClient = sSLVerifyClient;
+    }
+
+
+    public String getSSLVerifyDepthText() {
+        return SSLVerifyDepthText;
+    }
+
+
+    public void setSSLVerifyDepthText(String sSLVerifyDepthText) {
+        SSLVerifyDepthText = sSLVerifyDepthText;
+    }
+
+
+    public String getSSLCACertificateFile() {
+        return SSLCACertificateFile;
+    }
+
+
+    public void setSSLCACertificateFile(String sSLCACertificateFile) {
+        SSLCACertificateFile = sSLCACertificateFile;
+    }
+
+
+    public String getSSLCACertificatePath() {
+        return SSLCACertificatePath;
+    }
+
+
+    public void setSSLCACertificatePath(String sSLCACertificatePath) {
+        SSLCACertificatePath = sSLCACertificatePath;
+    }
+
+
+    public String getSSLCertificateChainFile() {
+        return SSLCertificateChainFile;
+    }
+
+
+    public void setSSLCertificateChainFile(String sSLCertificateChainFile) {
+        SSLCertificateChainFile = sSLCertificateChainFile;
+    }
+
+
+    public String getSSLCARevocationFile() {
+        return SSLCARevocationFile;
+    }
+
+
+    public void setSSLCARevocationFile(String sSLCARevocationFile) {
+        SSLCARevocationFile = sSLCARevocationFile;
+    }
+
+
+    public String getSSLCARevocationPath() {
+        return SSLCARevocationPath;
+    }
+
+
+    public void setSSLCARevocationPath(String sSLCARevocationPath) {
+        SSLCARevocationPath = sSLCARevocationPath;
     }
 
 
@@ -1159,12 +1286,20 @@ public final class ConnectorForm extends ActionForm {
         this.connectorType = null;
         this.portText = null;
         this.acceptCountText = null;
+        this.connLingerText = null;
         this.connTimeOutText = null;
+        this.connUploadTimeOutText = null;
         this.bufferSizeText = null;
         this.address = null;
         this.enableLookups = "false";
+        this.compression = "off";
         this.minProcessorsText = null;
         this.maxProcessorsText = null;
+        this.maxKeepAliveText = null;
+        this.maxSpare = null;
+        this.maxThreads = null;
+        this.minSpare = null;
+        this.threadPriority = null;
         this.uriEncodingText = null;
         this.useBodyEncodingForURI = "false";
         this.allowTrace = "false";
@@ -1176,24 +1311,24 @@ public final class ConnectorForm extends ActionForm {
         this.keyStorePassword = null;        
         this.clientAuthentication = "false";
         this.secure = "false";
-        this.compressableMimeType = null;
-        this.compression = null;
-        this.connLingerText = null;
-        this.disableUploadTimeout = "false";
-        this.maxHttpHeaderSizeText = null;
-        this.maxKeepAliveReqsText = null;
-        this.maxSpareProcessorsText = null;
-        this.noCompressionUA = null;
-        this.restrictedUA = null;
-        this.server = null;
-        this.socketBufferText = null;
-        this.strategy = null;
         this.tcpNoDelay = "false";
-        this.threadPriorityText = null;
-        this.algorithm = null;
-        this.ciphers = null;
-        this.keyStoreType = null;
-        this.sslProtocol = null;
+        this.xpoweredBy = "false";
+        this.trustStoreFileName = null;
+        this.trustStorePassword = null;
+        this.trustStoreType = null;
+        this.SSLEngine = null;
+        this.SSLProtocol = null;
+        this.SSLCipherSuite = null;
+        this.SSLCertificateFile = null;
+        this.SSLCertificateKeyFile = null;
+        this.SSLPassword = null;
+        this.SSLVerifyClient = null;
+        this.SSLVerifyDepthText = null;
+        this.SSLCACertificateFile = null;
+        this.SSLCACertificatePath = null;
+        this.SSLCertificateChainFile = null;
+        this.SSLCARevocationFile = null;
+        this.SSLCARevocationPath = null;
         
     }
     
@@ -1212,60 +1347,46 @@ public final class ConnectorForm extends ActionForm {
     
     public ActionErrors validate(ActionMapping mapping,
     HttpServletRequest request) {
-        
+    
         errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        
-        // front end validation when save is clicked.
-        if (submit != null) {
-            
-            /* general */
-            numberCheck("acceptCountText", acceptCountText, true, 0, 128);
-            numberCheck("connTimeOutText", connTimeOutText, true, -1, 60000);
-            numberCheck("bufferSizeText", bufferSizeText, true, 1, 8192);
-  
-            /* The IP address can also be null -- which means open the
-             server socket on *all* IP addresses for this host */
-            if ((address.length() > 0) && !address.equalsIgnoreCase(" ")) {
-                try {
-                    InetAddress.getByName(address);
-                } catch (Exception e) {
-                    errors.add("address", new ActionMessage("error.address.invalid"));
-                }
-            } else {
-                address = " ";
-            }
-            
-            /* ports */
-            numberCheck("portNumber",  portText, true, 1, 65535);
-            numberCheck("redirectPortText",  redirectPortText, true, -1, 65535);
-            
-            /* processors*/
-            numberCheck("minProcessorsText",  minProcessorsText, true, 1, 512);
+        /* The IP address can also be null -- which means open the
+         server socket on *all* IP addresses for this host */
+        if ((address.length() > 0) && !address.equalsIgnoreCase(" ")) {
             try {
-                // if min is a valid integer, then check that max >= min
-                int min = Integer.parseInt(minProcessorsText);
-                numberCheck("maxProcessorsText",  maxProcessorsText, true, min, 512);
+                InetAddress.getByName(address);
             } catch (Exception e) {
-                // check for the complete range
-                numberCheck("maxProcessorsText",  maxProcessorsText, true, 1, 512);
+                errors.add("address", new ActionMessage("error.address.invalid"));
             }
+        } else {
+            address = " ";
+        }
             
-            // proxy                  
-            if ((proxyName!= null) && (proxyName.length() > 0)) {
-                try {
-                    InetAddress.getByName(proxyName);
-                } catch (Exception e) {
-                    errors.add("proxyName", new ActionMessage("error.proxyName.invalid"));
-                }
-            }   
+        /* ports */
+        numberCheck("portNumber",  portText, true, 1, 65535);
+        numberCheck("redirectPortText",  redirectPortText, true, -1, 65535);
             
-            // supported only by Coyote HTTP and HTTPS connectors
-            if (!("AJP".equalsIgnoreCase(connectorType)))
-                numberCheck("proxyPortText",  proxyPortText, true, 0, 65535);            
+        // proxy                  
+        if ((proxyName!= null) && (proxyName.length() > 0)) {
+            try {
+                InetAddress.getByName(proxyName);
+            } catch (Exception e) {
+                errors.add("proxyName",
+                        new ActionMessage("error.proxyName.invalid"));
+            }
+        }   
+        
+        // supported only by Coyote HTTP and HTTPS connectors
+        if (!("AJP".equalsIgnoreCase(connectorType))) {
+            numberCheck("acceptCountText", acceptCountText, true, 0, 128);
+            //numberCheck("connTimeOutText", connTimeOutText, true, -1, 60000);
+            numberCheck("bufferSizeText", bufferSizeText, true, 1, 8192);
+            numberCheck("proxyPortText",  proxyPortText, true, 0, 65535);  
         }
         
+        if ("HTTP-APR".equalsIgnoreCase(connectorType)) {
+            numberCheck("SSLVerifyDepthText", SSLVerifyDepthText, true, 1, 100);
+        }
         return errors;
     }
     
@@ -1275,7 +1396,8 @@ public final class ConnectorForm extends ActionForm {
      *
      * @param  field  The field name in the form for which this error occured.
      * @param  numText  The string representation of the number.
-     * @param rangeCheck  Boolean value set to true of reange check should be performed.
+     * @param rangeCheck  Boolean value set to true of reange check should be
+     * performed.
      *
      * @param  min  The lower limit of the range
      * @param  max  The upper limit of the range
@@ -1305,5 +1427,5 @@ public final class ConnectorForm extends ActionForm {
             }
         }
     }
-
+    
 }

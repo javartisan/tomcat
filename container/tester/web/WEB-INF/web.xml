@@ -1,29 +1,24 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-
-<!DOCTYPE web-app
-    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
-    "http://java.sun.com/dtd/web-app_2_3.dtd">
-
 <!--
-   Licensed to the Apache Software Foundation (ASF) under one or more
-   contributor license agreements.  See the NOTICE file distributed with
-   this work for additional information regarding copyright ownership.
-   The ASF licenses this file to You under the Apache License, Version 2.0
-   (the "License"); you may not use this file except in compliance with
-   the License.  You may obtain a copy of the License at
-  
-       http://www.apache.org/licenses/LICENSE-2.0
-  
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
 -->
-
-<!-- Deployment Descriptor for the Tester Web Application -->
-
-<web-app>
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+    version="2.4">
 
     <!-- ========== Filter Definitions ==================================== -->
 
@@ -361,6 +356,11 @@
     </filter-mapping>
 
     <filter-mapping>
+        <filter-name>HttpFilter</filter-name>
+        <url-pattern>/WrappedRequest01</url-pattern>
+    </filter-mapping>
+
+    <filter-mapping>
         <filter-name>GenericFilter</filter-name>
         <url-pattern>/WrappedReset01</url-pattern>
     </filter-mapping>
@@ -466,6 +466,10 @@
 -->
 
     <listener>
+        <listener-class>org.apache.tester.RequestListener01</listener-class>
+    </listener>
+
+    <listener>
         <listener-class>org.apache.tester.SessionListener01</listener-class>
     </listener>
 
@@ -517,6 +521,11 @@
     <servlet>
         <servlet-name>Authentication05</servlet-name>
         <servlet-class>org.apache.tester.Authentication05</servlet-class>
+    </servlet>
+
+    <servlet>
+        <servlet-name>Authentication06</servlet-name>
+        <servlet-class>org.apache.tester.Authentication06</servlet-class>
     </servlet>
 
     <servlet>
@@ -923,6 +932,11 @@
     </servlet>
 
     <servlet>
+        <servlet-name>Request01</servlet-name>
+        <servlet-class>org.apache.tester.Request01</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>Reset01</servlet-name>
         <servlet-class>org.apache.tester.Reset01</servlet-class>
     </servlet>
@@ -1028,7 +1042,21 @@
     </servlet>
 
 
+    <servlet>
+        <servlet-name>invoker</servlet-name>
+        <servlet-class>
+          org.apache.catalina.servlets.InvokerServlet
+        </servlet-class>
+        <init-param>
+            <param-name>debug</param-name>
+            <param-value>0</param-value>
+        </init-param>
+        <load-on-startup>2</load-on-startup>
+    </servlet>
+
+
     <!-- ========== Servlet Mappings ====================================== -->
+
 
     <servlet-mapping>
         <servlet-name>invoker</servlet-name>
@@ -1099,6 +1127,21 @@
     <servlet-mapping>
         <servlet-name>Authentication05</servlet-name>
         <url-pattern>/disallowed/Authentication05</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>Authentication05</servlet-name>
+        <url-pattern>/disallowed/private/Authentication05</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>Authentication06</servlet-name>
+        <url-pattern>/allowed/public/Authentication06</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>Authentication05</servlet-name>
+        <url-pattern>/allowed/private/Authentication05</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>
@@ -1714,6 +1757,16 @@
     </servlet-mapping>
 
     <servlet-mapping>
+        <servlet-name>Request01</servlet-name>
+        <url-pattern>/Request01</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>Request01</servlet-name>
+        <url-pattern>/WrappedRequest01</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
         <servlet-name>Reset01</servlet-name>
         <url-pattern>/Reset01</url-pattern>
     </servlet-mapping>
@@ -1970,6 +2023,56 @@
         <web-resource-collection>
             <web-resource-name>No Users Allowed Area</web-resource-name>
             <url-pattern>/disallowed/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+        </auth-constraint>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>Really No Users Allowed Area</web-resource-name>
+            <url-pattern>/disallowed/private/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+        </auth-constraint>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>Really No Users Allowed Area</web-resource-name>
+            <url-pattern>/disallowed/private/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>*</role-name>
+        </auth-constraint>
+    </security-constraint>
+
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>All Users Allowed Area</web-resource-name>
+            <url-pattern>/allowed/public/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>*</role-name>
+        </auth-constraint>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>All Users Allowed Area</web-resource-name>
+            <url-pattern>/allowed/public/*</url-pattern>
+        </web-resource-collection>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>All Users Allowed Area</web-resource-name>
+            <url-pattern>/allowed/private/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>*</role-name>
+        </auth-constraint>
+    </security-constraint>
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>All Users Allowed Area</web-resource-name>
+            <url-pattern>/allowed/private/*</url-pattern>
         </web-resource-collection>
         <auth-constraint>
         </auth-constraint>

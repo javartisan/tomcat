@@ -19,17 +19,18 @@
 package org.apache.webapp.admin.resources;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
+
 import javax.management.Attribute;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -42,7 +43,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * updated data source entry.</p>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveDataSourceAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -50,12 +51,6 @@ public final class SaveDataSourceAction extends Action {
 
 
     // ----------------------------------------------------- Instance Variables
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     /**
      * The MBeanServer we will be interacting with.
@@ -90,11 +85,8 @@ public final class SaveDataSourceAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Has this transaction been cancelled?
         if (isCancelled(request)) {
@@ -123,41 +115,55 @@ public final class SaveDataSourceAction extends Action {
             Object params[] = new Object[2];
             params[0] = dataSourceForm.getJndiName();
             params[1] = ResourceUtils.DATASOURCE_CLASS;
+            String encodedJndiName = URLEncoder.encode(params[0].toString(), 
+                                                       "UTF-8");
 
             String resourcetype = dataSourceForm.getResourcetype();
             String path = dataSourceForm.getPath();
             String host = dataSourceForm.getHost();
-            String service = dataSourceForm.getService();
+            String domain = dataSourceForm.getDomain();
 
             ObjectName oname = null;
+            ObjectName encodedOName = null;
 
             try {
-                if (resourcetype!=null) {
-                    // Construct the MBean Name for the naming source
-                    if (resourcetype.equals("Global")) {
-                        oname =
-                            new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                            ResourceUtils.GLOBAL_TYPE);
-                    } else if (resourcetype.equals("Context")) {
-                        oname =
-                            new ObjectName (ResourceUtils.NAMINGRESOURCES_TYPE +
-                            ResourceUtils.CONTEXT_TYPE + ",path=" + path +
-                            ",host=" + host + ",service=" + service);
-                    } else if (resourcetype.equals("DefaultContext")) {
-                        if (host.length() > 0) {
-                            oname = 
-                                new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                                ResourceUtils.HOST_DEFAULTCONTEXT_TYPE + ",host=" + 
-                                host + ",service=" + service);
-                        } else {
-                            oname = 
-                                new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                                ResourceUtils.SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + 
-                                service);
-                        }
-                    }
+            
+                if (resourcetype.equals("Global")) {
+                    oname = new ObjectName( domain + ResourceUtils.RESOURCE_TYPE + 
+                                            ResourceUtils.GLOBAL_TYPE + 
+                                            ",class=" + params[1] + 
+                                            ",name=" + params[0]);
+                    encodedOName = new ObjectName( domain + 
+                                            ResourceUtils.RESOURCE_TYPE + 
+                                            ResourceUtils.GLOBAL_TYPE + 
+                                            ",class=" + params[1] + 
+                                            ",name=" + encodedJndiName);
+                } else if (resourcetype.equals("Context")) {
+                    oname = new ObjectName( domain + ResourceUtils.RESOURCE_TYPE + 
+                                            ResourceUtils.CONTEXT_TYPE + 
+                                            ",path=" + path + ",host=" + host + 
+                                            ",class=" + params[1] + 
+                                            ",name=" + params[0]);
+                    encodedOName = new ObjectName( domain + 
+                                            ResourceUtils.RESOURCE_TYPE + 
+                                            ResourceUtils.CONTEXT_TYPE + 
+                                            ",path=" + path + ",host=" + host + 
+                                            ",class=" + params[1] + 
+                                            ",name=" + encodedJndiName);
                 }
-
+                
+                if (mserver.isRegistered(oname) || 
+                                        mserver.isRegistered(encodedOName)) {
+                    ActionMessages errors = new ActionMessages();
+                    errors.add("jndiName",
+                               new ActionMessage("resources.invalid.name"));
+                    saveErrors(request, errors);
+                    return (new ActionForward(mapping.getInput()));
+                }        
+                
+                oname = ResourceUtils.getNamingResourceObjectName(domain,
+                            resourcetype, path, host);                                
+                            
                 // Create the new object and associated MBean
                 objectName = (String) mserver.invoke(oname, "addResource",
                                                      params, signature);

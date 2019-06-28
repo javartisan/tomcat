@@ -23,9 +23,12 @@ import java.security.Principal;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.util.StringManager;
-import org.apache.commons.digester.Digester;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.tomcat.util.digester.Digester;
 
 
 /**
@@ -39,12 +42,12 @@ import org.apache.commons.digester.Digester;
  * synchronization is performed around accesses to the principals collection.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 781382 $ $Date: 2009-06-03 15:02:06 +0100 (Wed, 03 Jun 2009) $
+ * @version $Id: MemoryRealm.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
-public class MemoryRealm
-    extends RealmBase {
+public class MemoryRealm  extends RealmBase {
 
+    private static Log log = LogFactory.getLog(MemoryRealm.class);
 
     // ----------------------------------------------------- Instance Variables
 
@@ -79,7 +82,7 @@ public class MemoryRealm
     /**
      * The set of valid Principals for this Realm, keyed by user name.
      */
-    private HashMap principals = new HashMap();
+    private Map principals = new HashMap();
 
 
     /**
@@ -150,18 +153,18 @@ public class MemoryRealm
                 validated = (digest(credentials)
                              .equalsIgnoreCase(principal.getPassword()));
             } else {
-                validated = 
+                validated =
                     (digest(credentials).equals(principal.getPassword()));
             }
         }
 
         if (validated) {
-            if (debug >= 2)
-                log(sm.getString("memoryRealm.authenticateSuccess", username));
+            if (log.isDebugEnabled())
+                log.debug(sm.getString("memoryRealm.authenticateSuccess", username));
             return (principal);
         } else {
-            if (debug >= 2)
-                log(sm.getString("memoryRealm.authenticateFailure", username));
+            if (log.isDebugEnabled())
+                log.debug(sm.getString("memoryRealm.authenticateFailure", username));
             return (null);
         }
 
@@ -224,7 +227,7 @@ public class MemoryRealm
      */
     protected String getName() {
 
-        return (MemoryRealm.name);
+        return (name);
 
     }
 
@@ -254,6 +257,15 @@ public class MemoryRealm
 
     }
 
+    /**
+     * Returns the principals for this realm.
+     *
+     * @return The principals, keyed by user name (a String)
+     */
+    protected Map getPrincipals() {
+        return principals;
+    }
+
 
     // ------------------------------------------------------ Lifecycle Methods
 
@@ -266,6 +278,9 @@ public class MemoryRealm
      */
     public synchronized void start() throws LifecycleException {
 
+        // Perform normal superclass initialization
+        super.start();
+
         // Validate the existence of our database file
         File file = new File(pathname);
         if (!file.isAbsolute())
@@ -276,8 +291,8 @@ public class MemoryRealm
                               file.getAbsolutePath()));
 
         // Load the contents of the database file
-        if (debug >= 1)
-            log(sm.getString("memoryRealm.loadPath",
+        if (log.isDebugEnabled())
+            log.debug(sm.getString("memoryRealm.loadPath",
                              file.getAbsolutePath()));
         Digester digester = getDigester();
         try {
@@ -286,11 +301,11 @@ public class MemoryRealm
                 digester.parse(file);
             }
         } catch (Exception e) {
-            throw new LifecycleException("memoryRealm.readXml", e);
+            throw new LifecycleException
+                (sm.getString("memoryRealm.readXml"), e);
+        } finally {
+            digester.reset();
         }
-
-        // Perform normal superclass initialization
-        super.start();
 
     }
 

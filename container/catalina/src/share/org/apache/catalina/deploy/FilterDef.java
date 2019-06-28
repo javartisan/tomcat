@@ -21,6 +21,7 @@ package org.apache.catalina.deploy;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.io.Serializable;
 
 
 /**
@@ -28,10 +29,10 @@ import java.util.Map;
  * in a <code>&lt;filter&gt;</code> element in the deployment descriptor.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: FilterDef.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class FilterDef {
+public class FilterDef implements Serializable {
 
 
     // ------------------------------------------------------------- Properties

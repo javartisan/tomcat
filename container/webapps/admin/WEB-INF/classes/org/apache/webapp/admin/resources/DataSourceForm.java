@@ -18,15 +18,15 @@
 package org.apache.webapp.admin.resources;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the individual data source page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DataSourceForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -205,22 +205,22 @@ public final class DataSourceForm extends BaseForm {
     
        
     /**
-     * The service of this data source.
+     * The domain of this data source.
      */
-    private String service = null;
+    private String domain = null;
     
     /**
-     * Return the service of the data source this bean refers to.
+     * Return the domain of the data source this bean refers to.
      */
-    public String getService() {
-        return this.service;
+    public String getDomain() {
+        return this.domain;
     }
 
     /**
-     * Set the service of the data source this bean refers to.
+     * Set the domain of the data source this bean refers to.
      */
-    public void setService(String service) {
-        this.service = service;
+    public void setDomain(String domain) {
+        this.domain = domain;
     }
     
     /**
@@ -294,43 +294,36 @@ public final class DataSourceForm extends BaseForm {
         // url is a required field
         if ((url == null) || (url.length() < 1)) {
             errors.add("url",
-                    new ActionMessage("resources.error.url.required"));
+                       new ActionMessage("resources.error.url.required"));
         }
-        
+
         // jndiName is a required field
         if (( jndiName == null) || (jndiName.length() < 1)) {
             errors.add("jndiName",
-                    new ActionMessage("resources.error.jndiName.required"));
+                       new ActionMessage("resources.error.jndiName.required"));
         }
-        
+
         // driverClass is a required field
         if ((driverClass == null) || (driverClass.length() < 1)) {
             errors.add("driverClass",
-                    new ActionMessage("resources.error.driverClass.required"));
+                       new ActionMessage("resources.error.driverClass.required"));
         }
         
-        // username is a required field
-        if ((username == null) || (username.length() < 1)) {
-            errors.add("username",
-                    new ActionMessage("users.error.username.required"));
-        }
-            
-            
         // FIX ME -- need to do a range check
         numberCheck("active", active , false, 0, 10000);
         numberCheck("idle", idle , false, 0, 10000);
         numberCheck("wait", wait , false, 0, 10000);
-        
+
         // Quotes not allowed in username
         if ((username != null) && (username.indexOf('"') >= 0)) {
             errors.add("username",
-                    new ActionMessage("users.error.quotes"));
+                       new ActionMessage("users.error.quotes"));
         }
-        
+
         // Quotes not allowed in password
         if ((password != null) && (password.indexOf('"') > 0)) {
             errors.add("password",
-                    new ActionMessage("users.error.quotes"));
+                       new ActionMessage("users.error.quotes"));
         }
 
         return (errors);

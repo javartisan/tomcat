@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,61 +13,40 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 
 package org.apache.jasper.servlet;
 
-import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.security.AccessController;
 import java.security.CodeSource;
 import java.security.PermissionCollection;
-import java.security.PrivilegedAction;
-import java.security.ProtectionDomain;
 
 import org.apache.jasper.Constants;
 
 /**
- * This is a class loader that loads JSP files as though they were
- * Java classes. It calls the compiler to compile the JSP file into a
- * servlet and then loads the generated class. 
+ * Class loader for loading servlet class files (corresponding to JSP files) 
+ * and tag handler class files (corresponding to tag files).
  *
  * @author Anil K. Vijendran
  * @author Harish Prabandham
+ * @author Jean-Francois Arcand
  */
 public class JasperLoader extends URLClassLoader {
 
-    protected class PrivilegedLoadClass
-        implements PrivilegedAction {
+    private PermissionCollection permissionCollection;
+    private ClassLoader parent;
+    private SecurityManager securityManager;
 
-        PrivilegedLoadClass() {
-        }
-         
-        public Object run() {
-            return Thread.currentThread().getContextClassLoader();
-        }
-
-    }
-
-    private PermissionCollection permissionCollection = null;
-    private CodeSource codeSource = null;
-    private String className = null;
-    private ClassLoader parent = null;
-    private SecurityManager securityManager = null;
-    private PrivilegedLoadClass privLoadClass = null;
-
-    public JasperLoader(URL [] urls, String className, ClassLoader parent,
-                        PermissionCollection permissionCollection,
-                        CodeSource codeSource) {
-        super(urls,parent);
-        this.permissionCollection = permissionCollection;
-        this.codeSource = codeSource;
-        this.className = className;
-        this.parent = parent;
-        this.privLoadClass = new PrivilegedLoadClass();
-        this.securityManager = System.getSecurityManager();
+    public JasperLoader(URL[] urls, ClassLoader parent,
+			PermissionCollection permissionCollection,
+			CodeSource codeSource) {
+	super(urls, parent);
+	this.permissionCollection = permissionCollection;
+	this.parent = parent;
+	this.securityManager = System.getSecurityManager();
     }
 
     /**
@@ -81,9 +61,7 @@ public class JasperLoader extends URLClassLoader {
     public Class loadClass(String name) throws ClassNotFoundException {
 
         return (loadClass(name, false));
-
     }
-
 
     /**
      * Load the class with the specified name, searching using the following
@@ -110,7 +88,7 @@ public class JasperLoader extends URLClassLoader {
      *                                     
      * @exception ClassNotFoundException if the class was not found
      */                                    
-    public Class loadClass(String name, boolean resolve)
+    public synchronized Class loadClass(final String name, boolean resolve)
         throws ClassNotFoundException {
 
         Class clazz = null;                
@@ -124,58 +102,57 @@ public class JasperLoader extends URLClassLoader {
         }                          
                           
         // (.5) Permission to access this class when using a SecurityManager
-        int dot = name.lastIndexOf('.');
         if (securityManager != null) {     
+            int dot = name.lastIndexOf('.');
             if (dot >= 0) {                
-                try {                    
-                    securityManager.checkPackageAccess(name.substring(0,dot));
+                try {        
+                    // Do not call the security manager since by default, we grant that package.
+                    if (!"org.apache.jasper.runtime".equalsIgnoreCase(name.substring(0,dot))){
+                        securityManager.checkPackageAccess(name.substring(0,dot));
+                    }
                 } catch (SecurityException se) {
                     String error = "Security Violation, attempt to use " +
                         "Restricted Class: " + name;
-                    System.out.println(error);
+                    se.printStackTrace();
                     throw new ClassNotFoundException(error);
                 }                          
             }                              
         }
 
-        // Class is in a package, delegate to thread context class loader
-        if( !name.startsWith(Constants.JSP_PACKAGE_NAME) ) {
-            ClassLoader classLoader = null;
-            if (securityManager != null) {
-                 classLoader = (ClassLoader)AccessController.doPrivileged(privLoadClass);
-            } else {
-                classLoader = Thread.currentThread().getContextClassLoader();
-            }
-            clazz = classLoader.loadClass(name);
-            if( resolve )
-                resolveClass(clazz);
-            return clazz;
-        }
+	if( !name.startsWith(Constants.JSP_PACKAGE_NAME) ) {
+            // Class is not in org.apache.jsp, therefore, have our
+            // parent load it
+            clazz = parent.loadClass(name);            
+	    if( resolve )
+		resolveClass(clazz);
+	    return clazz;
+	}
 
-        // Only load classes for this JSP page
-        if( name.startsWith(className) ) {
-            String classFile = name.substring(Constants.JSP_PACKAGE_NAME.length()+1) +
-                ".class";
-            byte [] cdata = loadClassDataFromFile(classFile);
-            if( cdata == null )
-                throw new ClassNotFoundException(name);
-            if( securityManager != null ) {
-                ProtectionDomain pd = new ProtectionDomain(
-                        codeSource,permissionCollection);
-                clazz = defineClass(name,cdata,0,cdata.length,pd);
-            } else {
-                clazz = defineClass(name,cdata,0,cdata.length);
-            }
-            if( clazz != null ) {
-                if( resolve )                
-                    resolveClass(clazz);
-                return clazz;
-            }
-        }
-
-        throw new ClassNotFoundException(name);
+	return findClass(name);
     }
 
+    
+    /**
+     * Delegate to parent
+     * 
+     * @see java.lang.ClassLoader#getResourceAsStream(java.lang.String)
+     */
+    public InputStream getResourceAsStream(String name) {
+        InputStream is = parent.getResourceAsStream(name);
+        if (is == null) {
+            URL url = findResource(name);
+            if (url != null) {
+                try {
+                    is = url.openStream();
+                } catch (IOException e) {
+                    is = null;
+                }
+            }
+        }
+        return is;
+    }
+    
+    
     /**
      * Get the Permissions for a CodeSource.
      *
@@ -183,36 +160,10 @@ public class JasperLoader extends URLClassLoader {
      * a web application context, we just return our preset
      * PermissionCollection for the web app context.
      *
-     * @param codeSource where the code was loaded from
+     * @param codeSource Code source where the code was loaded from
      * @return PermissionCollection for CodeSource
      */
-    protected final PermissionCollection getPermissions(CodeSource codeSource) {
+    public final PermissionCollection getPermissions(CodeSource codeSource) {
         return permissionCollection;
     }
-
-
-    /**
-     * Load JSP class data from file.
-     */
-    protected byte[] loadClassDataFromFile(String fileName) {
-        byte[] classBytes = null;
-        try {
-            InputStream in = getResourceAsStream(fileName);
-            if (in == null) {
-                return null;
-            }
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            byte buf[] = new byte[1024];
-            for(int i = 0; (i = in.read(buf)) != -1; )
-                baos.write(buf, 0, i);
-            in.close();     
-            baos.close();    
-            classBytes = baos.toByteArray();
-        } catch(Exception ex) {
-            ex.printStackTrace();
-            return null;     
-        }                    
-        return classBytes;
-    }
-
 }

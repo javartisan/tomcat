@@ -1,4 +1,4 @@
-/* $Id: ConnectorCreateRule.java 303287 2004-09-29 09:55:39Z remm $
+/* $Id: ConnectorCreateRule.java 466608 2006-10-21 23:10:15Z markt $
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,13 +14,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+ */ 
+
 
 package org.apache.catalina.startup;
 
-import org.apache.catalina.Connector;
-import org.apache.commons.digester.Rule;
+
+import org.apache.catalina.connector.Connector;
+import org.apache.tomcat.util.digester.Rule;
 import org.xml.sax.Attributes;
+
 
 /**
  * Rule implementation that creates a connector.
@@ -28,35 +31,19 @@ import org.xml.sax.Attributes;
 
 public class ConnectorCreateRule extends Rule {
 
+
     // --------------------------------------------------------- Public Methods
+
 
     /**
      * Process the beginning of this element.
-     * 
-     * @param attributes
-     *            The attribute list of this element
+     *
+     * @param attributes The attribute list of this element
      */
     public void begin(Attributes attributes) throws Exception {
-        Class clazz;
-        Connector connector;
-
-        String className = attributes.getValue("className");
-        clazz = Class.forName(className);
-
-        if (className.equals("org.apache.coyote.tomcat4.CoyoteConnector")) {
-            Class argsClass[] = { String.class };
-            Object argsObjs[] = { attributes
-                    .getValue("protocolHandlerClassName") };
-            connector = (Connector) clazz.getConstructor(argsClass)
-                    .newInstance(argsObjs);
-        } else {
-            Class argsClass[] = {};
-            Object argsObjs[] = {};
-            connector = (Connector) clazz.getConstructor(argsClass)
-                    .newInstance(argsObjs);
-        }
-        digester.push(connector);
+        digester.push(new Connector(attributes.getValue("protocol")));
     }
+
 
     /**
      * Process the end of this element.
@@ -64,5 +51,6 @@ public class ConnectorCreateRule extends Rule {
     public void end() throws Exception {
         Object top = digester.pop();
     }
+
 
 }

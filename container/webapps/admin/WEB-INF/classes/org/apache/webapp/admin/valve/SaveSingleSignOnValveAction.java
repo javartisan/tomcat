@@ -19,19 +19,18 @@ package org.apache.webapp.admin.valve;
 
 import java.util.Locale;
 import java.io.IOException;
-import javax.management.Attribute;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 
@@ -40,7 +39,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * <em>Edit Valve</em> transactions for Single Sign On valve.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveSingleSignOnValveAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveSingleSignOnValveAction extends Action {
@@ -53,11 +52,6 @@ public final class SaveSingleSignOnValveAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-   
     // --------------------------------------------------------- Public Methods
     
     
@@ -84,10 +78,8 @@ public final class SaveSingleSignOnValveAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -100,47 +92,43 @@ public final class SaveSingleSignOnValveAction extends Action {
         // Identify the requested action
         SingleSignOnValveForm vform = (SingleSignOnValveForm) form;
         String adminAction = vform.getAdminAction();
-        String vObjectName = vform.getObjectName();
         String parent = vform.getParentObjectName();
         String valveType = vform.getValveType();
                
         // Perform a "Create Valve" transaction (if requested)
         if ("Create".equals(adminAction)) {
 
-            vObjectName = ValveUtil.createValve(parent, valveType, 
-                                response, request, mapping, 
-                                (ApplicationServlet) getServlet());
+            try {
+                // Ensure that only one single sign on valve exists
+                ObjectName pname = new ObjectName(parent); 
+                ObjectName oname = 
+                        new ObjectName(pname.getDomain() + 
+                                    ":type=Valve,name=SingleSignOn");               
+                
+                if (mBServer.isRegistered(oname)) {
+                    ActionMessages errors = new ActionMessages();
+                    errors.add("singleSignOnValve",
+                               new ActionMessage("error.singleSignOn.exists"));
+                    saveErrors(request, errors);
+                    return (new ActionForward(mapping.getInput()));
+                } 
+            } catch (Exception e) {
+                getServlet().log
+                    (resources.getMessage(locale, "users.error.invoke",
+                                          adminAction), e);
+                response.sendError
+                    (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                     resources.getMessage(locale, "users.error.invoke",
+                                          adminAction));
+                return (null);
+
+            }
+            
+            ValveUtil.createValve(parent, valveType, response, request, mapping,
+                    (ApplicationServlet) getServlet());
                       
         }
 
-        // Perform attribute updates as requested
-        String attribute = null;
-        try {
-        
-            ObjectName voname = new ObjectName(vObjectName);
-            
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(vform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(voname,
-                                  new Attribute("debug", new Integer(debug)));
-
-        } catch (Exception e) {
-
-            getServlet().log
-                (resources.getMessage(locale, "users.error.attribute.set",
-                                      attribute), e);
-            response.sendError
-                (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-                 resources.getMessage(locale, "users.error.attribute.set",
-                                      attribute));
-            return (null);
-        }
-    
         // Forward to the success reporting page
         session.removeAttribute(mapping.getAttribute());
         return (mapping.findForward("Save Successful"));

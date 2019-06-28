@@ -21,18 +21,17 @@ package org.apache.catalina.users;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-import org.apache.catalina.Group;
+
 import org.apache.catalina.Role;
-import org.apache.catalina.User;
 import org.apache.catalina.UserDatabase;
 
 
 /**
- * <p>Concrete implementation of {@link Group} for the
+ * <p>Concrete implementation of {@link org.apache.catalina.Group} for the
  * {@link MemoryUserDatabase} implementation of {@link UserDatabase}.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MemoryGroup.java 939529 2010-04-30 00:51:34Z kkolinko $
  * @since 4.1
  */
 
@@ -102,7 +101,7 @@ public class MemoryGroup extends AbstractGroup {
 
 
     /**
-     * Return the set of {@link User}s that are members of this group.
+     * Return the set of {@link org.apache.catalina.User}s that are members of this group.
      */
     public Iterator getUsers() {
 

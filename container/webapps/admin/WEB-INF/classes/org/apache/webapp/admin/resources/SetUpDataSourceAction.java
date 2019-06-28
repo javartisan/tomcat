@@ -19,14 +19,12 @@ package org.apache.webapp.admin.resources;
 
 import java.io.IOException;
 import java.util.Locale;
+import javax.management.AttributeNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -42,7 +40,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * being added, or a non-null value for an existing DataSource.</p>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SetUpDataSourceAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -56,11 +54,6 @@ public final class SetUpDataSourceAction extends Action {
      */
     private MBeanServer mserver = null;
 
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
     // --------------------------------------------------------- Public Methods
 
@@ -90,24 +83,21 @@ public final class SetUpDataSourceAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Set up the form bean based on the creating or editing state
         String objectName = request.getParameter("objectName");
         String resourcetype = request.getParameter("resourcetype");
         String path = request.getParameter("path");
         String host = request.getParameter("host");
-        String service = request.getParameter("service");
+        String domain = request.getParameter("domain");
 
         DataSourceForm dataSourceForm = new DataSourceForm();
         dataSourceForm.setResourcetype(resourcetype);
         dataSourceForm.setPath(path);
         dataSourceForm.setHost(host);
-        dataSourceForm.setService(service);
+        dataSourceForm.setDomain(domain);
         dataSourceForm.setType(ResourceUtils.DATASOURCE_CLASS);
 
         if (objectName == null) {
@@ -127,26 +117,33 @@ public final class SetUpDataSourceAction extends Action {
             String attribute = null;
             try {
                 ObjectName oname = new ObjectName(objectName);
-                attribute = "name";
-                dataSourceForm.setJndiName
-                    ((String) mserver.getAttribute(oname, attribute));
-                attribute = "url";
-                dataSourceForm.setUrl
-                    ((String) mserver.getAttribute(oname, attribute));
-                attribute = "driverClassName";
-                dataSourceForm.setDriverClass
-                    ((String) mserver.getAttribute(oname, attribute));
-                attribute = "username";
-                dataSourceForm.setUsername
-                    ((String) mserver.getAttribute(oname, attribute));
-                attribute = "password";
-                dataSourceForm.setPassword
-                    ((String) mserver.getAttribute(oname, attribute));
+                try {
+                    attribute = "name";
+                    dataSourceForm.setJndiName
+                        ((String) mserver.getAttribute(oname, attribute));
+                    attribute = "url";
+                    dataSourceForm.setUrl
+                        ((String) mserver.getAttribute(oname, attribute));
+                    attribute = "driverClassName";
+                    dataSourceForm.setDriverClass
+                        ((String) mserver.getAttribute(oname, attribute));
+                    attribute = "username";
+                    dataSourceForm.setUsername
+                        ((String) mserver.getAttribute(oname, attribute));
+                    attribute = "password";
+                    dataSourceForm.setPassword
+                        ((String) mserver.getAttribute(oname, attribute));
+                    attribute = "validationQuery";
+                    dataSourceForm.setQuery
+                        ((String) mserver.getAttribute(oname, attribute));
+                } catch (AttributeNotFoundException ex) {
+                    // disply empty if attribute is not set yet
+                }
                 try {
                     attribute = "maxActive";
                     dataSourceForm.setActive
                         ((String) mserver.getAttribute(oname, attribute));
-                } catch (Exception e) {
+                } catch (AttributeNotFoundException e) {
                     // if maxActive not defined, display default value
                     dataSourceForm.setActive("4");
                 }
@@ -154,7 +151,7 @@ public final class SetUpDataSourceAction extends Action {
                     attribute = "maxIdle";
                     dataSourceForm.setIdle
                         ((String) mserver.getAttribute(oname, attribute));
-                } catch (Exception e) {
+                } catch (AttributeNotFoundException e) {
                     // if maxIdle not defined, display default value
                     dataSourceForm.setIdle("2");
                 }
@@ -162,16 +159,9 @@ public final class SetUpDataSourceAction extends Action {
                     attribute = "maxWait";
                     dataSourceForm.setWait
                         ((String) mserver.getAttribute(oname, attribute));
-                } catch (Exception e) {
+                } catch (AttributeNotFoundException e) {
                     // if maxWait not defined, display default value
                     dataSourceForm.setWait("5000");
-                }
-                try {
-                    attribute = "validationQuery";
-                    dataSourceForm.setQuery
-                        ((String) mserver.getAttribute(oname, attribute));
-                } catch (Exception e) {
-                    // don't display anything
                 }
             } catch (Exception e) {
                 getServlet().log

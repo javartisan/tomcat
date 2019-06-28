@@ -14,32 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.catalina.ssi;
 
-import java.io.PrintWriter;
 
+import java.io.PrintWriter;
 /**
- * The interface that all SSI commands ( SSIEcho, SSIInclude, ...) must implement.
+ * The interface that all SSI commands ( SSIEcho, SSIInclude, ...) must
+ * implement.
  * 
  * @author Bip Thelin
  * @author Dan Sandberg
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
- *
+ * @author David Becker
+ * @version $Id: SSICommand.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 public interface SSICommand {
     /**
      * Write the output of the command to the writer.
-     *
-     * @param ssiMediator the ssi mediator
-     * @param commandName the name of the actual command ( ie. echo )
-     * @param paramNames The parameter names
-     * @param paramValues The parameter values
-     * @param writer the writer to output to
-     * @throws SSIStopProcessingException if SSI processing should be aborted
+     * 
+     * @param ssiMediator
+     *            the ssi mediator
+     * @param commandName
+     *            the name of the actual command ( ie. echo )
+     * @param paramNames
+     *            The parameter names
+     * @param paramValues
+     *            The parameter values
+     * @param writer
+     *            the writer to output to
+     * @return the most current modified date resulting from any SSI commands
+     * @throws SSIStopProcessingException
+     *             if SSI processing should be aborted
      */
-    public void process(SSIMediator ssiMediator,
-			String commandName,
-			String[] paramNames,
-			String[] paramValues,
-			PrintWriter writer) throws SSIStopProcessingException;
+	public long process(SSIMediator ssiMediator, String commandName,
+            String[] paramNames, String[] paramValues, PrintWriter writer)
+            throws SSIStopProcessingException;
 }

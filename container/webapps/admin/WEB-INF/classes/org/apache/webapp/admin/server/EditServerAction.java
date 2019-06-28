@@ -24,8 +24,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -34,8 +32,6 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
 import org.apache.struts.util.MessageResources;
-import org.apache.webapp.admin.Lists;
-import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.webapp.admin.ApplicationServlet;
 
 /**
@@ -44,7 +40,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  *
  * @author Jazmin Jonson
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditServerAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class EditServerAction extends Action {
@@ -55,11 +51,6 @@ public class EditServerAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-        
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -85,11 +76,8 @@ public class EditServerAction extends Action {
         
          // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
             mBServer = ((ApplicationServlet) getServlet()).getServer();
@@ -99,19 +87,20 @@ public class EditServerAction extends Action {
         }
 
         // label of the node that was clicked on.
-        String nodeLabel = request.getParameter("nodeLabel");        
+        String nodeLabel = request.getParameter("nodeLabel");  
+        String select = request.getParameter("select");        
         
         ServerForm serverFm = new ServerForm();
         session.setAttribute("serverForm", serverFm);
         serverFm.setNodeLabel(nodeLabel);        
-        serverFm.setDebugLvlVals(Lists.getDebugLevels());
+        serverFm.setObjectName(select);
         
         ObjectName sname = null;    
         try {
-           sname = new ObjectName(TomcatTreeBuilder.SERVER_TYPE);
+            sname = new ObjectName(select);
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.serviceName.bad",
+                resources.getMessage(locale, "error.serviceName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
@@ -121,9 +110,6 @@ public class EditServerAction extends Action {
         String attribute = null;
         try {
             // Copy scalar properties
-            attribute = "debug";
-            serverFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(sname, attribute)).toString());
             attribute = "port";
             serverFm.setPortNumberText
                 (((Integer) mBServer.getAttribute(sname, attribute)).toString());

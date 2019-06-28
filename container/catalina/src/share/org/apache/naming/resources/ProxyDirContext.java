@@ -18,33 +18,29 @@
 
 package org.apache.naming.resources;
 
-import java.util.Collections;
-import java.util.Hashtable;
-import java.util.Map;
-import java.io.InputStream;
-import java.io.IOException;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Hashtable;
 
 import javax.naming.Context;
 import javax.naming.Name;
-import javax.naming.NameParser;
 import javax.naming.NameNotFoundException;
+import javax.naming.NameParser;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
-import javax.naming.directory.DirContext;
 import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
 import javax.naming.directory.ModificationItem;
 import javax.naming.directory.SearchControls;
 
 import org.apache.naming.StringManager;
 
-import org.apache.commons.collections.map.LRUMap;
-
 /**
  * Proxy Directory Context implementation.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ProxyDirContext.java 1061470 2011-01-20 19:19:40Z jim $
  */
 
 public class ProxyDirContext implements DirContext {
@@ -69,11 +65,18 @@ public class ProxyDirContext implements DirContext {
         if (dirContext instanceof BaseDirContext) {
             // Initialize parameters based on the associated dir context, like
             // the caching policy.
-            if (((BaseDirContext) dirContext).isCached()) {
-                cache = Collections.synchronizedMap(new LRUMap(cacheSize));
-                cacheTTL = ((BaseDirContext) dirContext).getCacheTTL();
-                cacheObjectMaxSize = 
-                    ((BaseDirContext) dirContext).getCacheObjectMaxSize();
+            BaseDirContext baseDirContext = (BaseDirContext) dirContext;
+            if (baseDirContext.isCached()) {
+                try {
+                    cache = (ResourceCache) 
+                        Class.forName(cacheClassName).newInstance();
+                } catch (Exception e) {
+                    //FIXME
+                    e.printStackTrace();
+                }
+                cache.setCacheMaxSize(baseDirContext.getCacheMaxSize());
+                cacheTTL = baseDirContext.getCacheTTL();
+                cacheObjectMaxSize = baseDirContext.getCacheMaxSize() / 20;
             }
         }
         hostName = (String) env.get(HOST);
@@ -85,21 +88,32 @@ public class ProxyDirContext implements DirContext {
      * Builds a clone of this proxy dir context, wrapping the given directory
      * context, and sharing the same cache.
      */
+    // TODO: Refactor using the proxy field
+    /*
     protected ProxyDirContext(ProxyDirContext proxyDirContext, 
                               DirContext dirContext, String vPath) {
         this.env = proxyDirContext.env;
         this.dirContext = dirContext;
         this.vPath = vPath;
         this.cache = proxyDirContext.cache;
+        this.cacheMaxSize = proxyDirContext.cacheMaxSize;
         this.cacheSize = proxyDirContext.cacheSize;
         this.cacheTTL = proxyDirContext.cacheTTL;
         this.cacheObjectMaxSize = proxyDirContext.cacheObjectMaxSize;
+        this.notFoundCache = proxyDirContext.notFoundCache;
         this.hostName = proxyDirContext.hostName;
         this.contextName = proxyDirContext.contextName;
     }
+    */
 
 
     // ----------------------------------------------------- Instance Variables
+
+
+    /**
+     * Proxy DirContext (either this or the real proxy).
+     */
+    protected ProxyDirContext proxy = this;
 
 
     /**
@@ -139,16 +153,16 @@ public class ProxyDirContext implements DirContext {
 
 
     /**
-     * Cache.
-     * Path -> Cache entry.
+     * Cache class.
      */
-    protected Map cache = null;
+    protected String cacheClassName = 
+        "org.apache.naming.resources.ResourceCache";
 
 
     /**
-     * Cache size
+     * Cache.
      */
-    protected int cacheSize = 1000;
+    protected ResourceCache cache = null;
 
 
     /**
@@ -160,7 +174,7 @@ public class ProxyDirContext implements DirContext {
     /**
      * Max size of resources which will have their content cached.
      */
-    protected int cacheObjectMaxSize = 32768; // 32 KB
+    protected int cacheObjectMaxSize = 512; // 512 KB
 
 
     /**
@@ -170,7 +184,21 @@ public class ProxyDirContext implements DirContext {
         new ImmutableNameNotFoundException();
 
 
+    /**
+     * Non cacheable resources.
+     */
+    protected String[] nonCacheable = { "/WEB-INF/lib/", "/WEB-INF/classes/" };
+
+
     // --------------------------------------------------------- Public Methods
+
+
+    /**
+     * Get the cache used for this context.
+     */
+    public ResourceCache getCache() {
+        return cache;
+    }
 
 
     /**
@@ -225,6 +253,9 @@ public class ProxyDirContext implements DirContext {
         throws NamingException {
         CacheEntry entry = cacheLookup(name.toString());
         if (entry != null) {
+            if (!entry.exists) {
+                throw notFoundException;
+            }
             if (entry.resource != null) {
                 // Check content caching.
                 return entry.resource;
@@ -251,6 +282,9 @@ public class ProxyDirContext implements DirContext {
         throws NamingException {
         CacheEntry entry = cacheLookup(name);
         if (entry != null) {
+            if (!entry.exists) {
+                throw notFoundException;
+            }
             if (entry.resource != null) {
                 return entry.resource;
             } else {
@@ -769,6 +803,9 @@ public class ProxyDirContext implements DirContext {
         throws NamingException {
         CacheEntry entry = cacheLookup(name.toString());
         if (entry != null) {
+            if (!entry.exists) {
+                throw notFoundException;
+            }
             return entry.attributes;
         }
         Attributes attributes = dirContext.getAttributes(parseName(name));
@@ -790,6 +827,9 @@ public class ProxyDirContext implements DirContext {
         throws NamingException {
         CacheEntry entry = cacheLookup(name);
         if (entry != null) {
+            if (!entry.exists) {
+                throw notFoundException;
+            }
             return entry.attributes;
         }
         Attributes attributes = dirContext.getAttributes(parseName(name));
@@ -1324,6 +1364,45 @@ public class ProxyDirContext implements DirContext {
     }
 
 
+    // --------------------------------------------------------- Public Methods
+
+
+    /**
+     * Retrieves the named object as a cache entry, without any exception.
+     * 
+     * @param name the name of the object to look up
+     * @return the cache entry bound to name
+     */
+    public CacheEntry lookupCache(String name) {
+        CacheEntry entry = cacheLookup(name);
+        if (entry == null) {
+            entry = new CacheEntry();
+            entry.name = name;
+            try {
+                Object object = dirContext.lookup(parseName(name));
+                if (object instanceof InputStream) {
+                    entry.resource = new Resource((InputStream) object);
+                } else if (object instanceof DirContext) {
+                    entry.context = (DirContext) object;
+                } else if (object instanceof Resource) {
+                    entry.resource = (Resource) object;
+                } else {
+                    entry.resource = new Resource(new ByteArrayInputStream
+                        (object.toString().getBytes()));
+                }
+                Attributes attributes = dirContext.getAttributes(parseName(name));
+                if (!(attributes instanceof ResourceAttributes)) {
+                    attributes = new ResourceAttributes(attributes);
+                }
+                entry.attributes = (ResourceAttributes) attributes;
+            } catch (NamingException e) {
+                entry.exists = false;
+            }
+        }
+        return entry;
+    }
+
+
     // ------------------------------------------------------ Protected Methods
 
 
@@ -1352,11 +1431,17 @@ public class ProxyDirContext implements DirContext {
     /**
      * Lookup in cache.
      */
-    protected CacheEntry cacheLookup(String name)
-        throws NamingException {
+    protected CacheEntry cacheLookup(String name) {
         if (cache == null)
             return (null);
-        CacheEntry cacheEntry = (CacheEntry) cache.get(name);
+        if (name == null)
+            name = "";
+        for (int i = 0; i < nonCacheable.length; i++) {
+            if (name.startsWith(nonCacheable[i])) {
+                return (null);
+            }
+        }
+        CacheEntry cacheEntry = cache.lookup(name);
         if (cacheEntry == null) {
             cacheEntry = new CacheEntry();
             cacheEntry.name = name;
@@ -1372,9 +1457,7 @@ public class ProxyDirContext implements DirContext {
                         System.currentTimeMillis() + cacheTTL;
                 }
             }
-        }
-        if (!cacheEntry.exists) {
-            throw notFoundException;
+            cacheEntry.accessCount++;
         }
         return (cacheEntry);
     }
@@ -1475,8 +1558,12 @@ public class ProxyDirContext implements DirContext {
         if ((exists) && (entry.resource != null) 
             && (entry.resource.getContent() == null) 
             && (entry.attributes.getContentLength() >= 0)
-            && (entry.attributes.getContentLength() < cacheObjectMaxSize)) {
+            && (entry.attributes.getContentLength() < 
+                (cacheObjectMaxSize * 1024))) {
             int length = (int) entry.attributes.getContentLength();
+            // The entry size is 1 + the resource size in KB, if it will be 
+            // cached
+            entry.size += (entry.attributes.getContentLength() / 1024);
             InputStream is = null;
             try {
                 is = entry.resource.streamContent();
@@ -1508,7 +1595,12 @@ public class ProxyDirContext implements DirContext {
         entry.timestamp = System.currentTimeMillis() + cacheTTL;
 
         // Add new entry to cache
-        cache.put(name, entry);
+        synchronized (cache) {
+            // Check cache size, and remove elements if too big
+            if ((cache.lookup(name) == null) && cache.allocate(entry.size)) {
+                cache.load(entry);
+            }
+        }
 
     }
 
@@ -1519,51 +1611,19 @@ public class ProxyDirContext implements DirContext {
     protected boolean cacheUnload(String name) {
         if (cache == null)
             return false;
-        return (cache.remove(name) != null);
-    }
-
-
-    // ------------------------------------------------- CacheEntry Inner Class
-
-
-    protected class CacheEntry {
-
-
-        // ------------------------------------------------- Instance Variables
-
-
-        long timestamp = -1;
-        String name = null;
-        ResourceAttributes attributes = null;
-        Resource resource = null;
-        DirContext context = null;
-        boolean exists = true;
-
-
-        // ----------------------------------------------------- Public Methods
-
-
-        public void recycle() {
-            timestamp = -1;
-            name = null;
-            attributes = null;
-            resource = null;
-            context = null;
-            exists = true;
+        // To ensure correct operation, particularly of WebDAV, unload
+        // the resource with and without a trailing /
+        String name2;
+        if (name.endsWith("/")) {
+            name2 = name.substring(0, name.length() -1);
+        } else {
+            name2 = name + "/";
         }
-
-
-        public String toString() {
-            return ("Cache entry: " + name + "\n"
-                    + "Exists: " + exists + "\n"
-                    + "Attributes: " + attributes + "\n"
-                    + "Resource: " + resource + "\n"
-                    + "Context: " + context);
+        synchronized (cache) {
+            boolean result = cache.unload(name);
+            cache.unload(name2);
+            return result;
         }
-
-
     }
-
-
 }
 

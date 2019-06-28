@@ -19,16 +19,15 @@
 package org.apache.catalina.users;
 
 
-import org.apache.catalina.Role;
 import org.apache.catalina.UserDatabase;
 
 
 /**
- * <p>Concrete implementation of {@link Role} for the
+ * <p>Concrete implementation of {@link org.apache.catalina.Role} for the
  * {@link MemoryUserDatabase} implementation of {@link UserDatabase}.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MemoryRole.java 939529 2010-04-30 00:51:34Z kkolinko $
  * @since 4.1
  */
 

@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,11 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 package org.apache.jasper.compiler;
 
-import java.io.PrintWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 
 /**
  * This is what is used to generate servlets. 
@@ -35,16 +36,16 @@ public class ServletWriter {
     // The sink writer:
     PrintWriter writer;
     
-    // servlet line numbers start from 1, but we pre-increment
-    private int javaLine = 0;
+    // servlet line numbers start from 1
+    private int javaLine = 1;
 
 
     public ServletWriter(PrintWriter writer) {
-        this.writer = writer;
+	this.writer = writer;
     }
 
     public void close() throws IOException {
-        writer.close();
+	writer.close();
     }
 
     
@@ -58,15 +59,15 @@ public class ServletWriter {
     // -------------------- Formatting --------------------
 
     public void pushIndent() {
-        virtual_indent += TAB_WIDTH;
-        if (virtual_indent >= 0 && virtual_indent <= SPACES.length())
-            indent = virtual_indent;
+	virtual_indent += TAB_WIDTH;
+	if (virtual_indent >= 0 && virtual_indent <= SPACES.length())
+	    indent = virtual_indent;
     }
 
     public void popIndent() {
-        virtual_indent -= TAB_WIDTH;
-        if (virtual_indent >= 0 && virtual_indent <= SPACES.length())
-            indent = virtual_indent;
+	virtual_indent -= TAB_WIDTH;
+	if (virtual_indent >= 0 && virtual_indent <= SPACES.length())
+	    indent = virtual_indent;
     }
 
     /**
@@ -94,7 +95,7 @@ public class ServletWriter {
      */
     public void println(String s) {
         javaLine++;
-        writer.println(s);
+	writer.println(s);
     }
 
     /**
@@ -102,22 +103,22 @@ public class ServletWriter {
      */
     public void println() {
         javaLine++;
-        writer.println("");
+	writer.println("");
     }
 
     /**
      * Prints the current indention
      */
     public void printin() {
-        writer.print(SPACES.substring(0, indent));
+	writer.print(SPACES.substring(0, indent));
     }
 
     /**
      * Prints the current indention, followed by the given string
      */
     public void printin(String s) {
-        writer.print(SPACES.substring(0, indent));
-        writer.print(s);
+	writer.print(SPACES.substring(0, indent));
+	writer.print(s);
     }
 
     /**
@@ -125,8 +126,8 @@ public class ServletWriter {
      */
     public void printil(String s) {
         javaLine++;
-        writer.print(SPACES.substring(0, indent));
-        writer.println(s);
+	writer.print(SPACES.substring(0, indent));
+	writer.println(s);
     }
 
     /**
@@ -135,7 +136,14 @@ public class ServletWriter {
      * Use println() to print a '\n'.
      */
     public void print(char c) {
-        writer.print(c);
+	writer.print(c);
+    }
+
+    /**
+     * Prints the given int.
+     */
+    public void print(int i) {
+	writer.print(i);
     }
 
     /**
@@ -145,7 +153,7 @@ public class ServletWriter {
      * off.
      */
     public void print(String s) {
-        writer.print(s);
+	writer.print(s);
     }
 
     /**
@@ -163,6 +171,6 @@ public class ServletWriter {
             index++;
         }
 
-        writer.print(s);
+	writer.print(s);
     }
 }

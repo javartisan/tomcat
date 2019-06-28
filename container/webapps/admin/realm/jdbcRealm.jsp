@@ -1,9 +1,25 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <!-- Standard Struts Entries -->
 <%@ page language="java" import="java.net.URLEncoder" contentType="text/html;charset=utf-8" %>
-<%@ taglib uri="/WEB-INF/struts-bean.tld" prefix="bean" %>
-<%@ taglib uri="/WEB-INF/struts-html.tld" prefix="html" %>
+<%@ taglib uri="http://struts.apache.org/tags-bean" prefix="bean" %>
+<%@ taglib uri="http://struts.apache.org/tags-html" prefix="html" %>
 <%@ taglib uri="/WEB-INF/controls.tld" prefix="controls" %>
-<%@ taglib uri="/WEB-INF/struts-logic.tld" prefix="logic" %>
+<%@ taglib uri="http://struts.apache.org/tags-logic" prefix="logic" %>
 
 <html:html locale="true">
 
@@ -45,7 +61,7 @@
             <logic:notEqual name="jdbcRealmForm" property="adminAction" value="Create">
             <logic:notEqual name="jdbcRealmForm" property="allowDeletion" value="false">
              <controls:action url='<%= "/DeleteRealm.do?select=" +
-                                        URLEncoder.encode(thisObjectName) %>'>
+                                        URLEncoder.encode(thisObjectName,"UTF-8") %>'>
                 <bean:message key="actions.realms.delete"/>
               </controls:action>
                </logic:notEqual>
@@ -110,18 +126,6 @@
                 <html:text property="connectionName" size="30" styleId="username"/>
             </controls:data>
         </controls:row>
-
-        <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="debuglevel">
-            <controls:label><bean:message key="server.debuglevel"/>:</controls:label>
-            <controls:data>
-               <html:select property="debugLvl" styleId="debuglevel">
-                     <bean:define id="debugLvlVals" name="jdbcRealmForm" property="debugLvlVals"/>
-                     <html:options collection="debugLvlVals" property="value"
-                        labelProperty="label"/>
-                </html:select>
-            </controls:data>
-        </controls:row>
-
 
         <controls:row labelStyle="table-label-text" dataStyle="table-normal-text" styleId="digest">
             <controls:label><bean:message key="realm.digest"/>:</controls:label>

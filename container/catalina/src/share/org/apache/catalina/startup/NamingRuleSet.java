@@ -19,8 +19,8 @@
 package org.apache.catalina.startup;
 
 
-import org.apache.commons.digester.Digester;
-import org.apache.commons.digester.RuleSetBase;
+import org.apache.tomcat.util.digester.Digester;
+import org.apache.tomcat.util.digester.RuleSetBase;
 
 
 /**
@@ -29,7 +29,7 @@ import org.apache.commons.digester.RuleSetBase;
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NamingRuleSet.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class NamingRuleSet extends RuleSetBase {
@@ -90,48 +90,45 @@ public class NamingRuleSet extends RuleSetBase {
 
         digester.addObjectCreate(prefix + "Ejb",
                                  "org.apache.catalina.deploy.ContextEjb");
-        digester.addSetProperties(prefix + "Ejb");
-        digester.addSetNext(prefix + "Ejb",
-                            "addEjb",
-                            "org.apache.catalina.deploy.ContextEjb");
+        digester.addRule(prefix + "Ejb", new SetAllPropertiesRule());
+        digester.addRule(prefix + "Ejb",
+                new SetNextNamingRule("addEjb",
+                            "org.apache.catalina.deploy.ContextEjb"));
 
         digester.addObjectCreate(prefix + "Environment",
                                  "org.apache.catalina.deploy.ContextEnvironment");
         digester.addSetProperties(prefix + "Environment");
-        digester.addSetNext(prefix + "Environment",
-                            "addEnvironment",
-                            "org.apache.catalina.deploy.ContextEnvironment");
+        digester.addRule(prefix + "Environment",
+                            new SetNextNamingRule("addEnvironment",
+                            "org.apache.catalina.deploy.ContextEnvironment"));
 
         digester.addObjectCreate(prefix + "LocalEjb",
                                  "org.apache.catalina.deploy.ContextLocalEjb");
-        digester.addSetProperties(prefix + "LocalEjb");
-        digester.addSetNext(prefix + "LocalEjb",
-                            "addLocalEjb",
-                            "org.apache.catalina.deploy.ContextLocalEjb");
+        digester.addRule(prefix + "LocalEjb", new SetAllPropertiesRule());
+        digester.addRule(prefix + "LocalEjb",
+                new SetNextNamingRule("addLocalEjb",
+                            "org.apache.catalina.deploy.ContextLocalEjb"));
 
         digester.addObjectCreate(prefix + "Resource",
                                  "org.apache.catalina.deploy.ContextResource");
-        digester.addSetProperties(prefix + "Resource");
-        digester.addSetNext(prefix + "Resource",
-                            "addResource",
-                            "org.apache.catalina.deploy.ContextResource");
+        digester.addRule(prefix + "Resource", new SetAllPropertiesRule());
+        digester.addRule(prefix + "Resource",
+                new SetNextNamingRule("addResource",
+                            "org.apache.catalina.deploy.ContextResource"));
 
-        digester.addCallMethod(prefix + "ResourceEnvRef",
-                               "addResourceEnvRef", 2);
-        digester.addCallParam(prefix + "ResourceEnvRef/name", 0);
-        digester.addCallParam(prefix + "ResourceEnvRef/type", 1);
+        digester.addObjectCreate(prefix + "ResourceEnvRef",
+            "org.apache.catalina.deploy.ContextResourceEnvRef");
+        digester.addRule(prefix + "ResourceEnvRef", new SetAllPropertiesRule());
+        digester.addRule(prefix + "ResourceEnvRef",
+                new SetNextNamingRule("addResourceEnvRef",
+                            "org.apache.catalina.deploy.ContextResourceEnvRef"));
 
-        digester.addObjectCreate(prefix + "ResourceParams",
-                                 "org.apache.catalina.deploy.ResourceParams");
-        digester.addSetProperties(prefix + "ResourceParams");
-        digester.addSetNext(prefix + "ResourceParams",
-                            "addResourceParams",
-                            "org.apache.catalina.deploy.ResourceParams");
-
-        digester.addCallMethod(prefix + "ResourceParams/parameter",
-                               "addParameter", 2);
-        digester.addCallParam(prefix + "ResourceParams/parameter/name", 0);
-        digester.addCallParam(prefix + "ResourceParams/parameter/value", 1);
+        digester.addObjectCreate(prefix + "Transaction",
+            "org.apache.catalina.deploy.ContextTransaction");
+        digester.addRule(prefix + "Transaction", new SetAllPropertiesRule());
+        digester.addRule(prefix + "Transaction",
+                new SetNextNamingRule("setTransaction",
+                            "org.apache.catalina.deploy.ContextTransaction"));
 
     }
 

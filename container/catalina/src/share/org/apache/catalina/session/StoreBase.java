@@ -21,11 +21,9 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 
-import org.apache.catalina.Container;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleListener;
-import org.apache.catalina.Logger;
 import org.apache.catalina.Manager;
 import org.apache.catalina.Store;
 import org.apache.catalina.util.LifecycleSupport;
@@ -36,11 +34,11 @@ import org.apache.catalina.util.StringManager;
  * support most of the functionality required by a Store.
  *
  * @author Bip Thelin
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StoreBase.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public abstract class StoreBase
-    implements Lifecycle, Runnable, Store {
+    implements Lifecycle, Store {
 
     // ----------------------------------------------------- Instance Variables
 
@@ -50,34 +48,9 @@ public abstract class StoreBase
     protected static String info = "StoreBase/1.0";
 
     /**
-     * The interval (in seconds) between checks for expired sessions.
-     */
-    protected int checkInterval = 60;
-
-    /**
-     * Name to register for the background thread.
-     */
-    protected String threadName = "StoreBase";
-
-    /**
      * Name to register for this Store, used for logging.
      */
     protected static String storeName = "StoreBase";
-
-    /**
-     * The background thread.
-     */
-    protected Thread thread = null;
-
-    /**
-     * The background thread completion semaphore.
-     */
-    protected boolean threadDone = false;
-
-    /**
-     * The debugging detail level for this component.
-     */
-    protected int debug = 0;
 
     /**
      * Has this component been started yet?
@@ -113,12 +86,6 @@ public abstract class StoreBase
         return(info);
     }
 
-    /**
-     * Return the thread name for this Store.
-     */
-    public String getThreadName() {
-        return(threadName);
-    }
 
     /**
      * Return the name for this Store, used for logging.
@@ -127,42 +94,6 @@ public abstract class StoreBase
         return(storeName);
     }
 
-    /**
-     * Set the debugging detail level for this Store.
-     *
-     * @param debug The new debugging detail level
-     */
-    public void setDebug(int debug) {
-        this.debug = debug;
-    }
-
-    /**
-     * Return the debugging detail level for this Store.
-     */
-    public int getDebug() {
-        return(this.debug);
-    }
-
-
-    /**
-     * Set the check interval (in seconds) for this Store.
-     *
-     * @param checkInterval The new check interval
-     */
-    public void setCheckInterval(int checkInterval) {
-        int oldCheckInterval = this.checkInterval;
-        this.checkInterval = checkInterval;
-        support.firePropertyChange("checkInterval",
-                                   new Integer(oldCheckInterval),
-                                   new Integer(this.checkInterval));
-    }
-
-    /**
-     * Return the check interval (in seconds) for this Store.
-     */
-    public int getCheckInterval() {
-        return(this.checkInterval);
-    }
 
     /**
      * Set the Manager with which this Store is associated.
@@ -181,6 +112,7 @@ public abstract class StoreBase
     public Manager getManager() {
         return(this.manager);
     }
+
 
     // --------------------------------------------------------- Public Methods
 
@@ -240,97 +172,57 @@ public abstract class StoreBase
      * the Session and remove it from the Store.
      *
      */
-    protected void processExpires() {
-        long timeNow = System.currentTimeMillis();
+    public void processExpires() {
         String[] keys = null;
 
-        if(!started) {
+         if(!started) {
             return;
         }
 
         try {
             keys = keys();
         } catch (IOException e) {
-            log (e.toString());
-            e.printStackTrace();
+            manager.getContainer().getLogger().error("Error getting keys", e);
             return;
         }
-
+        if (manager.getContainer().getLogger().isDebugEnabled()) {
+            manager.getContainer().getLogger().debug(getStoreName()+ ": processExpires check number of " + keys.length + " sessions" );
+        }
+    
         for (int i = 0; i < keys.length; i++) {
             try {
                 StandardSession session = (StandardSession) load(keys[i]);
                 if (session == null) {
                     continue;
                 }
-                if (!session.isValid()) {
+                if (session.isValid()) {
                     continue;
                 }
-                int maxInactiveInterval = session.getMaxInactiveInterval();
-                if (maxInactiveInterval < 0) {
-                    continue;
+                if (manager.getContainer().getLogger().isDebugEnabled()) {
+                    manager.getContainer().getLogger().debug(getStoreName()+ ": processExpires expire store session " + keys[i] );
                 }
-                int timeIdle = // Truncate, do not round up
-                    (int) ((timeNow - session.getLastUsedTime()) / 1000L);
-                if (timeIdle >= maxInactiveInterval) {
-                    if ( ( (PersistentManagerBase) manager).isLoaded( keys[i] )) {
-                        // recycle old backup session
-                        session.recycle();
-                    } else {
-                        // expire swapped out session
-                        session.expire();
-                    }
-                    remove(session.getId());
+                if ( ( (PersistentManagerBase) manager).isLoaded( keys[i] )) {
+                    // recycle old backup session
+                    session.recycle();
+                } else {
+                    // expire swapped out session
+                    session.expire();
                 }
+                remove(session.getIdInternal());
             } catch (Exception e) {
-                log ("Session: "+keys[i]+"; "+e.toString());
+                manager.getContainer().getLogger().error("Session: "+keys[i]+"; ", e);
                 try {
                     remove(keys[i]);
                 } catch (IOException e2) {
-                    log (e2.toString());
-                    e2.printStackTrace();
+                    manager.getContainer().getLogger().error("Error removing key", e2);
                 }
             }
         }
     }
 
-    /**
-     * Log a message on the Logger associated with our Container (if any).
-     *
-     * @param message Message to be logged
-     */
-    protected void log(String message) {
-        Logger logger = null;
-        Container container = manager.getContainer();
-
-        if (container != null) {
-            logger = container.getLogger();
-        }
-
-        if (logger != null) {
-            logger.log(getStoreName()+"[" + container.getName() + "]: "
-                       + message);
-        } else {
-            String containerName = null;
-            if (container != null) {
-                containerName = container.getName();
-            }
-            System.out.println(getStoreName()+"[" + containerName
-                               + "]: " + message);
-        }
-    }
 
     // --------------------------------------------------------- Thread Methods
 
-    /**
-     * The background thread that checks for session timeouts and shutdown.
-     */
-    public void run() {
-        // Loop until the termination semaphore is set
-        while (!threadDone) {
-            threadSleep();
-            processExpires();
-        }
-    }
 
     /**
      * Prepare for the beginning of active use of the public methods of this
@@ -348,9 +240,8 @@ public abstract class StoreBase
         lifecycle.fireLifecycleEvent(START_EVENT, null);
         started = true;
 
-        // Start the background reaper thread
-        threadStart();
     }
+
 
     /**
      * Gracefully terminate the active use of the public methods of this
@@ -368,52 +259,7 @@ public abstract class StoreBase
         lifecycle.fireLifecycleEvent(STOP_EVENT, null);
         started = false;
 
-        // Stop the background reaper thread
-        threadStop();
     }
 
-    /**
-     * Start the background thread that will periodically check for
-     * session timeouts.
-     */
-    protected void threadStart() {
-        if (thread != null)
-            return;
 
-        threadDone = false;
-        thread = new Thread(this, getThreadName());
-        thread.setDaemon(true);
-        thread.start();
-    }
-
-    /**
-     * Sleep for the duration specified by the <code>checkInterval</code>
-     * property.
-     */
-    protected void threadSleep() {
-        try {
-            Thread.sleep(checkInterval * 1000L);
-        } catch (InterruptedException e) {
-            ;
-        }
-    }
-
-    /**
-     * Stop the background thread that is periodically checking for
-     * session timeouts.
-     */
-    protected void threadStop() {
-        if (thread == null)
-            return;
-
-        threadDone = true;
-        thread.interrupt();
-        try {
-            thread.join();
-        } catch (InterruptedException e) {
-            ;
-        }
-
-        thread = null;
-    }
 }

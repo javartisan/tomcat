@@ -19,34 +19,27 @@
 package org.apache.catalina.core;
 
 
-import java.io.InputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-import java.security.PrivilegedExceptionAction;
-import java.security.PrivilegedActionException;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
-import javax.naming.NamingException;
+
 import javax.naming.Binding;
+import javax.naming.NamingException;
 import javax.naming.directory.DirContext;
 import javax.servlet.RequestDispatcher;
 import javax.servlet.Servlet;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextAttributeEvent;
 import javax.servlet.ServletContextAttributeListener;
-import javax.servlet.http.HttpServletRequest;
-import org.apache.naming.resources.Resource;
-import org.apache.naming.resources.DirContextURLStreamHandler;
+
 import org.apache.catalina.Context;
 import org.apache.catalina.Host;
-import org.apache.catalina.HttpRequest;
-import org.apache.catalina.Logger;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.deploy.ApplicationParameter;
 import org.apache.catalina.util.Enumerator;
@@ -54,6 +47,11 @@ import org.apache.catalina.util.RequestUtil;
 import org.apache.catalina.util.ResourceSet;
 import org.apache.catalina.util.ServerInfo;
 import org.apache.catalina.util.StringManager;
+import org.apache.naming.resources.DirContextURLStreamHandler;
+import org.apache.naming.resources.Resource;
+import org.apache.tomcat.util.buf.CharChunk;
+import org.apache.tomcat.util.buf.MessageBytes;
+import org.apache.tomcat.util.http.mapper.MappingData;
 
 
 /**
@@ -63,187 +61,11 @@ import org.apache.catalina.util.StringManager;
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
- * @version $Revision: 782763 $ $Date: 2009-06-08 21:14:37 +0100 (Mon, 08 Jun 2009) $
+ * @version $Id: ApplicationContext.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
-public class ApplicationContext implements ServletContext {
-
-    protected class PrivilegedGetInitParameter implements PrivilegedAction {
-
-        private String name;
-        
-        PrivilegedGetInitParameter(String name){
-            this.name = name;
-        }
-                
-        public Object run(){
-            return ((String) parameters.get(name));
-        }
-    }
-
-
-    protected class PrivilegedGetInitParameterNames
-        implements PrivilegedAction {
-
-            PrivilegedGetInitParameterNames(){
-        }
-   
-        public Object run() {
-            return (new Enumerator(parameters.keySet()));
-        }
-    }        
-
-
-    protected class PrivilegedGetNamedDispatcher
-        implements PrivilegedAction {
-
-            private Wrapper wrapper;
-            private String name;
-
-            PrivilegedGetNamedDispatcher(Wrapper wrapper, String name) {
-            this.wrapper = wrapper;
-            this.name = name;
-        }
-        public Object run() {
-            return new ApplicationDispatcher(wrapper, null, null, null, name);
-        }
-    }
-
-
-    protected class PrivilegedGetRequestDispatcher
-        implements PrivilegedAction {
-
-        private String contextPath;
-        private String relativeURI;
-        private String queryString;
-
-        PrivilegedGetRequestDispatcher(String contextPath, String relativeURI,
-                                       String queryString) {
-            this.contextPath = contextPath;
-            this.relativeURI = relativeURI;
-            this.queryString = queryString;
-        }
-
-        public Object run() {
-            HttpRequest request = new MappingRequest
-                (context.getPath(), contextPath + relativeURI, queryString);
-            /*
-            HttpRequestBase request = new HttpRequestBase();
-            request.setContext(context);
-            request.setContextPath(context.getPath());
-            request.setRequestURI(contextPath + relativeURI);
-            request.setQueryString(queryString);
-            */
-            Wrapper wrapper = (Wrapper) context.map(request, true);
-            if (wrapper == null)
-                return (null);
-
-            // Construct a RequestDispatcher to process this request
-            HttpServletRequest hrequest =
-                (HttpServletRequest) request.getRequest();
-            return (RequestDispatcher) new ApplicationDispatcher
-                (wrapper,
-                 hrequest.getServletPath(),
-                 hrequest.getPathInfo(),
-                 hrequest.getQueryString(),
-                 null);
-        }
-
-    }
-
-
-
-    protected class PrivilegedGetResource
-        implements PrivilegedExceptionAction {
-
-        private String path;
-        private String host;
-        private DirContext resources;
-
-        PrivilegedGetResource(String host, String path, DirContext resources) {
-            this.host = host;
-            this.path = path;
-            this.resources = resources;
-        }
-
-        public Object run() throws Exception {
-            return new URL("jndi", null, 0, getJNDIUri(host, path),
-                           new DirContextURLStreamHandler(resources));
-        }
-    }
-
-
-    protected class PrivilegedGetResourcePaths
-        implements PrivilegedAction {
-
-        private String path;
-        private DirContext resources;
-
-        PrivilegedGetResourcePaths(DirContext resources, String path) {
-            this.resources = resources;
-            this.path = path;
-        }
-
-        public Object run() {
-            return (getResourcePathsInternal(resources, path));
-        }
-
-    }
-
-
-    protected class PrivilegedLogMessage
-        implements PrivilegedAction {
-
-        private String message;
-
-        PrivilegedLogMessage(String message) {
-            this.message = message;
-        }
-
-        public Object run() {
-            internalLog(message);
-            return null;
-        }
-
-    }
-
-    protected class PrivilegedLogException
-        implements PrivilegedAction {
-
-        private String message;
-        private Exception exception;
-
-        PrivilegedLogException(Exception exception,String message) {
-            this.message = message;
-            this.exception = exception;
-        }
-
-        public Object run() {
-            internalLog(exception,message);
-            return null;
-        }
-
-    }
-
-    protected class PrivilegedLogThrowable
-        implements PrivilegedAction {
-
-
-        private String message;
-        private Throwable throwable;
-
-        PrivilegedLogThrowable(String message,Throwable throwable) {
-            this.message = message;
-            this.throwable = throwable;
-        }
-
-        public Object run() {
-            internalLog(message,throwable);
-            return null;
-        }
-
-    }
-
+public class ApplicationContext
+    implements ServletContext {
 
     // ----------------------------------------------------------- Constructors
 
@@ -267,7 +89,7 @@ public class ApplicationContext implements ServletContext {
     /**
      * The context attributes for this context.
      */
-    private HashMap attributes = new HashMap();
+    protected HashMap attributes = new HashMap();
 
 
     /**
@@ -314,33 +136,19 @@ public class ApplicationContext implements ServletContext {
     private String basePath = null;
 
 
-    // --------------------------------------------------------- Public Methods
+    /**
+     * Thread local mapping data.
+     */
+    private ThreadLocal localMappingData = new ThreadLocal();
 
 
     /**
-     * Clear all application-created attributes.
+     * Thread local URI message bytes.
      */
-    public void clearAttributes() {
-
-        // Create list of attributes to be removed
-        ArrayList list = new ArrayList();
-        synchronized (attributes) {
-            Iterator iter = attributes.keySet().iterator();
-            while (iter.hasNext()) {
-                list.add(iter.next());
-            }
-        }
-
-        // Remove application originated attributes
-        // (read only attributes will be left in place)
-        Iterator keys = list.iterator();
-        while (keys.hasNext()) {
-            String key = (String) keys.next();
-            removeAttribute(key);
-        }
+    private ThreadLocal localUriMB = new ThreadLocal();
 
 
-    }
+    // --------------------------------------------------------- Public Methods
 
 
     /**
@@ -351,19 +159,6 @@ public class ApplicationContext implements ServletContext {
     public DirContext getResources() {
 
         return context.getResources();
-
-    }
-
-
-    /**
-     * Set an attribute as read only.
-     */
-    public void setAttributeReadOnly(String name) {
-
-        synchronized (attributes) {
-            if (attributes.containsKey(name))
-                readOnlyAttributes.put(name, name);
-        }
 
     }
 
@@ -393,7 +188,7 @@ public class ApplicationContext implements ServletContext {
     public Enumeration getAttributeNames() {
 
         synchronized (attributes) {
-            return (new Enumerator(attributes.keySet()));
+            return new Enumerator(attributes.keySet(), true);
         }
 
     }
@@ -406,8 +201,8 @@ public class ApplicationContext implements ServletContext {
      * obtain <code>RequestDispatcher</code> objects or resources from the
      * context.  The given path must be absolute (beginning with a "/"),
      * and is interpreted based on our virtual host's document root.
-     * @param uri a <code>String</code> specifying the context path of a web
-     * application in the container.
+     *
+     * @param uri Absolute URI of a resource on the server
      */
     public ServletContext getContext(String uri) {
 
@@ -415,30 +210,46 @@ public class ApplicationContext implements ServletContext {
         if ((uri == null) || (!uri.startsWith("/")))
             return (null);
 
-        // Use the host mapper to match the uri to a context
+        Context child = null;
         try {
             Host host = (Host) context.getParent();
-            Context child = host.map(uri);
-            if (child != null) {
-            	// Without crossContext, can only return the current context
-                if (context.getCrossContext()) {
-                	return child.getServletContext();
-                } else {
-                	if (context == child) {
-                		return (this);
-                	} else {
-                		return (null);
-                	}
-                }
-            } else {
-            	return (null);
+            String mapuri = uri;
+            while (true) {
+                child = (Context) host.findChild(mapuri);
+                if (child != null)
+                    break;
+                int slash = mapuri.lastIndexOf('/');
+                if (slash < 0)
+                    break;
+                mapuri = mapuri.substring(0, slash);
             }
         } catch (Throwable t) {
             return (null);
         }
 
+        if (child == null)
+            return (null);
+
+        if (context.getCrossContext()) {
+            // If crossContext is enabled, can always return the context
+            return child.getServletContext();
+        } else if (child == context) {
+            // Can still return the current context
+            return context.getServletContext();
+        } else {
+            // Nothing to return
+            return (null);
+        }
     }
 
+    
+    /**
+     * Return the main path associated with this context.
+     */
+    public String getContextPath() {
+        return context.getPath();
+    }
+    
 
     /**
      * Return the value of the specified initialization parameter, or
@@ -447,15 +258,10 @@ public class ApplicationContext implements ServletContext {
      * @param name Name of the initialization parameter to retrieve
      */
     public String getInitParameter(final String name) {
+
         mergeParameters();
         synchronized (parameters) {
-            if (System.getSecurityManager() != null){
-                PrivilegedGetInitParameter ip =
-                    new PrivilegedGetInitParameter(name);
-                return (String)AccessController.doPrivileged(ip);
-            } else {
-                return ((String) parameters.get(name));
-            }                   
+            return ((String) parameters.get(name));
         }
     }
 
@@ -465,16 +271,12 @@ public class ApplicationContext implements ServletContext {
      * empty enumeration if the context has no initialization parameters.
      */
     public Enumeration getInitParameterNames() {
+
         mergeParameters();
         synchronized (parameters) {
-            if (System.getSecurityManager() != null){
-                PrivilegedGetInitParameterNames pn =
-                    new PrivilegedGetInitParameterNames();
-                return (Enumeration)AccessController.doPrivileged(pn);
-            } else {
-                return (new Enumerator(parameters.keySet()));
-            }
+           return (new Enumerator(parameters.keySet()));
         }
+
     }
 
 
@@ -535,18 +337,9 @@ public class ApplicationContext implements ServletContext {
         Wrapper wrapper = (Wrapper) context.findChild(name);
         if (wrapper == null)
             return (null);
+        
+        return new ApplicationDispatcher(wrapper, null, null, null, null, name);
 
-        ApplicationDispatcher dispatcher;
-        if (System.getSecurityManager() != null){
-            PrivilegedGetNamedDispatcher nd = 
-                new PrivilegedGetNamedDispatcher(wrapper, name);
-            dispatcher = (ApplicationDispatcher)AccessController.doPrivileged(nd);
-        } else {
-            dispatcher =
-                new ApplicationDispatcher(wrapper, null, null, null, name);
-        }
-
-        return ((RequestDispatcher) dispatcher);
     }
 
 
@@ -560,6 +353,10 @@ public class ApplicationContext implements ServletContext {
 
         if (!context.isFilesystemBased())
             return null;
+
+        if (path == null) {
+            return null;
+        }
 
         File file = new File(basePath, path);
         return (file.getAbsolutePath());
@@ -581,53 +378,82 @@ public class ApplicationContext implements ServletContext {
             return (null);
         if (!path.startsWith("/"))
             throw new IllegalArgumentException
-              (sm.getString("applicationContext.requestDispatcher.iae", path));
+                (sm.getString
+                 ("applicationContext.requestDispatcher.iae", path));
 
         // Get query string
         String queryString = null;
-        int question = path.indexOf('?');
-        if (question >= 0) {
-            queryString = path.substring(question + 1);
-            path = path.substring(0, question);
+        int pos = path.indexOf('?');
+        if (pos >= 0) {
+            queryString = path.substring(pos + 1);
+            path = path.substring(0, pos); 
         }
-
+ 
         path = RequestUtil.normalize(path);
         if (path == null)
             return (null);
 
-        // Construct a "fake" request to be mapped by our Context
-        String contextPath = context.getPath();
-        if (contextPath == null)
-            contextPath = "";
-        if( System.getSecurityManager() != null ) {
-            PrivilegedGetRequestDispatcher dp =
-                new PrivilegedGetRequestDispatcher(contextPath,
-                        path,queryString);
-            return (RequestDispatcher)AccessController.doPrivileged(dp);
+        pos = path.length();
+
+        // Retrieve the thread local URI
+        MessageBytes uriMB = (MessageBytes) localUriMB.get();
+        if (uriMB == null) {
+            uriMB = MessageBytes.newInstance();
+            CharChunk uriCC = uriMB.getCharChunk();
+            uriCC.setLimit(-1);
+            localUriMB.set(uriMB);
+        } else {
+            uriMB.recycle();
         }
 
-        // The remaining code is duplicated in PrivilegedGetRequestDispatcher,
-        // we need to make sure they stay in sync
-        HttpRequest request = new MappingRequest
-            (context.getPath(), contextPath + path, queryString);
-        /*
-        request.setContext(context);
-        request.setContextPath(context.getPath());
-        request.setRequestURI(contextPath + relativeURI);
-        request.setQueryString(queryString);
-        */
-        Wrapper wrapper = (Wrapper) context.map(request, true);
-        if (wrapper == null)
-            return (null);
+        // Retrieve the thread local mapping data
+        MappingData mappingData = (MappingData) localMappingData.get();
+        if (mappingData == null) {
+            mappingData = new MappingData();
+            localMappingData.set(mappingData);
+        }
 
+        // Map the URI
+        CharChunk uriCC = uriMB.getCharChunk();
+        try {
+            uriCC.append(context.getPath(), 0, context.getPath().length());
+            /*
+             * Ignore any trailing path params (separated by ';') for mapping
+             * purposes
+             */
+            int semicolon = path.indexOf(';');
+            if (pos >= 0 && semicolon > pos) {
+                semicolon = -1;
+            }
+            uriCC.append(path, 0, semicolon > 0 ? semicolon : pos);
+            context.getMapper().map(uriMB, mappingData);
+            if (mappingData.wrapper == null) {
+                return (null);
+            }
+            /*
+             * Append any trailing path params (separated by ';') that were
+             * ignored for mapping purposes, so that they're reflected in the
+             * RequestDispatcher's requestURI
+             */
+            if (semicolon > 0) {
+                uriCC.append(path, semicolon, pos - semicolon);
+            }
+        } catch (Exception e) {
+            // Should never happen
+            log(sm.getString("applicationContext.mapping.error"), e);
+            return (null);
+        }
+
+        Wrapper wrapper = (Wrapper) mappingData.wrapper;
+        String wrapperPath = mappingData.wrapperPath.toString();
+        String pathInfo = mappingData.pathInfo.toString();
+
+        mappingData.recycle();
+        
         // Construct a RequestDispatcher to process this request
-        HttpServletRequest hrequest =
-            (HttpServletRequest) request.getRequest();
-        return (RequestDispatcher) new ApplicationDispatcher(wrapper,
-                        hrequest.getServletPath(),
-                        hrequest.getPathInfo(),
-                        hrequest.getQueryString(),
-                        null);
+        return new ApplicationDispatcher
+            (wrapper, uriCC.toString(), wrapperPath, pathInfo, 
+             queryString, null);
 
     }
 
@@ -646,34 +472,44 @@ public class ApplicationContext implements ServletContext {
     public URL getResource(String path)
         throws MalformedURLException {
 
+        if (path == null || !path.startsWith("/")) {
+            throw new MalformedURLException(sm.getString("applicationContext.requestDispatcher.iae", path));
+        }
+        
         path = RequestUtil.normalize(path);
         if (path == null)
             return (null);
 
-        DirContext resources = context.getResources();
-        if (resources != null) {
-            String fullPath = context.getName() + path;
-            String hostName = context.getParent().getName();
-            try {
-                resources.lookup(path);
-                if( System.getSecurityManager() != null ) {
-                    try {
-                        PrivilegedGetResource dp =
-                            new PrivilegedGetResource
-                                (hostName, fullPath, resources);
-                        return (URL)AccessController.doPrivileged(dp);
-                    } catch( PrivilegedActionException pe) {
-                        throw pe.getException();
-                    }
-                } else {
+        String libPath = "/WEB-INF/lib/";
+        if ((path.startsWith(libPath)) && (path.endsWith(".jar"))) {
+            File jarFile = null;
+            if (context.isFilesystemBased()) {
+                jarFile = new File(basePath, path);
+            } else {
+                jarFile = new File(context.getWorkPath(), path);
+            }
+            if (jarFile.exists()) {
+                return jarFile.toURL();
+            } else {
+                return null;
+            }
+        } else {
+
+            DirContext resources = context.getResources();
+            if (resources != null) {
+                String fullPath = context.getName() + path;
+                String hostName = context.getParent().getName();
+                try {
+                    resources.lookup(path);
                     return new URL
-                        ("jndi", null, 0, getJNDIUri(hostName, fullPath),
+                        ("jndi", "", 0, getJNDIUri(hostName, fullPath),
                          new DirContextURLStreamHandler(resources));
+                } catch (Exception e) {
+                    // Ignore
                 }
-            } catch (Exception e) {
-                //e.printStackTrace();
             }
         }
+
         return (null);
 
     }
@@ -686,13 +522,15 @@ public class ApplicationContext implements ServletContext {
      * return <code>null</code>.
      *
      * @param path The path to the desired resource.
-
      */
     public InputStream getResourceAsStream(String path) {
 
+        if (path == null || !path.startsWith("/"))
+            return (null);
+
         path = RequestUtil.normalize(path);
         if (path == null)
-            return (null);
+            return null;
 
         DirContext resources = context.getResources();
         if (resources != null) {
@@ -717,15 +555,22 @@ public class ApplicationContext implements ServletContext {
      */
     public Set getResourcePaths(String path) {
 
+        // Validate the path argument
+        if (path == null) {
+            return null;
+        }
+        if (!path.startsWith("/")) {
+            throw new IllegalArgumentException
+                (sm.getString("applicationContext.resourcePaths.iae", path));
+        }
+
+        path = RequestUtil.normalize(path);
+        if (path == null)
+            return (null);
+
         DirContext resources = context.getResources();
         if (resources != null) {
-            if (System.getSecurityManager() != null) {
-                PrivilegedAction dp =
-                    new PrivilegedGetResourcePaths(resources, path);
-                return ((Set) AccessController.doPrivileged(dp));
-            } else {
-                return (getResourcePathsInternal(resources, path));
-            }
+            return (getResourcePathsInternal(resources, path));
         }
         return (null);
 
@@ -786,18 +631,7 @@ public class ApplicationContext implements ServletContext {
      * @deprecated As of Java Servlet API 2.1, with no direct replacement.
      */
     public Enumeration getServletNames() {
-        if (System.getSecurityManager() != null){
-            return (Enumeration)AccessController.doPrivileged(
-                new PrivilegedAction(){
-
-                    public Object run(){
-                        return (new Enumerator(empty)); 
-                    }
-                }
-            );
-        } else {
-            return (new Enumerator(empty));
-        }
+        return (new Enumerator(empty));
     }
 
 
@@ -805,18 +639,7 @@ public class ApplicationContext implements ServletContext {
      * @deprecated As of Java Servlet API 2.1, with no direct replacement.
      */
     public Enumeration getServlets() {
-        if (System.getSecurityManager() != null){
-            return (Enumeration)AccessController.doPrivileged(
-                new PrivilegedAction(){
-
-                    public Object run(){
-                        return (new Enumerator(empty)); 
-                    }
-                }
-            );
-        } else {
-            return (new Enumerator(empty));
-        }        
+        return (new Enumerator(empty));
     }
 
 
@@ -826,20 +649,8 @@ public class ApplicationContext implements ServletContext {
      * @param message Message to be written
      */
     public void log(String message) {
-        if( System.getSecurityManager() != null ) {
-            PrivilegedLogMessage dp =
-                new PrivilegedLogMessage(message);
-            AccessController.doPrivileged(dp);
-        } else {
-            internalLog(message);
-        }
-    }
 
-    private void internalLog(String message) {
-
-        Logger logger = context.getLogger();
-        if (logger != null)
-            logger.log(message);
+        context.getLogger().info(message);
 
     }
 
@@ -854,19 +665,8 @@ public class ApplicationContext implements ServletContext {
      *  <code>log(String, Throwable)</code> instead
      */
     public void log(Exception exception, String message) {
-        if( System.getSecurityManager() != null ) {
-            PrivilegedLogException dp =
-                new PrivilegedLogException(exception,message);
-            AccessController.doPrivileged(dp);
-        } else {
-            internalLog(exception,message);
-        }
-    }
-
-    private void internalLog(Exception exception, String message) {
-        Logger logger = context.getLogger();
-        if (logger != null)
-            logger.log(exception, message);
+        
+        context.getLogger().error(message, exception);
 
     }
 
@@ -878,20 +678,8 @@ public class ApplicationContext implements ServletContext {
      * @param throwable Exception to be reported
      */
     public void log(String message, Throwable throwable) {
-        if( System.getSecurityManager() != null ) {
-            PrivilegedLogThrowable dp =
-                new PrivilegedLogThrowable(message,throwable);
-            AccessController.doPrivileged(dp);
-        } else {
-            internalLog(message,throwable);
-        }
-    }
-
-    private void internalLog(String message, Throwable throwable) {
-
-        Logger logger = context.getLogger();
-        if (logger != null)
-            logger.log(message, throwable);
+        
+        context.getLogger().error(message, throwable);
 
     }
 
@@ -921,7 +709,7 @@ public class ApplicationContext implements ServletContext {
         }
 
         // Notify interested application event listeners
-        Object listeners[] = context.getApplicationListeners();
+        Object listeners[] = context.getApplicationEventListeners();
         if ((listeners == null) || (listeners.length == 0))
             return;
         ServletContextAttributeEvent event =
@@ -984,7 +772,7 @@ public class ApplicationContext implements ServletContext {
         }
 
         // Notify interested application event listeners
-        Object listeners[] = context.getApplicationListeners();
+        Object listeners[] = context.getApplicationEventListeners();
         if ((listeners == null) || (listeners.length == 0))
             return;
         ServletContextAttributeEvent event = null;
@@ -1035,16 +823,55 @@ public class ApplicationContext implements ServletContext {
 
 
     /**
+     * Clear all application-created attributes.
+     */
+    void clearAttributes() {
+
+        // Create list of attributes to be removed
+        ArrayList list = new ArrayList();
+        synchronized (attributes) {
+            Iterator iter = attributes.keySet().iterator();
+            while (iter.hasNext()) {
+                list.add(iter.next());
+            }
+        }
+
+        // Remove application originated attributes
+        // (read only attributes will be left in place)
+        Iterator keys = list.iterator();
+        while (keys.hasNext()) {
+            String key = (String) keys.next();
+            removeAttribute(key);
+        }
+        
+    }
+    
+    
+    /**
      * Return the facade associated with this ApplicationContext.
      */
-    ServletContext getFacade() {
+    protected ServletContext getFacade() {
 
         return (this.facade);
 
     }
 
 
+    /**
+     * Set an attribute as read only.
+     */
+    void setAttributeReadOnly(String name) {
+
+        synchronized (attributes) {
+            if (attributes.containsKey(name))
+                readOnlyAttributes.put(name, name);
+        }
+
+    }
+
+
     // -------------------------------------------------------- Private Methods
+
 
     /**
      * Merge the context initialization parameters specified in the application
@@ -1104,7 +931,7 @@ public class ApplicationContext implements ServletContext {
     /**
      * Get full path, based on the host name and the context path.
      */
-    public static String getJNDIUri(String hostName, String path) {
+    private static String getJNDIUri(String hostName, String path) {
         if (!path.startsWith("/"))
             return "/" + hostName + "/" + path;
         else
@@ -1113,4 +940,3 @@ public class ApplicationContext implements ServletContext {
 
 
 }
-

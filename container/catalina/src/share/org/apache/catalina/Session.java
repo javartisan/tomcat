@@ -21,6 +21,7 @@ package org.apache.catalina;
 
 import java.security.Principal;
 import java.util.Iterator;
+
 import javax.servlet.http.HttpSession;
 
 
@@ -30,7 +31,7 @@ import javax.servlet.http.HttpSession;
  * between requests for a particular user of a web application.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Session.java 1160227 2011-08-22 12:06:00Z kkolinko $
  */
 
 public interface Session {
@@ -49,6 +50,18 @@ public interface Session {
      * The SessionEvent event type when a session is destroyed.
      */
     public static final String SESSION_DESTROYED_EVENT = "destroySession";
+
+
+    /**
+     * The SessionEvent event type when a session is activated.
+     */
+    public static final String SESSION_ACTIVATED_EVENT = "activateSession";
+
+
+    /**
+     * The SessionEvent event type when a session is passivated.
+     */
+    public static final String SESSION_PASSIVATED_EVENT = "passivateSession";
 
 
     // ------------------------------------------------------------- Properties
@@ -92,11 +105,29 @@ public interface Session {
 
 
     /**
-     * Set the session identifier for this session.
+     * Return the session identifier for this session.
+     */
+    public String getIdInternal();
+
+
+    /**
+     * Set the session identifier for this session and notifies any associated
+     * listeners that a new session has been created.
      *
      * @param id The new session identifier
      */
     public void setId(String id);
+
+
+    /**
+     * Set the session identifier for this session and optionally notifies any
+     * associated listeners that a new session has been created.
+     *
+     * @param id        The new session identifier
+     * @param notify    Should any associated listeners be notified that a new
+     *                      session has been created? 
+     */
+    public void setId(String id, boolean notify);
 
 
     /**
@@ -115,6 +146,11 @@ public interface Session {
      */
     public long getLastAccessedTime();
 
+    /**
+     * Return the last client access time without invalidation check
+     * @see #getLastAccessedTime().
+     */
+    public long getLastAccessedTimeInternal();
 
     /**
      * Return the Manager within which this Session is valid.
@@ -213,6 +249,12 @@ public interface Session {
      * Add a session event listener to this component.
      */
     public void addSessionListener(SessionListener listener);
+
+
+    /**
+     * End access to the session.
+     */
+    public void endAccess();
 
 
     /**

@@ -19,16 +19,17 @@
 package org.apache.naming;
 
 import java.util.Enumeration;
+
+import javax.naming.Context;
 import javax.naming.RefAddr;
 import javax.naming.Reference;
-import javax.naming.Context;
 import javax.naming.StringRefAddr;
 
 /**
  * Represents a reference address to a resource.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ResourceRef.java 939533 2010-04-30 00:56:48Z kkolinko $
  */
 
 public class ResourceRef

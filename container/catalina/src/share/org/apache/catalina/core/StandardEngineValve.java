@@ -20,13 +20,13 @@ package org.apache.catalina.core;
 
 
 import java.io.IOException;
+
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import org.apache.catalina.Host;
-import org.apache.catalina.Request;
-import org.apache.catalina.Response;
-import org.apache.catalina.ValveContext;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.util.StringManager;
 import org.apache.catalina.valves.ValveBase;
 
@@ -39,7 +39,7 @@ import org.apache.catalina.valves.ValveBase;
  * when processing HTTP requests.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardEngineValve.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 final class StandardEngineValve
@@ -91,40 +91,21 @@ final class StandardEngineValve
      * @exception IOException if an input/output error occurred
      * @exception ServletException if a servlet error occurred
      */
-    public void invoke(Request request, Response response,
-                       ValveContext valveContext)
+    public final void invoke(Request request, Response response)
         throws IOException, ServletException {
 
-        // Validate the request and response object types
-        if (!(request.getRequest() instanceof HttpServletRequest) ||
-            !(response.getResponse() instanceof HttpServletResponse)) {
-            return;     // NOTE - Not much else we can do generically
-        }
-
-        // Validate that any HTTP/1.1 request included a host header
-        HttpServletRequest hrequest = (HttpServletRequest) request;
-        if ("HTTP/1.1".equals(hrequest.getProtocol()) &&
-            (hrequest.getServerName() == null)) {
-            ((HttpServletResponse) response.getResponse()).sendError
-                (HttpServletResponse.SC_BAD_REQUEST,
-                 sm.getString("standardEngine.noHostHeader",
-                              request.getRequest().getServerName()));
-            return;
-        }
-
         // Select the Host to be used for this Request
-        StandardEngine engine = (StandardEngine) getContainer();
-        Host host = (Host) engine.map(request, true);
+        Host host = request.getHost();
         if (host == null) {
-            ((HttpServletResponse) response.getResponse()).sendError
+            response.sendError
                 (HttpServletResponse.SC_BAD_REQUEST,
-                 sm.getString("standardEngine.noHost",
-                              request.getRequest().getServerName()));
+                 sm.getString("standardEngine.noHost", 
+                              request.getServerName()));
             return;
         }
 
         // Ask this Host to process this request
-        host.invoke(request, response);
+        host.getPipeline().getFirst().invoke(request, response);
 
     }
 

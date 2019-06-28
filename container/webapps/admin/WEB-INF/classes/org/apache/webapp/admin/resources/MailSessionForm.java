@@ -18,15 +18,15 @@
 package org.apache.webapp.admin.resources;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the individual mail session page.
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MailSessionForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -124,22 +124,22 @@ public final class MailSessionForm extends BaseForm {
     
        
     /**
-     * The service of this mail session.
+     * The domain of this mail session.
      */
-    private String service = null;
+    private String domain = null;
     
     /**
-     * Return the service of the mail session this bean refers to.
+     * Return the domain of the mail session this bean refers to.
      */
-    public String getService() {
-        return this.service;
+    public String getDomain() {
+        return this.domain;
     }
 
     /**
-     * Set the service of the mail session this bean refers to.
+     * Set the domain of the mail session this bean refers to.
      */
-    public void setService(String service) {
-        this.service = service;
+    public void setDomain(String domain) {
+        this.domain = domain;
     }
     
     /**

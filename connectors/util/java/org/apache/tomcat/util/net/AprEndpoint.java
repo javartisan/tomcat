@@ -455,6 +455,18 @@ public class AprEndpoint {
     public void setSSLVerifyDepth(int SSLVerifyDepth) { this.SSLVerifyDepth = SSLVerifyDepth; }
 
 
+    /**
+     * The maximum number of headers in a request that are allowed.
+     * 100 by default. A value of less than 0 means no limit.
+     */
+    private int maxHeaderCount = 100; // as in Apache HTTPD server
+    public int getMaxHeaderCount() {
+        return maxHeaderCount;
+    }
+    public void setMaxHeaderCount(int maxHeaderCount) {
+        this.maxHeaderCount = maxHeaderCount;
+    }
+
     // --------------------------------------------------------- Public Methods
 
 
@@ -563,7 +575,8 @@ public class AprEndpoint {
         long inetAddress = Address.info(addressStr, family,
                 port, 0, rootPool);
         // Create the APR server socket
-        serverSock = Socket.create(family, Socket.SOCK_STREAM,
+        serverSock = Socket.create(Address.getInfo(inetAddress).family,
+                Socket.SOCK_STREAM,
                 Socket.APR_PROTO_TCP, rootPool);
         if (OS.IS_UNIX) {
             Socket.optSet(serverSock, Socket.APR_SO_REUSEADDR, 1);
@@ -644,7 +657,17 @@ public class AprEndpoint {
                 value = SSL.SSL_PROTOCOL_TLSV1;
             } else if ("SSLv2+SSLv3".equalsIgnoreCase(SSLProtocol)) {
                 value = SSL.SSL_PROTOCOL_SSLV2 | SSL.SSL_PROTOCOL_SSLV3;
+            } else if ("all".equalsIgnoreCase(SSLProtocol) ||
+                    SSLProtocol == null || SSLProtocol.length() == 0) {
+                // NOOP, use the default defined above
+            } else {
+                // Protocol not recognized, fail to start as it is safer than
+                // continuing with the default which might enable more than the
+                // is required
+                throw new Exception(sm.getString(
+                        "endpoint.apr.invalidSslProtocol", SSLProtocol));
             }
+
             // Create SSL Context
             sslContext = SSLContext.make(rootPool, value, SSL.SSL_MODE_SERVER);
             // List the ciphers that the client is permitted to negotiate
@@ -922,18 +945,17 @@ public class AprEndpoint {
      */
     protected Worker getWorkerThread() {
         // Allocate a new worker thread
-        Worker workerThread = createWorkerThread();
-        while (workerThread == null) {
-            try {
-                synchronized (workers) {
+        synchronized (workers) {
+            Worker workerThread;
+            while ((workerThread = createWorkerThread()) == null) {
+                try {
                     workers.wait();
+                } catch (InterruptedException e) {
+                    // Ignore
                 }
-            } catch (InterruptedException e) {
-                // Ignore
             }
-            workerThread = createWorkerThread();
+            return workerThread;
         }
-        return workerThread;
     }
 
 
@@ -1004,7 +1026,7 @@ public class AprEndpoint {
                     // Hand this socket off to an appropriate processor
                     getWorkerThread().assign(socket, true);
                 } catch (Throwable t) {
-                    log.error(sm.getString("endpoint.accept.fail"), t);
+                    if (running) log.error(sm.getString("endpoint.accept.fail"), t);
                 }
 
                 // The processor will recycle itself when it finishes
@@ -1029,9 +1051,9 @@ public class AprEndpoint {
         protected long[] desc;
 
         protected long[] addS;
-        protected int addCount = 0;
+        protected volatile int addCount = 0;
         
-        protected int keepAliveCount = 0;
+        protected volatile int keepAliveCount = 0;
         public int getKeepAliveCount() { return keepAliveCount; }
 
         /**
@@ -1118,15 +1140,17 @@ public class AprEndpoint {
                     }
                 }
 
-                while (keepAliveCount < 1 && addCount < 1) {
-                    // Reset maintain time.
-                    maintainTime = 0;
-                    try {
-                        synchronized (this) {
-                            this.wait();
+                if (keepAliveCount < 1 && addCount < 1) {
+                    synchronized (this) {
+                        while (keepAliveCount < 1 && addCount < 1) {
+                            // Reset maintain time.
+                            maintainTime = 0;
+                            try {
+                                this.wait();
+                            } catch (InterruptedException e) {
+                                // Ignore
+                            }
                         }
-                    } catch (InterruptedException e) {
-                        // Ignore
                     }
                 }
 
@@ -1134,17 +1158,22 @@ public class AprEndpoint {
                     // Add sockets which are waiting to the poller
                     if (addCount > 0) {
                         synchronized (this) {
-                            for (int i = (addCount - 1); i >= 0; i--) {
-                                int rv = Poll.add
-                                    (serverPollset, addS[i], Poll.APR_POLLIN);
-                                if (rv == Status.APR_SUCCESS) {
-                                    keepAliveCount++;
-                                } else {
-                                    // Can't do anything: close the socket right away
-                                    Socket.destroy(addS[i]);
+                            int successCount = 0;
+                            try {
+                                for (int i = (addCount - 1); i >= 0; i--) {
+                                    int rv = Poll.add
+                                        (serverPollset, addS[i], Poll.APR_POLLIN);
+                                    if (rv == Status.APR_SUCCESS) {
+                                        successCount++;
+                                    } else {
+                                        // Can't do anything: close the socket right away
+                                        Socket.destroy(addS[i]);
+                                    }
                                 }
+                            } finally {
+                                keepAliveCount += successCount;
+                                addCount = 0;
                             }
-                            addCount = 0;
                         }
                     }
                     maintainTime += pollTime;
@@ -1347,10 +1376,11 @@ public class AprEndpoint {
         protected long[] desc;
         protected HashMap sendfileData;
         
-        protected int sendfileCount;
+        protected volatile int sendfileCount;
         public int getSendfileCount() { return sendfileCount; }
 
         protected ArrayList addS;
+        protected volatile int addCount;
 
         /**
          * Create the sendfile poller. With some versions of APR, the maximum poller size will
@@ -1371,6 +1401,7 @@ public class AprEndpoint {
             desc = new long[size * 2];
             sendfileData = new HashMap(size);
             addS = new ArrayList();
+            addCount = 0;
         }
 
         /**
@@ -1378,6 +1409,7 @@ public class AprEndpoint {
          */
         protected void destroy() {
             // Close any socket remaining in the add queue
+            addCount = 0;
             for (int i = (addS.size() - 1); i >= 0; i--) {
                 SendfileData data = (SendfileData) addS.get(i);
                 Socket.destroy(data.socket);
@@ -1419,7 +1451,9 @@ public class AprEndpoint {
                                                data.pos, data.end - data.pos, 0);
                     if (nw < 0) {
                         if (!(-nw == Status.EAGAIN)) {
-                            Socket.destroy(data.socket);
+                            Pool.destroy(data.fdpool);
+                            // No need to close socket, this will be done by
+                            // calling code since data.socket == 0
                             data.socket = 0;
                             return false;
                         } else {
@@ -1445,6 +1479,7 @@ public class AprEndpoint {
             // at most for pollTime before being polled
             synchronized (this) {
                 addS.add(data);
+                addCount++;
                 this.notify();
             }
             return false;
@@ -1482,35 +1517,43 @@ public class AprEndpoint {
                     }
                 }
 
-                while (sendfileCount < 1 && addS.size() < 1) {
-                    // Reset maintain time.
-                    maintainTime = 0;
-                    try {
-                        synchronized (this) {
-                            this.wait();
+                if (sendfileCount < 1 && addCount < 1) {
+                    synchronized (this) {
+                        while (sendfileCount < 1 && addS.size() < 1) {
+                            // Reset maintain time.
+                            maintainTime = 0;
+                            try {
+                                this.wait();
+                            } catch (InterruptedException e) {
+                                // Ignore
+                            }
                         }
-                    } catch (InterruptedException e) {
-                        // Ignore
                     }
                 }
 
                 try {
                     // Add socket to the poller
-                    if (addS.size() > 0) {
+                    if (addCount > 0) {
                         synchronized (this) {
-                            for (int i = (addS.size() - 1); i >= 0; i--) {
-                                SendfileData data = (SendfileData) addS.get(i);
-                                int rv = Poll.add(sendfilePollset, data.socket, Poll.APR_POLLOUT);
-                                if (rv == Status.APR_SUCCESS) {
-                                    sendfileData.put(new Long(data.socket), data);
-                                    sendfileCount++;
-                                } else {
-                                    log.warn(sm.getString("endpoint.sendfile.addfail", "" + rv, Error.strerror(rv)));
-                                    // Can't do anything: close the socket right away
-                                    Socket.destroy(data.socket);
+                            int successCount = 0;
+                            try {
+                                for (int i = (addS.size() - 1); i >= 0; i--) {
+                                    SendfileData data = (SendfileData) addS.get(i);
+                                    int rv = Poll.add(sendfilePollset, data.socket, Poll.APR_POLLOUT);
+                                    if (rv == Status.APR_SUCCESS) {
+                                        sendfileData.put(new Long(data.socket), data);
+                                        successCount++;
+                                    } else {
+                                        log.warn(sm.getString("endpoint.sendfile.addfail", "" + rv, Error.strerror(rv)));
+                                        // Can't do anything: close the socket right away
+                                        Socket.destroy(data.socket);
+                                    }
                                 }
+                            } finally {
+                                sendfileCount += successCount;
+                                addS.clear();
+                                addCount = 0;
                             }
-                            addS.clear();
                         }
                     }
 
@@ -1633,7 +1676,7 @@ public class AprEndpoint {
         /** 
          * Put the object into the queue.
          * 
-         * @param   object      the object to be appended to the queue (first element). 
+         * @param   worker  the object to be appended to the queue (first element). 
          */
         public void push(Worker worker) {
             workers[end++] = worker;

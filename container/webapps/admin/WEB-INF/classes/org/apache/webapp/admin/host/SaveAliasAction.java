@@ -26,25 +26,21 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessage;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
-
-
 
 /**
  * The <code>Action</code> that completes <em>Add Alias</em> and
  * <em>Edit Alias</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveAliasAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveAliasAction extends Action {
@@ -64,12 +60,6 @@ public final class SaveAliasAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -97,10 +87,8 @@ public final class SaveAliasAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -125,7 +113,7 @@ public final class SaveAliasAction extends Action {
         // validate if this alias already exists.
         List aliasVals = aform.getAliasVals();
         if (aliasVals.contains(values[0])) {
-           ActionMessages errors = new ActionMessages();
+            ActionMessages errors = new ActionMessages();
             errors.add("aliasName",
                        new ActionMessage("error.aliasName.exists"));
             saveErrors(request, errors);

@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.TimeZone;
+
 import javax.servlet.http.Cookie;
 
 
@@ -31,7 +32,7 @@ import javax.servlet.http.Cookie;
  *
  * @author Craig R. McClanahan
  * @author Tim Tye
- * @version $Revision: 782763 $ $Date: 2009-06-08 21:14:37 +0100 (Mon, 08 Jun 2009) $
+ * @version $Id: RequestUtil.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 
 public final class RequestUtil {
@@ -298,7 +299,7 @@ public final class RequestUtil {
         throws UnsupportedEncodingException {
 
         if ((data != null) && (data.length() > 0)) {
-        
+
             // use the specified encoding to extract bytes out of the
             // given string so that the encoding is not lost. If an
             // encoding is not specified, let it use platform default
@@ -311,7 +312,7 @@ public final class RequestUtil {
                 }
             } catch (UnsupportedEncodingException uee) {
             }
-            
+
             parseParameters(map, bytes, encoding);
         }
 
@@ -322,7 +323,7 @@ public final class RequestUtil {
      * Decode and return the specified URL-encoded String.
      * When the byte array is converted to a string, the system default
      * character encoding is used...  This may be different than some other
-     * servers.
+     * servers. It is assumed the string is not a query string.
      *
      * @param str The url-encoded string
      *
@@ -330,14 +331,13 @@ public final class RequestUtil {
      * by a valid 2-digit hexadecimal number
      */
     public static String URLDecode(String str) {
-
         return URLDecode(str, null);
-
     }
-
-
+    
+    
     /**
-     * Decode and return the specified URL-encoded String.
+     * Decode and return the specified URL-encoded String. It is assumed the
+     * string is not a query string.
      *
      * @param str The url-encoded string
      * @param enc The encoding to use; if null, the default encoding is used
@@ -345,7 +345,19 @@ public final class RequestUtil {
      * by a valid 2-digit hexadecimal number
      */
     public static String URLDecode(String str, String enc) {
-
+        return URLDecode(str, enc, false);
+    }
+    
+    /**
+     * Decode and return the specified URL-encoded String.
+     *
+     * @param str The url-encoded string
+     * @param enc The encoding to use; if null, the default encoding is used
+     * @param isQuery Is this a query string being processed
+     * @exception IllegalArgumentException if a '%' character is not followed
+     * by a valid 2-digit hexadecimal number
+     */
+    public static String URLDecode(String str, String enc, boolean isQuery) {
         if (str == null)
             return (null);
 
@@ -361,13 +373,14 @@ public final class RequestUtil {
             }
         } catch (UnsupportedEncodingException uee) {}
 
-        return URLDecode(bytes, enc);
+        return URLDecode(bytes, enc, isQuery);
 
     }
 
 
     /**
-     * Decode and return the specified URL-encoded byte array.
+     * Decode and return the specified URL-encoded byte array. It is assumed
+     * the string is not a query string.
      *
      * @param bytes The url-encoded byte array
      * @exception IllegalArgumentException if a '%' character is not followed
@@ -379,7 +392,8 @@ public final class RequestUtil {
 
 
     /**
-     * Decode and return the specified URL-encoded byte array.
+     * Decode and return the specified URL-encoded byte array. It is assumed
+     * the string is not a query string.
      *
      * @param bytes The url-encoded byte array
      * @param enc The encoding to use; if null, the default encoding is used
@@ -387,7 +401,20 @@ public final class RequestUtil {
      * by a valid 2-digit hexadecimal number
      */
     public static String URLDecode(byte[] bytes, String enc) {
+        return URLDecode(bytes, null, false);
+    }
 
+    /**
+     * Decode and return the specified URL-encoded byte array.
+     *
+     * @param bytes The url-encoded byte array
+     * @param enc The encoding to use; if null, the default encoding is used
+     * @param isQuery Is this a query string being processed
+     * @exception IllegalArgumentException if a '%' character is not followed
+     * by a valid 2-digit hexadecimal number
+     */
+    public static String URLDecode(byte[] bytes, String enc, boolean isQuery) {
+    
         if (bytes == null)
             return (null);
 
@@ -396,7 +423,7 @@ public final class RequestUtil {
         int ox = 0;
         while (ix < len) {
             byte b = bytes[ix++];     // Get byte to test
-            if (b == '+') {
+            if (b == '+' && isQuery) {
                 b = (byte)' ';
             } else if (b == '%') {
                 b = (byte) ((convertHexDigit(bytes[ix++]) << 4)
@@ -430,12 +457,12 @@ public final class RequestUtil {
 
 
     /**
-     * Put name value pair in map.
-     *
-     * @param b the character value byte
-     *
      * Put name and value pair in map.  When name already exist, add value
      * to array of values.
+     *
+     * @param map The map to populate
+     * @param name The parameter name
+     * @param value The parameter value
      */
     private static void putMapEntry( Map map, String name, String value) {
         String[] newValues = null;
@@ -497,7 +524,7 @@ public final class RequestUtil {
                     } else {
                         data[ox++] = c;
                     }                   
-                    break;
+                    break;  
                 case '+':
                     data[ox++] = (byte)' ';
                     break;

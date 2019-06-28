@@ -21,9 +21,11 @@ package org.apache.catalina.core;
 
 import java.io.IOException;
 import java.util.Locale;
+
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
+
 import org.apache.catalina.util.StringManager;
 
 
@@ -40,7 +42,7 @@ import org.apache.catalina.util.StringManager;
  * keep these two classes in synchronization when making changes!
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationHttpResponse.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 class ApplicationHttpResponse extends HttpServletResponseWrapper {
@@ -155,6 +157,17 @@ class ApplicationHttpResponse extends HttpServletResponseWrapper {
         if (!included)
             getResponse().setLocale(loc);
 
+    }
+
+
+    /**
+     * Ignore <code>setBufferSize()</code> calls on an included response.
+     *
+     * @param size The buffer size
+     */
+    public void setBufferSize(int size) {
+        if (!included)
+            getResponse().setBufferSize(size);
     }
 
 
@@ -339,7 +352,7 @@ class ApplicationHttpResponse extends HttpServletResponseWrapper {
      */
     public String getInfo() {
 
-        return (ApplicationHttpResponse.info);
+        return (info);
 
     }
 

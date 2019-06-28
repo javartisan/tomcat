@@ -19,16 +19,17 @@
 package org.apache.catalina.core;
 
 
-import java.io.IOException;
-import java.net.URL;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
 import org.apache.catalina.Container;
 import org.apache.catalina.Context;
-import org.apache.catalina.DefaultContext;
-import org.apache.catalina.Deployer;
 import org.apache.catalina.Host;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Valve;
-import org.apache.catalina.valves.ErrorDispatcherValve;
+import org.apache.catalina.startup.HostConfig;
+import org.apache.catalina.valves.ValveBase;
+import org.apache.commons.modeler.Registry;
 
 
 /**
@@ -38,14 +39,18 @@ import org.apache.catalina.valves.ErrorDispatcherValve;
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardHost.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 public class StandardHost
     extends ContainerBase
-    implements Deployer, Host {
+    implements Host  
+ {
+    /* Why do we implement deployer and delegate to deployer ??? */
 
-
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( StandardHost.class );
+    
     // ----------------------------------------------------------- Constructors
 
 
@@ -72,7 +77,7 @@ public class StandardHost
     /**
      * The application root for this Host.
      */
-    private String appBase = ".";
+    private String appBase = "webapps";
 
 
     /**
@@ -88,7 +93,13 @@ public class StandardHost
     private String configClass =
         "org.apache.catalina.startup.ContextConfig";
 
+    /**
+     * The Java class name of the default host config configuration class (deployer)
+     */
+    private String hostConfigClass =
+        "org.apache.catalina.startup.HostConfig";
 
+        
     /**
      * The Java class name of the default Context implementation class for
      * deployed web applications.
@@ -98,10 +109,9 @@ public class StandardHost
 
 
     /**
-     * The <code>Deployer</code> to whom we delegate application
-     * deployment requests.
+     * The deploy on startup flag for this Host.
      */
-    private Deployer deployer = new StandardHostDeployer(this);
+    private boolean deployOnStartup = true;
 
 
     /**
@@ -117,25 +127,11 @@ public class StandardHost
     private String errorReportValveClass =
         "org.apache.catalina.valves.ErrorReportValve";
 
-
     /**
      * The descriptive information string for this implementation.
      */
     private static final String info =
         "org.apache.catalina.core.StandardHost/1.0";
-
-
-    /**
-     * The live deploy flag for this Host.
-     */
-    private boolean liveDeploy = true;
-
-
-    /**
-     * The Java class name of the default Mapper class for this Container.
-     */
-    private String mapperClass =
-        "org.apache.catalina.core.StandardHostMapper";
 
 
     /**
@@ -151,9 +147,15 @@ public class StandardHost
 
 
     /**
-     * DefaultContext config
+     * Attribute value used to turn on/off XML validation
      */
-    private DefaultContext defaultContext;
+     private boolean xmlValidation = false;
+
+
+    /**
+     * Attribute value used to turn on/off XML namespace awarenes.
+     */
+     private boolean xmlNamespaceAware = false;
 
 
     // ------------------------------------------------------------- Properties
@@ -187,8 +189,7 @@ public class StandardHost
 
     /**
      * Return the value of the auto deploy flag.  If true, it indicates that 
-     * this host's child webapps should be discovred and automatically 
-     * deployed at startup time.
+     * this host's child webapps will be dynamically deployed.
      */
     public boolean getAutoDeploy() {
 
@@ -238,31 +239,31 @@ public class StandardHost
 
     }
 
+    
+    /**
+     * Return the Java class name of the host configuration class (deployer)
+     */
+    public String getHostConfigClass() {
+
+        return (this.hostConfigClass);
+
+    }
+
 
     /**
-     * Set the DefaultContext
-     * for new web applications.
+     * Set the Java class name of the host config configuration class (deployer)
      *
-     * @param defaultContext The new DefaultContext
+     * @param hostConfigClass The new host config configuration class (deployer)
      */
-    public void addDefaultContext(DefaultContext defaultContext) {
+    public void setHostConfigClass(String hostConfigClass) {
 
-        DefaultContext oldDefaultContext = this.defaultContext;
-        this.defaultContext = defaultContext;
-        support.firePropertyChange("defaultContext",
-                                   oldDefaultContext, this.defaultContext);
-
+        String oldHostConfigClass = this.hostConfigClass;
+        this.hostConfigClass = hostConfigClass;
+        support.firePropertyChange("hostConfigClass",
+                                   oldHostConfigClass, this.hostConfigClass);
     }
 
-
-    /**
-     * Retrieve the DefaultContext for new web applications.
-     */
-    public DefaultContext getDefaultContext() {
-        return (this.defaultContext);
-    }
-
-
+    
     /**
      * Return the Java class name of the Context implementation class
      * for new web applications.
@@ -286,6 +287,33 @@ public class StandardHost
         this.contextClass = contextClass;
         support.firePropertyChange("contextClass",
                                    oldContextClass, this.contextClass);
+
+    }
+
+
+    /**
+     * Return the value of the deploy on startup flag.  If true, it indicates 
+     * that this host's child webapps should be discovred and automatically 
+     * deployed at startup time.
+     */
+    public boolean getDeployOnStartup() {
+
+        return (this.deployOnStartup);
+
+    }
+
+
+    /**
+     * Set the deploy on startup flag value for this host.
+     * 
+     * @param deployOnStartup The new deploy on startup flag
+     */
+    public void setDeployOnStartup(boolean deployOnStartup) {
+
+        boolean oldDeployOnStartup = this.deployOnStartup;
+        this.deployOnStartup = deployOnStartup;
+        support.firePropertyChange("deployOnStartup", oldDeployOnStartup, 
+                                   this.deployOnStartup);
 
     }
 
@@ -318,9 +346,7 @@ public class StandardHost
      * encountered.
      */
     public boolean getLiveDeploy() {
-
-        return (this.liveDeploy);
-
+        return (this.autoDeploy);
     }
 
 
@@ -330,37 +356,7 @@ public class StandardHost
      * @param liveDeploy The new live deploy flag
      */
     public void setLiveDeploy(boolean liveDeploy) {
-
-        boolean oldLiveDeploy = this.liveDeploy;
-        this.liveDeploy = liveDeploy;
-        support.firePropertyChange("liveDeploy", oldLiveDeploy, 
-                                   this.liveDeploy);
-
-    }
-
-
-    /**
-     * Return the default Mapper class name.
-     */
-    public String getMapperClass() {
-
-        return (this.mapperClass);
-
-    }
-
-
-    /**
-     * Set the default Mapper class name.
-     *
-     * @param mapperClass The new default Mapper class name
-     */
-    public void setMapperClass(String mapperClass) {
-
-        String oldMapperClass = this.mapperClass;
-        this.mapperClass = mapperClass;
-        support.firePropertyChange("mapperClass",
-                                   oldMapperClass, this.mapperClass);
-
+        setAutoDeploy(liveDeploy);
     }
 
 
@@ -445,7 +441,45 @@ public class StandardHost
 
     }
 
+     /**
+     * Set the validation feature of the XML parser used when
+     * parsing xml instances.
+     * @param xmlValidation true to enable xml instance validation
+     */
+    public void setXmlValidation(boolean xmlValidation){
+        
+        this.xmlValidation = xmlValidation;
 
+    }
+
+    /**
+     * Get the server.xml &lt;host&gt; attribute's xmlValidation.
+     * @return true if validation is enabled.
+     *
+     */
+    public boolean getXmlValidation(){
+        return xmlValidation;
+    }
+
+    /**
+     * Get the server.xml &lt;host&gt; attribute's xmlNamespaceAware.
+     * @return true if namespace awarenes is enabled.
+     *
+     */
+    public boolean getXmlNamespaceAware(){
+        return xmlNamespaceAware;
+    }
+
+
+    /**
+     * Set the namespace aware feature of the XML parser used when
+     * parsing xml instances.
+     * @param xmlNamespaceAware true to enable namespace awareness
+     */
+    public void setXmlNamespaceAware(boolean xmlNamespaceAware){
+        this.xmlNamespaceAware=xmlNamespaceAware;
+    }    
+    
     /**
      * Host work directory base.
      */
@@ -466,34 +500,6 @@ public class StandardHost
 
     // --------------------------------------------------------- Public Methods
 
-
-    /**
-     * Install the StandardContext portion of the DefaultContext
-     * configuration into current Context.
-     *
-     * @param context current web application context
-     */
-    public void installDefaultContext(Context context) {
-
-        if (defaultContext != null &&
-            defaultContext instanceof StandardDefaultContext) {
-
-            ((StandardDefaultContext)defaultContext).installDefaultContext(context);
-        }
-
-    }
-
-    /**
-     * Import the DefaultContext config into a web application context.
-     *
-     * @param context web application context to import default context
-     */
-    public void importDefaultContext(Context context) {
-
-        if( this.defaultContext != null )
-            this.defaultContext.importDefaultContext(context);
-
-    }
 
     /**
      * Add an alias name that should be mapped to this same Host.
@@ -571,14 +577,14 @@ public class StandardHost
      */
     public Context map(String uri) {
 
-        if (debug > 0)
-            log("Mapping request URI '" + uri + "'");
+        if (log.isDebugEnabled())
+            log.debug("Mapping request URI '" + uri + "'");
         if (uri == null)
             return (null);
 
         // Match on the longest possible context path prefix
-        if (debug > 1)
-            log("  Trying the longest context path prefix");
+        if (log.isTraceEnabled())
+            log.trace("  Trying the longest context path prefix");
         Context context = null;
         String mapuri = uri;
         while (true) {
@@ -593,20 +599,20 @@ public class StandardHost
 
         // If no Context matches, select the default Context
         if (context == null) {
-            if (debug > 1)
-                log("  Trying the default context");
+            if (log.isTraceEnabled())
+                log.trace("  Trying the default context");
             context = (Context) findChild("");
         }
 
         // Complain if no Context has been selected
         if (context == null) {
-            log(sm.getString("standardHost.mappingError", uri));
+            log.error(sm.getString("standardHost.mappingError", uri));
             return (null);
         }
 
         // Return the mapped Context (if any)
-        if (debug > 0)
-            log(" Mapped to context '" + context.getPath() + "'");
+        if (log.isDebugEnabled())
+            log.debug(" Mapped to context '" + context.getPath() + "'");
         return (context);
 
     }
@@ -676,222 +682,171 @@ public class StandardHost
      *  that prevents it from being started
      */
     public synchronized void start() throws LifecycleException {
+        if( started ) {
+            return;
+        }
+        if( ! initialized )
+            init();
 
+        // Look for a realm - that may have been configured earlier. 
+        // If the realm is added after context - it'll set itself.
+        if( realm == null ) {
+            ObjectName realmName=null;
+            try {
+                realmName=new ObjectName( domain + ":type=Realm,host=" + getName());
+                if( mserver.isRegistered(realmName ) ) {
+                    mserver.invoke(realmName, "init", 
+                            new Object[] {},
+                            new String[] {}
+                    );            
+                }
+            } catch( Throwable t ) {
+                log.debug("No realm for this host " + realmName);
+            }
+        }
+            
         // Set error report valve
         if ((errorReportValveClass != null)
             && (!errorReportValveClass.equals(""))) {
             try {
-                Valve valve = (Valve) Class.forName(errorReportValveClass)
+                boolean found = false;
+                Valve[] valves = 
+                    ((StandardPipeline)pipeline).getValves();
+                for (int i=0; !found && i<valves.length; i++)
+                    if(errorReportValveClass.equals(
+                            valves[i].getClass().getName()))
+                        found = true ;
+                if(!found) {          	
+                    Valve valve = (Valve) Class.forName(errorReportValveClass)
                     .newInstance();
-                addValve(valve);
+                    addValve(valve);
+                }
             } catch (Throwable t) {
-                log(sm.getString
+                log.error(sm.getString
                     ("standardHost.invalidErrorReportValveClass", 
-                     errorReportValveClass));
+                     errorReportValveClass), t);
             }
         }
-
-        // Set dispatcher valve
-        addValve(new ErrorDispatcherValve());
-
+        if(log.isInfoEnabled()) {
+            if (xmlValidation)
+                log.info( sm.getString("standardHost.validationEnabled"));
+            else
+                log.info( sm.getString("standardHost.validationDisabled"));
+        }
         super.start();
 
     }
 
 
-    // ------------------------------------------------------- Deployer Methods
-
-
+    // -------------------- JMX  --------------------
     /**
-     * Install a new web application, whose web application archive is at the
-     * specified URL, into this container with the specified context path.
-     * A context path of "" (the empty string) should be used for the root
-     * application for this container.  Otherwise, the context path must
-     * start with a slash.
-     * <p>
-     * If this application is successfully installed, a ContainerEvent of type
-     * <code>INSTALL_EVENT</code> will be sent to all registered listeners,
-     * with the newly created <code>Context</code> as an argument.
-     *
-     * @param contextPath The context path to which this application should
-     *  be installed (must be unique)
-     * @param war A URL of type "jar:" that points to a WAR file, or type
-     *  "file:" that points to an unpacked directory structure containing
-     *  the web application to be installed
-     *
-     * @exception IllegalArgumentException if the specified context path
-     *  is malformed (it must be "" or start with a slash)
-     * @exception IllegalStateException if the specified context path
-     *  is already attached to an existing web application
-     * @exception IOException if an input/output error was encountered
-     *  during install
-     */
-    public void install(String contextPath, URL war) throws IOException {
+      * Return the MBean Names of the Valves assoicated with this Host
+      *
+      * @exception Exception if an MBean cannot be created or registered
+      */
+     public String [] getValveNames()
+         throws Exception
+    {
+         Valve [] valves = this.getValves();
+         String [] mbeanNames = new String[valves.length];
+         for (int i = 0; i < valves.length; i++) {
+             if( valves[i] == null ) continue;
+             if( ((ValveBase)valves[i]).getObjectName() == null ) continue;
+             mbeanNames[i] = ((ValveBase)valves[i]).getObjectName().toString();
+         }
 
-        deployer.install(contextPath, war);
+         return mbeanNames;
 
+     }
+
+    public String[] getAliases() {
+        return aliases;
     }
 
+    private boolean initialized=false;
+    
+    public void init() {
+        if( initialized ) return;
+        initialized=true;
+        
+        // already registered.
+        if( getParent() == null ) {
+            try {
+                // Register with the Engine
+                ObjectName serviceName=new ObjectName(domain + 
+                                        ":type=Engine");
 
-    /**
-     * <p>Install a new web application, whose context configuration file
-     * (consisting of a <code>&lt;Context&gt;</code> element) and web
-     * application archive are at the specified URLs.</p>
-     *
-     * <p>If this application is successfully installed, a ContainerEvent
-     * of type <code>INSTALL_EVENT</code> will be sent to all registered
-     * listeners, with the newly created <code>Context</code> as an argument.
-     * </p>
-     *
-     * @param config A URL that points to the context configuration file to
-     *  be used for configuring the new Context
-     * @param war A URL of type "jar:" that points to a WAR file, or type
-     *  "file:" that points to an unpacked directory structure containing
-     *  the web application to be installed
-     *
-     * @exception IllegalArgumentException if one of the specified URLs is
-     *  null
-     * @exception IllegalStateException if the context path specified in the
-     *  context configuration file is already attached to an existing web
-     *  application
-     * @exception IOException if an input/output error was encountered
-     *  during installation
-     */
-    public synchronized void install(URL config, URL war) throws IOException {
-
-        deployer.install(config, war);
-
+                HostConfig deployer = null;
+                try {
+                    String hostConfigClassname = getHostConfigClass();
+                    if (hostConfigClassname != null) {
+                        Class clazz = Class.forName(hostConfigClassname);
+                        deployer = (HostConfig) clazz.newInstance();
+                    } else {
+                        deployer = new HostConfig();
+                    }
+                } catch (Exception e) {
+                    log.warn("Error creating HostConfig for host " + name, e);
+                    throw e;
+                }
+                addLifecycleListener(deployer);                
+                if( mserver.isRegistered( serviceName )) {
+                    if(log.isDebugEnabled())
+                        log.debug("Registering "+ serviceName +" with the Engine");
+                    mserver.invoke( serviceName, "addChild",
+                            new Object[] { this },
+                            new String[] { "org.apache.catalina.Container" } );
+                }
+            } catch( Exception ex ) {
+                log.error("Host registering failed!",ex);
+            }
+        }
+        
+        if( oname==null ) {
+            // not registered in JMX yet - standalone mode
+            try {
+                StandardEngine engine=(StandardEngine)parent;
+                domain=engine.getName();
+                if(log.isDebugEnabled())
+                    log.debug( "Register host " + getName() + " with domain "+ domain );
+                oname=new ObjectName(domain + ":type=Host,host=" +
+                        this.getName());
+                controller = oname;
+                Registry.getRegistry(null, null)
+                    .registerComponent(this, oname, null);
+            } catch( Throwable t ) {
+                log.error("Host registering failed!", t );
+            }
+        }
     }
 
-
-    /**
-     * Return the Context for the deployed application that is associated
-     * with the specified context path (if any); otherwise return
-     * <code>null</code>.
-     *
-     * @param contextPath The context path of the requested web application
-     */
-    public Context findDeployedApp(String contextPath) {
-
-        return (deployer.findDeployedApp(contextPath));
-
+    public void destroy() throws Exception {
+        // destroy our child containers, if any
+        Container children[] = findChildren();
+        super.destroy();
+        for (int i = 0; i < children.length; i++) {
+            if(children[i] instanceof StandardContext)
+                ((StandardContext)children[i]).destroy();
+        }
+      
     }
-
-
-    /**
-     * Return the context paths of all deployed web applications in this
-     * Container.  If there are no deployed applications, a zero-length
-     * array is returned.
-     */
-    public String[] findDeployedApps() {
-
-        return (deployer.findDeployedApps());
-
+    
+    public ObjectName preRegister(MBeanServer server, ObjectName oname ) 
+        throws Exception
+    {
+        ObjectName res=super.preRegister(server, oname);
+        String name=oname.getKeyProperty("host");
+        if( name != null )
+            setName( name );
+        return res;        
     }
-
-
-    /**
-     * Remove an existing web application, attached to the specified context
-     * path.  If this application is successfully removed, a
-     * ContainerEvent of type <code>REMOVE_EVENT</code> will be sent to all
-     * registered listeners, with the removed <code>Context</code> as
-     * an argument.
-     *
-     * @param contextPath The context path of the application to be removed
-     *
-     * @exception IllegalArgumentException if the specified context path
-     *  is malformed (it must be "" or start with a slash)
-     * @exception IllegalArgumentException if the specified context path does
-     *  not identify a currently installed web application
-     * @exception IOException if an input/output error occurs during
-     *  removal
-     */
-    public void remove(String contextPath) throws IOException {
-
-        deployer.remove(contextPath);
-
+    
+    public ObjectName createObjectName(String domain, ObjectName parent)
+        throws Exception
+    {
+        if( log.isDebugEnabled())
+            log.debug("Create ObjectName " + domain + " " + parent );
+        return new ObjectName( domain + ":type=Host,host=" + getName());
     }
-
-
-    /**
-     * Remove an existing web application, attached to the specified context
-     * path.  If this application is successfully removed, a
-     * ContainerEvent of type <code>REMOVE_EVENT</code> will be sent to all
-     * registered listeners, with the removed <code>Context</code> as
-     * an argument. Deletes the web application war file and/or directory
-     * if they exist in the Host's appBase.
-     *
-     * @param contextPath The context path of the application to be removed
-     * @param undeploy boolean flag to remove web application from server
-     *
-     * @exception IllegalArgumentException if the specified context path
-     *  is malformed (it must be "" or start with a slash)
-     * @exception IllegalArgumentException if the specified context path does
-     *  not identify a currently installed web application
-     * @exception IOException if an input/output error occurs during
-     *  removal
-     */
-    public void remove(String contextPath, boolean undeploy) throws IOException {
-
-        deployer.remove(contextPath,undeploy);
-
-    }
-
-
-    /**
-     * Start an existing web application, attached to the specified context
-     * path.  Only starts a web application if it is not running.
-     *
-     * @param contextPath The context path of the application to be started
-     *
-     * @exception IllegalArgumentException if the specified context path
-     *  is malformed (it must be "" or start with a slash)
-     * @exception IllegalArgumentException if the specified context path does
-     *  not identify a currently installed web application
-     * @exception IOException if an input/output error occurs during
-     *  startup
-     */
-    public void start(String contextPath) throws IOException {
-
-        deployer.start(contextPath);
-
-    }
-
-
-    /**
-     * Stop an existing web application, attached to the specified context
-     * path.  Only stops a web application if it is running.
-     *
-     * @param contextPath The context path of the application to be stopped
-     *
-     * @exception IllegalArgumentException if the specified context path
-     *  is malformed (it must be "" or start with a slash)
-     * @exception IllegalArgumentException if the specified context path does
-     *  not identify a currently installed web application
-     * @exception IOException if an input/output error occurs while stopping
-     *  the web application
-     */
-    public void stop(String contextPath) throws IOException {
-
-        deployer.stop(contextPath);
-
-    }
-
-
-    // ------------------------------------------------------ Protected Methods
-
-
-    /**
-     * Add a default Mapper implementation if none have been configured
-     * explicitly.
-     *
-     * @param mapperClass Java class name of the default Mapper
-     */
-    protected void addDefaultMapper(String mapperClass) {
-
-        super.addDefaultMapper(this.mapperClass);
-
-    }
-
 
 }

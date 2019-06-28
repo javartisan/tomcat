@@ -23,13 +23,13 @@ import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
+
 import javax.management.Attribute;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -42,7 +42,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * updated Env Entry.</p>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveEnvEntryAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -50,12 +50,6 @@ public final class SaveEnvEntryAction extends Action {
 
 
     // ----------------------------------------------------- Instance Variables
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     /**
      * The MBeanServer we will be interacting with.
@@ -91,11 +85,8 @@ public final class SaveEnvEntryAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Has this transaction been cancelled?
         if (isCancelled(request)) {
@@ -130,37 +121,36 @@ public final class SaveEnvEntryAction extends Action {
             String resourcetype = envEntryForm.getResourcetype();
             String path = envEntryForm.getPath();
             String host = envEntryForm.getHost();
-            String service = envEntryForm.getService();
+            String domain = envEntryForm.getDomain();
             
             ObjectName oname = null;
 
             try {
-
-                if (resourcetype!=null) {
-                    // Construct the MBean Name for the naming source
-                    if (resourcetype.equals("Global")) {
-                        oname = 
-                            new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                            ResourceUtils.GLOBAL_TYPE);
-                    } else if (resourcetype.equals("Context")) {            
-                        oname = 
-                            new ObjectName (ResourceUtils.NAMINGRESOURCES_TYPE + 
-                            ResourceUtils.CONTEXT_TYPE + ",path=" + path + 
-                            ",host=" + host + ",service=" + service);
-                    } else if (resourcetype.equals("DefaultContext")) {
-                        if (host.length() > 0) {
-                            oname = 
-                                new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                                ResourceUtils.HOST_DEFAULTCONTEXT_TYPE + ",host=" + 
-                                host + ",service=" + service);
-                        } else {
-                            oname = 
-                                new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE +
-                                ResourceUtils.SERVICE_DEFAULTCONTEXT_TYPE + ",service=" + 
-                                service);
-                        }
-                    }
-                }
+            
+                if (resourcetype.equals("Global")) {
+                    oname = new ObjectName( domain + 
+                                            ResourceUtils.ENVIRONMENT_TYPE + 
+                                            ResourceUtils.GLOBAL_TYPE + 
+                                            ",name=" + params[0]);
+                } else if (resourcetype.equals("Context")) {
+                    oname = new ObjectName( domain + 
+                                            ResourceUtils.ENVIRONMENT_TYPE + 
+                                            ResourceUtils.CONTEXT_TYPE + 
+                                            ",path=" + path + ",host=" + host + 
+                                            ",name=" + params[0]);
+                }         
+                            
+                if (mserver.isRegistered(oname)) {
+                    ActionMessages errors = new ActionMessages();
+                    errors.add("name",
+                               new ActionMessage("resources.invalid.env"));
+                    saveErrors(request, errors);
+                    return (new ActionForward(mapping.getInput()));
+                }  
+                
+                oname = ResourceUtils.getNamingResourceObjectName(domain,
+                            resourcetype, path, host);
+                
                 // Create the new object and associated MBean
                 objectName = (String) mserver.invoke(oname, "addEnvironment",
                                                      params, signature);

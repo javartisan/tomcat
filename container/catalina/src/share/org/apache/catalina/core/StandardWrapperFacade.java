@@ -20,6 +20,7 @@ package org.apache.catalina.core;
 
 
 import java.util.Enumeration;
+
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletContext;
 
@@ -28,7 +29,7 @@ import javax.servlet.ServletContext;
  * Facade for the <b>StandardWrapper</b> object.
  *
  * @author Remy Maucharat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardWrapperFacade.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
 public final class StandardWrapperFacade

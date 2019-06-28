@@ -21,6 +21,8 @@ package org.apache.catalina.deploy;
 
 import org.apache.catalina.util.RequestUtil;
 
+import java.io.Serializable;
+
 
 /**
  * Representation of a web resource collection for a web application's security
@@ -34,11 +36,10 @@ import org.apache.catalina.util.RequestUtil;
  * this class is synchronized.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SecurityCollection.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class SecurityCollection {
-
+public class SecurityCollection implements Serializable {
 
     // ----------------------------------------------------------- Constructors
 
@@ -180,10 +181,12 @@ public final class SecurityCollection {
 
         if (pattern == null)
             return;
+
         pattern = RequestUtil.URLDecode(pattern);
         String results[] = new String[patterns.length + 1];
-        for (int i = 0; i < patterns.length; i++)
+        for (int i = 0; i < patterns.length; i++) {
             results[i] = patterns[i];
+        }
         results[patterns.length] = pattern;
         patterns = results;
 

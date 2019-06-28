@@ -18,8 +18,10 @@
 
 package org.apache.catalina.util;
 
-import java.util.*;
-import java.text.*;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  *  Common place for date utils.
@@ -31,18 +33,30 @@ import java.text.*;
  */
 public class DateTool {
 
-    /** US locale - all HTTP dates are in english
+    private static StringManager sm =
+        StringManager.getManager("org.apache.catalina.util");
+
+    /**
+     * US locale - all HTTP dates are in english
      */
     public final static Locale LOCALE_US = Locale.US;
 
-    /** GMT timezone - all HTTP dates are on GMT
+    /**
+     * GMT timezone - all HTTP dates are on GMT
      */
     public final static TimeZone GMT_ZONE = TimeZone.getTimeZone("GMT");
 
-    /** format for RFC 1123 date string -- "Sun, 06 Nov 1994 08:49:37 GMT"
+    /**
+     * format for RFC 1123 date string -- "Sun, 06 Nov 1994 08:49:37 GMT"
      */
     public final static String RFC1123_PATTERN =
         "EEE, dd MMM yyyyy HH:mm:ss z";
+
+    /** 
+     * Format for http response header date field
+     */
+    public static final String HTTP_RESPONSE_DATE_HEADER =
+        "EEE, dd MMM yyyy HH:mm:ss zzz";
 
     // format for RFC 1036 date string -- "Sunday, 06-Nov-94 08:49:37 GMT"
     private final static String rfc1036Pattern =
@@ -52,16 +66,19 @@ public class DateTool {
     private final static String asctimePattern =
         "EEE MMM d HH:mm:ss yyyyy";
 
-    /** Pattern used for old cookies
+    /**
+     * Pattern used for old cookies
      */
     public final static String OLD_COOKIE_PATTERN = "EEE, dd-MMM-yyyy HH:mm:ss z";
 
-    /** DateFormat to be used to format dates
+    /**
+     * DateFormat to be used to format dates
      */
     public final static DateFormat rfc1123Format =
         new SimpleDateFormat(RFC1123_PATTERN, LOCALE_US);
 
-    /** DateFormat to be used to format old netscape cookies
+    /**
+     * DateFormat to be used to format old netscape cookies
      */
     public final static DateFormat oldCookieFormat =
         new SimpleDateFormat(OLD_COOKIE_PATTERN, LOCALE_US);

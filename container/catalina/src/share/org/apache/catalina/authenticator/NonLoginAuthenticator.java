@@ -21,8 +21,8 @@ package org.apache.catalina.authenticator;
 
 import java.io.IOException;
 
-import org.apache.catalina.HttpRequest;
-import org.apache.catalina.HttpResponse;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.deploy.LoginConfig;
 
 
@@ -32,7 +32,7 @@ import org.apache.catalina.deploy.LoginConfig;
  * only security constraints not involving user authentication.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: NonLoginAuthenticator.java 939523 2010-04-30 00:28:42Z kkolinko $
  */
 
 public final class NonLoginAuthenticator
@@ -78,8 +78,8 @@ public final class NonLoginAuthenticator
      *
      * @exception IOException if an input/output error occurs
      */
-    public boolean authenticate(HttpRequest request,
-                                HttpResponse response,
+    public boolean authenticate(Request request,
+                                Response response,
                                 LoginConfig config)
         throws IOException {
 
@@ -91,9 +91,9 @@ public final class NonLoginAuthenticator
         if (ssoId != null)
             associate(ssoId, getSession(request, true));
         */
-
-        if (debug >= 1)
-            log("User authentication is not required");
+        
+        if (containerLog.isDebugEnabled())
+            containerLog.debug("User authentication is not required");
         return (true);
 
 

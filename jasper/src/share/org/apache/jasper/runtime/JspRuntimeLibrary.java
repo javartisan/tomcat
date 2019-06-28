@@ -13,34 +13,32 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
-
+ */
 
 package org.apache.jasper.runtime;
 
-import java.io.IOException;
-import java.util.Enumeration;
-
-import java.lang.reflect.Method;
-
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorManager;
-
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.lang.reflect.Method;
 import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Enumeration;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.servlet.jsp.JspWriter;
+import javax.servlet.jsp.PageContext;
 import javax.servlet.jsp.tagext.BodyContent;
 
 import org.apache.jasper.JasperException;
-import org.apache.jasper.Constants;
-
+import org.apache.jasper.compiler.Localizer;
 
 /**
  * Bunch of util methods that are used by code generated for useBean,
@@ -52,8 +50,14 @@ import org.apache.jasper.Constants;
  * works so well right now. It got forgotten at some point. -akv
  *
  * @author Mandar Raje
+ * @author Shawn Bayern
  */
 public class JspRuntimeLibrary {
+    
+    private static final String SERVLET_EXCEPTION
+        = "javax.servlet.error.exception";
+    private static final String JSP_EXCEPTION
+        = "javax.servlet.jsp.jspException";
 
     protected static class PrivilegedIntrospectHelper
         implements PrivilegedExceptionAction {
@@ -83,9 +87,145 @@ public class JspRuntimeLibrary {
             return null;
         }
     }
- 
+
+    /**
+     * Returns the value of the javax.servlet.error.exception request
+     * attribute value, if present, otherwise the value of the
+     * javax.servlet.jsp.jspException request attribute value.
+     *
+     * This method is called at the beginning of the generated servlet code
+     * for a JSP error page, when the "exception" implicit scripting language
+     * variable is initialized.
+     */
+    public static Throwable getThrowable(ServletRequest request) {
+        Throwable error = (Throwable) request.getAttribute(SERVLET_EXCEPTION);
+        if (error == null) {
+            error = (Throwable) request.getAttribute(JSP_EXCEPTION);
+            if (error != null) {
+                /*
+                 * The only place that sets JSP_EXCEPTION is
+                 * PageContextImpl.handlePageException(). It really should set
+                 * SERVLET_EXCEPTION, but that would interfere with the 
+                 * ErrorReportValve. Therefore, if JSP_EXCEPTION is set, we
+                 * need to set SERVLET_EXCEPTION.
+                 */
+                request.setAttribute(SERVLET_EXCEPTION, error);
+            }
+        }
+
+        return error;
+    }
+
+    public static boolean coerceToBoolean(String s) {
+        if (s == null || s.length() == 0)
+            return false;
+        else
+            return Boolean.valueOf(s).booleanValue();
+    }
+
+    public static byte coerceToByte(String s) {
+        if (s == null || s.length() == 0)
+            return (byte) 0;
+        else
+            return Byte.valueOf(s).byteValue();
+    }
+
+    public static char coerceToChar(String s) {
+        if (s == null || s.length() == 0) {
+            return (char) 0;
+        } else {
+            // this trick avoids escaping issues
+            return (char)(int) s.charAt(0);
+        }
+    }
+
+    public static double coerceToDouble(String s) {
+        if (s == null || s.length() == 0)
+            return (double) 0;
+        else
+            return Double.valueOf(s).doubleValue();
+    }
+
+    public static float coerceToFloat(String s) {
+        if (s == null || s.length() == 0)
+            return (float) 0;
+        else
+            return Float.valueOf(s).floatValue();
+    }
+
+    public static int coerceToInt(String s) {
+        if (s == null || s.length() == 0)
+            return 0;
+        else
+            return Integer.valueOf(s).intValue();
+    }
+
+    public static short coerceToShort(String s) {
+        if (s == null || s.length() == 0)
+            return (short) 0;
+        else
+            return Short.valueOf(s).shortValue();
+    }
+
+    public static long coerceToLong(String s) {
+        if (s == null || s.length() == 0)
+            return (long) 0;
+        else
+            return Long.valueOf(s).longValue();
+    }
+
+    public static Object coerce(String s, Class target) {
+
+        boolean isNullOrEmpty = (s == null || s.length() == 0);
+
+        if (target == Boolean.class) {
+            if (isNullOrEmpty) {
+                s = "false";
+            }
+            return new Boolean(s);
+        } else if (target == Byte.class) {
+            if (isNullOrEmpty)
+                return new Byte((byte) 0);
+            else
+                return new Byte(s);
+        } else if (target == Character.class) {
+            if (isNullOrEmpty)
+                return new Character((char) 0);
+            else 
+                return new Character(s.charAt(0));
+        } else if (target == Double.class) {
+            if (isNullOrEmpty)
+                return new Double(0);
+            else
+                return new Double(s);
+        } else if (target == Float.class) {
+            if (isNullOrEmpty)
+                return new Float(0);
+            else
+                return new Float(s);
+        } else if (target == Integer.class) {
+            if (isNullOrEmpty)
+                return new Integer(0);
+            else
+                return new Integer(s);
+        } else if (target == Short.class) {
+            if (isNullOrEmpty)
+                return new Short((short) 0);
+            else
+                return new Short(s);
+        } else if (target == Long.class) {
+            if (isNullOrEmpty)
+                return new Long(0);
+            else
+                return new Long(s);
+        } else {
+            return null;
+        }
+    }
+
    // __begin convertMethod
-    public static Object convert(String propertyName, String s, Class t, Class propertyEditorClass) 
+    public static Object convert(String propertyName, String s, Class t,
+                                 Class propertyEditorClass) 
        throws JasperException 
     {
         try {
@@ -129,7 +269,7 @@ public class JspRuntimeLibrary {
                                             t, propertyName, s);
             }
         } catch (Exception ex) {
-            throw new JasperException (ex);
+            throw new JasperException(ex);
         }
     }
     // __end convertMethod
@@ -174,8 +314,8 @@ public class JspRuntimeLibrary {
                                         String param, boolean ignoreMethodNF) 
                                         throws JasperException
     {
-        java.lang.reflect.Method method = null;
-        Class type   = null;
+        Method method = null;
+        Class type = null;
         Class propertyEditorClass = null;
         try {
             java.beans.BeanInfo info
@@ -195,10 +335,9 @@ public class JspRuntimeLibrary {
             if ( method != null ) {
                 if (type.isArray()) {
                     if (request == null) {
-                        throw new JasperException(Constants.getString(
-                                "jsp.error.beans.setproperty.noindexset",
-                                new Object[] {}));
-                    };
+                        throw new JasperException(
+                            Localizer.getMessage("jsp.error.beans.setproperty.noindexset"));
+                    }
                     Class t = type.getComponentType();
                     String[] values = request.getParameterValues(param);
                     //XXX Please check.
@@ -217,18 +356,20 @@ public class JspRuntimeLibrary {
                 }
             }
         } catch (Exception ex) {
-            throw new JasperException (ex);
+            throw new JasperException(ex);
         }
         if (!ignoreMethodNF && (method == null)) {
             if (type == null) {
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.noproperty",
-                        new Object[] {prop, bean.getClass().getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.noproperty",
+                                         prop,
+                                         bean.getClass().getName()));
             } else {
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.nomethod.setproperty",
-                        new Object[] {prop, type.getName(),
-                                      bean.getClass().getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.nomethod.setproperty",
+                                         prop,
+                                         type.getName(),
+                                         bean.getClass().getName()));
             }
         }
     }
@@ -282,16 +423,19 @@ public class JspRuntimeLibrary {
      * the request and the property is indexed.
      */
     public static void createTypedArray(String propertyName,
-                                        Object bean, Method method, String []values, Class t,
+                                        Object bean,
+                                        Method method,
+                                        String[] values,
+                                        Class t,
                                         Class propertyEditorClass)
-    throws JasperException {
+                throws JasperException {
+
         try {
             if (propertyEditorClass != null) {
                 Object[] tmpval = new Integer[values.length];
                 for (int i=0; i<values.length; i++) {
-                    tmpval[i] =  
-                        getValueFromBeanInfoPropertyEditor(
-                                            t, propertyName, values[i], propertyEditorClass);
+                    tmpval[i] = getValueFromBeanInfoPropertyEditor(
+                            t, propertyName, values[i], propertyEditorClass);
                 }
                 method.invoke (bean, new Object[] {tmpval});
             } else if (t.equals(Integer.class)) {
@@ -384,7 +528,7 @@ public class JspRuntimeLibrary {
                 method.invoke (bean, new Object[] {tmpval});
             }
         } catch (Exception ex) {
-            throw new JasperException ("error in invoking method");
+            throw new JasperException ("error in invoking method", ex);
         }
     }
 
@@ -417,13 +561,14 @@ public class JspRuntimeLibrary {
      * @param encoded The string to decode.
      * @return The decoded string.
      */
+
     public static String decode(String encoded) {
         // speedily leave if we're not needed
-        if (encoded == null) return null;
+    if (encoded == null) return null;
         if (encoded.indexOf('%') == -1 && encoded.indexOf('+') == -1)
-            return encoded;
+        return encoded;
 
-        //allocate the buffer - use byte[] to avoid calls to new.
+    //allocate the buffer - use byte[] to avoid calls to new.
         byte holdbuffer[] = new byte[encoded.length()];
 
         int bufcount = 0;
@@ -431,35 +576,33 @@ public class JspRuntimeLibrary {
         for (int count = 0; count < encoded.length(); count++) {
         char cur = encoded.charAt(count);
             if (cur == '%') {
-                holdbuffer[bufcount++] =
-                    (byte)Integer.parseInt(encoded.substring(count+1,count+3),16);
+            holdbuffer[bufcount++] =
+          (byte)Integer.parseInt(encoded.substring(count+1,count+3),16);
                 if (count + 2 >= encoded.length())
                     count = encoded.length();
                 else
                     count += 2;
             } else if (cur == '+') {
-                holdbuffer[bufcount++] = (byte) ' ';
-            } else {
-                holdbuffer[bufcount++] = (byte) cur;
+        holdbuffer[bufcount++] = (byte) ' ';
+        } else {
+            holdbuffer[bufcount++] = (byte) cur;
             }
         }
         // REVISIT -- remedy for Deprecated warning.
-        //return new String(holdbuffer,0,0,bufcount);
-        return new String(holdbuffer,0,bufcount);
+    //return new String(holdbuffer,0,0,bufcount);
+    return new String(holdbuffer,0,bufcount);
     }
 
     // __begin lookupReadMethodMethod
     public static Object handleGetProperty(Object o, String prop)
     throws JasperException {
-        if (o == null)        {
-            throw new JasperException(Constants.getString(
-                    "jsp.error.beans.nullbean",
-                    new Object[] {}));
+        if (o == null) {
+            throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.nullbean"));
         }
         Object value = null;
         try {
-            java.lang.reflect.Method method = 
-                    getReadMethod(o.getClass(), prop);
+            Method method = getReadMethod(o.getClass(), prop);
             value = method.invoke(o, null);
         } catch (Exception ex) {
             throw new JasperException (ex);
@@ -467,6 +610,48 @@ public class JspRuntimeLibrary {
         return value;
     }
     // __end lookupReadMethodMethod
+
+    // handles <jsp:setProperty> with EL expression for 'value' attribute
+/** Use proprietaryEvaluate
+    public static void handleSetPropertyExpression(Object bean,
+        String prop, String expression, PageContext pageContext,
+        VariableResolver variableResolver, FunctionMapper functionMapper )
+        throws JasperException
+    {
+        try {
+            Method method = getWriteMethod(bean.getClass(), prop);
+            method.invoke(bean, new Object[] { 
+                pageContext.getExpressionEvaluator().evaluate(
+                    expression,
+                    method.getParameterTypes()[0],
+                    variableResolver,
+                    functionMapper,
+                    null )
+            });
+        } catch (Exception ex) {
+            throw new JasperException(ex);
+        }
+    }
+**/
+    public static void handleSetPropertyExpression(Object bean,
+        String prop, String expression, PageContext pageContext,
+        ProtectedFunctionMapper functionMapper )
+        throws JasperException
+    {
+        try {
+            Method method = getWriteMethod(bean.getClass(), prop);
+            method.invoke(bean, new Object[] {
+                PageContextImpl.proprietaryEvaluate(
+                    expression,
+                    method.getParameterTypes()[0],
+                    pageContext,
+                    functionMapper,
+                    false )
+            });
+        } catch (Exception ex) {
+            throw new JasperException(ex);
+        }
+    }
 
     public static void handleSetProperty(Object bean, String prop,
                                          Object value)
@@ -576,9 +761,9 @@ public class JspRuntimeLibrary {
         }        
     }
     
-    public static java.lang.reflect.Method getWriteMethod(Class beanClass, String prop)
+    public static Method getWriteMethod(Class beanClass, String prop)
     throws JasperException {
-        java.lang.reflect.Method method = null;        
+        Method method = null;        
         Class type = null;
         try {
             java.beans.BeanInfo info
@@ -595,31 +780,34 @@ public class JspRuntimeLibrary {
                 }
             } else {        
                 // just in case introspection silently fails.
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.nobeaninfo",
-                        new Object[] {beanClass.getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.nobeaninfo",
+                                         beanClass.getName()));
             }
         } catch (Exception ex) {
             throw new JasperException (ex);
         }
         if (method == null) {
             if (type == null) {
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.noproperty",
-                        new Object[] {prop, beanClass.getName()}));
+                throw new JasperException(
+                        Localizer.getMessage("jsp.error.beans.noproperty",
+                                             prop,
+                                             beanClass.getName()));
             } else {
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.nomethod.setproperty",
-                        new Object[] {prop, type.getName(),
-                                      beanClass.getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.nomethod.setproperty",
+                                         prop,
+                                         type.getName(),
+                                         beanClass.getName()));
             }
         }
         return method;
     }
 
-    public static java.lang.reflect.Method getReadMethod(Class beanClass, String prop)
-    throws JasperException {
-        java.lang.reflect.Method method = null;        
+    public static Method getReadMethod(Class beanClass, String prop)
+            throws JasperException {
+
+        Method method = null;        
         Class type = null;
         try {
             java.beans.BeanInfo info
@@ -636,22 +824,22 @@ public class JspRuntimeLibrary {
                 }
             } else {        
                 // just in case introspection silently fails.
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.nobeaninfo",
-                        new Object[] {beanClass.getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.nobeaninfo",
+                                         beanClass.getName()));
             }
         } catch (Exception ex) {
             throw new JasperException (ex);
         }
         if (method == null) {
             if (type == null) {
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.noproperty",
-                        new Object[] {prop, beanClass.getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.noproperty", prop,
+                                         beanClass.getName()));
             } else {
-                throw new JasperException(Constants.getString(
-                        "jsp.error.beans.nomethod",
-                        new Object[] {prop, beanClass.getName()}));
+                throw new JasperException(
+                    Localizer.getMessage("jsp.error.beans.nomethod", prop,
+                                         beanClass.getName()));
             }
         }
 
@@ -672,9 +860,9 @@ public class JspRuntimeLibrary {
             return pe.getValue();
         } catch (Exception ex) {
             throw new JasperException(
-                "Unable to convert string '" + attrValue + "' to class " +
-                attrClass.getName() + " for attribute " + attrName +
-                ": " + ex);
+                Localizer.getMessage("jsp.error.beans.property.conversion",
+                                     attrValue, attrClass.getName(), attrName,
+                                     ex.getMessage()));
         }
     }
 
@@ -689,13 +877,14 @@ public class JspRuntimeLibrary {
                 propEditor.setAsText(attrValue);
                 return propEditor.getValue();
             } else {
-                throw new IllegalArgumentException("Property Editor not registered with the PropertyEditorManager");
+                throw new IllegalArgumentException(
+                    Localizer.getMessage("jsp.error.beans.propertyeditor.notregistered"));
             }
         } catch (IllegalArgumentException ex) {
             throw new JasperException(
-                "Unable to convert string '" + attrValue + "' to class " +
-                attrClass.getName() + " for attribute " + attrName +
-                ": " + ex);
+                Localizer.getMessage("jsp.error.beans.property.conversion",
+                                     attrValue, attrClass.getName(), attrName,
+                                     ex.getMessage()));
         }
     }
 
@@ -722,10 +911,20 @@ public class JspRuntimeLibrary {
         HttpServletRequest hrequest = (HttpServletRequest) request;
         String uri = (String)
             request.getAttribute("javax.servlet.include.servlet_path");
-        if (uri == null)
+        if (uri != null) {
+            String pathInfo = (String)
+                request.getAttribute("javax.servlet.include.path_info");
+            if (pathInfo == null) {
+                if (uri.lastIndexOf('/') >= 0) 
+                    uri = uri.substring(0, uri.lastIndexOf('/'));
+            }
+        }
+        else {
             uri = hrequest.getServletPath();
-        return (uri.substring(0, uri.lastIndexOf('/')) + '/' + relativePath);
-        
+            if (uri.lastIndexOf('/') >= 0) 
+                uri = uri.substring(0, uri.lastIndexOf('/'));
+        }
+        return uri + '/' + relativePath;
 
     }
 
@@ -737,14 +936,14 @@ public class JspRuntimeLibrary {
      * @param request The servlet request we are processing
      * @param response The servlet response we are processing
      * @param relativePath The relative path of the resource to be included
-     * @param out The JspWriter to whom we are currently writing
+     * @param out The Writer to whom we are currently writing
      * @param flush Should we flush before the include is processed?
      *
      * @exception IOException if thrown by the included servlet
      * @exception ServletException if thrown by the included servlet
      */
-    public static void include(HttpServletRequest request,
-                               HttpServletResponse response,
+    public static void include(ServletRequest request,
+                               ServletResponse response,
                                String relativePath,
                                JspWriter out,
                                boolean flush)
@@ -766,6 +965,80 @@ public class JspRuntimeLibrary {
         rd.include(request,
                    new ServletResponseWrapperInclude(response, out));
 
+    }
+
+    /**
+     * URL encodes a string, based on the supplied character encoding.
+     * This performs the same function as java.next.URLEncode.encode
+     * in J2SDK1.4, and should be removed if the only platform supported
+     * is 1.4 or higher.
+     * @param s The String to be URL encoded.
+     * @param enc The character encoding 
+     * @return The URL encoded String
+     */
+    public static String URLEncode(String s, String enc) {
+
+        if (s == null) {
+            return "null";
+        }
+
+        if (enc == null) {
+            enc = "ISO-8859-1";        // The default request encoding 
+        }
+
+        StringBuffer out = new StringBuffer(s.length());
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        OutputStreamWriter writer = null;
+        try {
+            writer = new OutputStreamWriter(buf, enc);
+        } catch (java.io.UnsupportedEncodingException ex) {
+            // Use the default encoding?
+            writer = new OutputStreamWriter(buf);
+        }
+        
+        for (int i = 0; i < s.length(); i++) {
+            int c = s.charAt(i);
+            if (c == ' ') {
+                out.append('+');
+            } else if (isSafeChar(c)) {
+                out.append((char)c);
+            } else {
+                // convert to external encoding before hex conversion
+                try {
+                    writer.write(c);
+                    writer.flush();
+                } catch(IOException e) {
+                    buf.reset();
+                    continue;
+                }
+                byte[] ba = buf.toByteArray();
+                for (int j = 0; j < ba.length; j++) {
+                    out.append('%');
+                    // Converting each byte in the buffer
+                    out.append(Character.forDigit((ba[j]>>4) & 0xf, 16));
+                    out.append(Character.forDigit(ba[j] & 0xf, 16));
+                }
+                buf.reset();
+            }
+        }
+        return out.toString();
+    }
+
+    private static boolean isSafeChar(int c) {
+        if (c >= 'a' && c <= 'z') {
+            return true;
+        }
+        if (c >= 'A' && c <= 'Z') {
+            return true;
+        }
+        if (c >= '0' && c <= '9') {
+            return true;
+        }
+        if (c == '-' || c == '_' || c == '.' || c == '!' ||
+            c == '~' || c == '*' || c == '\'' || c == '(' || c == ')') {
+            return true;
+        }
+        return false;
     }
 
 }

@@ -21,18 +21,18 @@ package org.apache.catalina.users;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+
 import org.apache.catalina.Group;
 import org.apache.catalina.Role;
-import org.apache.catalina.User;
 import org.apache.catalina.UserDatabase;
 import org.apache.catalina.util.RequestUtil;
 
 /**
- * <p>Concrete implementation of {@link User} for the
+ * <p>Concrete implementation of {@link org.apache.catalina.User} for the
  * {@link MemoryUserDatabase} implementation of {@link UserDatabase}.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MemoryUser.java 1140072 2011-06-27 09:28:44Z markt $
  * @since 4.1
  */
 
@@ -246,7 +246,7 @@ public class MemoryUser extends AbstractUser {
      * <code>username</code> or </code>name</code> for the username
      * property.</p>
      */
-    public String toString() {
+    public String toXml() {
 
         StringBuffer sb = new StringBuffer("<user username=\"");
         sb.append(RequestUtil.filter(username));
@@ -291,6 +291,54 @@ public class MemoryUser extends AbstractUser {
         sb.append("/>");
         return (sb.toString());
 
+    }
+
+    /**
+     * <p>Return a String representation of this user.</p>
+     */
+    public String toString() {
+
+        StringBuffer sb = new StringBuffer("User username=\"");
+        sb.append(RequestUtil.filter(username));
+        sb.append("\"");
+        if (fullName != null) {
+            sb.append(", fullName=\"");
+            sb.append(RequestUtil.filter(fullName));
+            sb.append("\"");
+        }
+        synchronized (groups) {
+            if (groups.size() > 0) {
+                sb.append(", groups=\"");
+                int n = 0;
+                Iterator values = groups.iterator();
+                while (values.hasNext()) {
+                    if (n > 0) {
+                        sb.append(',');
+                    }
+                    n++;
+                    sb.append(RequestUtil.filter(
+                            ((Group)values.next()).getGroupname()));
+                }
+                sb.append("\"");
+            }
+        }
+        synchronized (roles) {
+            if (roles.size() > 0) {
+                sb.append(", roles=\"");
+                int n = 0;
+                Iterator values = roles.iterator();
+                while (values.hasNext()) {
+                    if (n > 0) {
+                        sb.append(',');
+                    }
+                    n++;
+                    sb.append(RequestUtil.filter(
+                            ((Role)values.next()).getRolename()));
+                }
+                sb.append("\"");
+            }
+        }
+        return (sb.toString());
     }
 
 

@@ -20,9 +20,10 @@ package org.apache.catalina.util;
 
 import java.io.File;
 import java.net.URLEncoder;
-import java.util.Hashtable;
 import java.util.Enumeration;
+import java.util.Hashtable;
 import java.util.StringTokenizer;
+
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
 
@@ -31,14 +32,17 @@ import javax.servlet.http.HttpServletRequest;
  * Encapsulates the CGI Process' environment and rules to derive
  * that environment from the servlet container and request information.
  * @author   Martin Dengler [root@martindengler.com]
- * @version  $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version  $Id: CGIProcessEnvironment.java 939526 2010-04-30 00:39:28Z kkolinko $
  * @since    Tomcat 4.0
+ * @deprecated
  */
 
 public class CGIProcessEnvironment extends ProcessEnvironment {
-
-
-
+    
+    
+    private static org.apache.commons.logging.Log log=
+        org.apache.commons.logging.LogFactory.getLog( CGIProcessEnvironment.class );
+    
     /** cgi command's query parameters */
     private Hashtable queryParameters = null;
 
@@ -134,7 +138,7 @@ public class CGIProcessEnvironment extends ProcessEnvironment {
     /**
      * Constructs the CGI environment to be supplied to the invoked CGI
      * script; relies heavliy on Servlet API methods and findCGI
-     * @param    req Request associated with the CGI invokation
+     * @param    req request associated with the CGI invokation
      * @return   true if environment was set OK, false if there was a problem
      *           and no environment was set
      */
@@ -303,9 +307,6 @@ public class CGIProcessEnvironment extends ProcessEnvironment {
      * cgiPathPrefix is usually set by the calling servlet to the servlet's
      * cgiPathPrefix init parameter
      * </p>
-     * <p>
-     * Written by Martin Dengler [root@martindengler.com]
-     * </p>
      *
      * @param pathInfo       String from HttpServletRequest.getPathInfo()
      * @param webAppRootDir  String from context.getRealPath("/")
@@ -326,7 +327,6 @@ public class CGIProcessEnvironment extends ProcessEnvironment {
      *                                   the cgi script, or null if no cgi
      *                                   was found
      * </ul>
-     * 
      * @since Tomcat 4.0
      */
     protected String[] findCGI(String pathInfo, String webAppRootDir,
@@ -347,8 +347,9 @@ public class CGIProcessEnvironment extends ProcessEnvironment {
                 webAppRootDir = webAppRootDir + File.separator
                     + cgiPathPrefix;
             }
-            if (debug >= 2) {
-                log("findCGI: start = [" + webAppRootDir
+            
+            if (log.isDebugEnabled()) {
+                log.debug("findCGI: start = [" + webAppRootDir
                     + "], pathInfo = [" + pathInfo + "] ");
             }
             File currentLocation = new File(webAppRootDir);
@@ -356,15 +357,15 @@ public class CGIProcessEnvironment extends ProcessEnvironment {
             while (!currentLocation.isFile() && dirWalker.hasMoreElements()) {
                 currentLocation = new
                     File(currentLocation, (String) dirWalker.nextElement());
-                if (debug >= 3) {
-                    log("findCGI: traversing to [" + currentLocation + "]");
+                if (log.isDebugEnabled())  {
+                    log.debug("findCGI: traversing to [" + currentLocation + "]");
                 }
             }
             if (!currentLocation.isFile()) {
                 return new String[] { null, null, null, null };
             } else {
-                if (debug >= 2) {
-                    log("findCGI: FOUND cgi at [" + currentLocation + "]");
+                if (log.isDebugEnabled())  {
+                    log.debug("findCGI: FOUND cgi at [" + currentLocation + "]");
                 }
                 path = currentLocation.getAbsolutePath();
                 name = currentLocation.getName();
@@ -377,8 +378,8 @@ public class CGIProcessEnvironment extends ProcessEnvironment {
                     scriptname = contextPath + servletPath + cginame;
                 }
             }
-            if (debug >= 1) {
-                log("findCGI calc: name=" + name + ", path=" + path
+            if (log.isDebugEnabled())  {
+                log.debug("findCGI calc: name=" + name + ", path=" + path
                     + ", scriptname=" + scriptname + ", cginame=" + cginame);
             }
             return new String[] { path, scriptname, cginame, name };

@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,7 +13,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
+
 package org.apache.jasper.compiler;
 
 import org.apache.jasper.JasperException;
@@ -40,7 +42,7 @@ public interface ErrorHandler {
      * @param exception Parse exception
      */
     public void jspError(String fname, int line, int column, String msg,
-                         Exception exception) throws JasperException;
+			 Exception exception) throws JasperException;
 
     /**
      * Processes the given JSP parse error.
@@ -49,7 +51,7 @@ public interface ErrorHandler {
      * @param exception Parse exception
      */
     public void jspError(String msg, Exception exception)
-        throws JasperException;
+	throws JasperException;
 
     /**
      * Processes the given javac compilation errors.
@@ -58,5 +60,14 @@ public interface ErrorHandler {
      * compilation errors
      */
     public void javacError(JavacErrorDetail[] details)
+	throws JasperException;
+
+    /**
+     * Processes the given javac error report and exception.
+     *
+     * @param errorReport Compilation error report
+     * @param exception Compilation exception
+     */
+    public void javacError(String errorReport, Exception exception)
         throws JasperException;
 }

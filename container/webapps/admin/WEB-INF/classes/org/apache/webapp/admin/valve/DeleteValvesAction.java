@@ -26,8 +26,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -45,7 +43,7 @@ import org.apache.webapp.admin.TreeControlNode;
  * transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteValvesAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteValvesAction extends Action {
@@ -64,12 +62,6 @@ public class DeleteValvesAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -98,10 +90,8 @@ public class DeleteValvesAction extends Action {
         
         // Look up the components we will be using as needed
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
 
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -117,10 +107,6 @@ public class DeleteValvesAction extends Action {
         String operation = "removeValve";
         try {
 
-            // Look up our MBeanFactory MBean
-            ObjectName fname =
-                new ObjectName(TomcatTreeBuilder.FACTORY_TYPE);
-
             // Look up our tree control data structure
             TreeControl control = (TreeControl)
                 session.getAttribute("treeControlTest");
@@ -128,6 +114,7 @@ public class DeleteValvesAction extends Action {
             // Remove the specified valves
             for (int i = 0; i < valves.length; i++) {
                 values[0] = valves[i];
+                ObjectName fname = TomcatTreeBuilder.getMBeanFactory();
                 mBServer.invoke(fname, operation,
                                 values, removeValveTypes);
                 if (control != null) {

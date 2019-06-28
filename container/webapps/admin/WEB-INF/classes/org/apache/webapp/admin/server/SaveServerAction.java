@@ -24,18 +24,16 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
-import org.apache.struts.action.ActionMessages;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessages;
+
 import javax.management.Attribute;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import org.apache.webapp.admin.ApplicationServlet;
-import org.apache.webapp.admin.TomcatTreeBuilder;
 import org.apache.struts.util.MessageResources;
 
 /**
@@ -43,7 +41,7 @@ import org.apache.struts.util.MessageResources;
  *
  * @author Jazmin Jonson
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveServerAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveServerAction extends Action {
@@ -52,11 +50,6 @@ public final class SaveServerAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
     // --------------------------------------------------------- Public Methods
     
@@ -84,10 +77,8 @@ public final class SaveServerAction extends Action {
         
        // Acquire the resources that we need
         HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -105,29 +96,21 @@ public final class SaveServerAction extends Action {
             return (new ActionForward(mapping.getInput()));
         }
         
-       // Acquire a reference to the Server MBean
+        ServerForm sform = (ServerForm) form;
+        String sObjectName = sform.getObjectName();
+        // Acquire a reference to the Server MBean
         ObjectName soname = null;
         try {            
-            soname = new ObjectName(TomcatTreeBuilder.SERVER_TYPE);
-       } catch (Throwable t) {
+            soname = new ObjectName(sObjectName);
+        } catch (Throwable t) {
             throw new ServletException
             ("Cannot acquire Server MBean reference ", t);
         }
         
-        ServerForm sform = (ServerForm) form;
 
         // Perform attribute updates as requested
         String attribute = null;
         try{          
-            attribute = "debug";
-            int debug = 0;
-            try {
-                debug = Integer.parseInt(sform.getDebugLvl());
-            } catch (Throwable t) {
-                debug = 0;
-            }
-            mBServer.setAttribute(soname,
-                                  new Attribute("debug", new Integer(debug)));
             attribute = "port";
             int port = 0;
             try {

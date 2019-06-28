@@ -19,10 +19,6 @@
 package org.apache.catalina;
 
 
-import java.io.IOException;
-import javax.servlet.ServletException;
-
-
 /**
  * <p>Interface describing a collection of Valves that should be executed
  * in sequence when the <code>invoke()</code> method is invoked.  It is
@@ -40,7 +36,7 @@ import javax.servlet.ServletException;
  *
  * @author Craig R. McClanahan
  * @author Peter Donald
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Pipeline.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Pipeline {
@@ -105,24 +101,6 @@ public interface Pipeline {
 
 
     /**
-     * Cause the specified request and response to be processed by the Valves
-     * associated with this pipeline, until one of these valves causes the
-     * response to be created and returned.  The implementation must ensure
-     * that multiple simultaneous requests (on different threads) can be
-     * processed through the same Pipeline without interfering with each
-     * other's control flow.
-     *
-     * @param request The servlet request we are processing
-     * @param response The servlet response we are creating
-     *
-     * @exception IOException if an input/output error occurs
-     * @exception ServletException if a servlet exception is thrown
-     */
-    public void invoke(Request request, Response response)
-        throws IOException, ServletException;
-
-
-    /**
      * Remove the specified Valve from the pipeline associated with this
      * Container, if it is found; otherwise, do nothing.  If the Valve is
      * found and removed, the Valve's <code>setContainer(null)</code> method
@@ -131,6 +109,13 @@ public interface Pipeline {
      * @param valve Valve to be removed
      */
     public void removeValve(Valve valve);
+
+
+    /**
+     * <p>Return the Valve instance that has been distinguished as the basic
+     * Valve for this Pipeline (if any).
+     */
+    public Valve getFirst();
 
 
 }

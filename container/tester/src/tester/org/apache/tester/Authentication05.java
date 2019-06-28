@@ -1,9 +1,10 @@
 /*
- * Copyright 1999, 2000, 2001 ,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -27,7 +28,7 @@ import javax.servlet.http.*;
  * roles will permit access to an authenticated user.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 289023 $ $Date: 2004-08-26 23:06:34 +0100 (Thu, 26 Aug 2004) $
+ * @version $Id: Authentication05.java 939535 2010-04-30 01:11:10Z kkolinko $
  */
 
 public class Authentication05 extends HttpServlet {

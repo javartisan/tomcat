@@ -26,9 +26,6 @@ import java.util.ArrayList;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -39,13 +36,12 @@ import javax.management.ObjectName;
 import org.apache.struts.util.MessageResources;
 
 import org.apache.webapp.admin.ApplicationServlet;
-import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * The <code>Action</code> that sets up <em>Delete Contexts</em> transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteContextAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteContextAction extends Action {
@@ -55,12 +51,6 @@ public class DeleteContextAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mBServer = null;
-    
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
     
 
     // --------------------------------------------------------- Public Methods
@@ -88,11 +78,8 @@ public class DeleteContextAction extends Action {
         
 
         // Acquire the resources that we need
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -128,15 +115,32 @@ public class DeleteContextAction extends Action {
         ArrayList list = new ArrayList();
         try {
             ObjectName poname = new ObjectName(patternObject);
-            String pattern = TomcatTreeBuilder.CONTEXT_TYPE +
-                             TomcatTreeBuilder.WILDCARD +
-                             ",host=" + poname.getKeyProperty("host") +
-                             ",service=" + poname.getKeyProperty("service"); 
+            String domain = poname.getDomain();
+            StringBuffer sb = new StringBuffer(domain);
+            sb.append(":j2eeType=WebModule,*");
+            ObjectName search = new ObjectName(sb.toString());
             // get all available contexts only for this host
             Iterator items =
-                mBServer.queryNames(new ObjectName(pattern), null).iterator();
+                mBServer.queryNames(search, null).iterator();
+            String item = null;
+            String host = poname.getKeyProperty("host");
+            if (host==null) {
+                String name = poname.getKeyProperty("name");
+                if ((name != null) && (name.length() > 0)) {
+                    name = name.substring(2);
+                    int i = name.indexOf("/");
+                    host = name.substring(0,i);
+                }
+            }
+            String hostPrefix = "//"+host;
+            String hostAttr = null;
             while (items.hasNext()) {
-                list.add(items.next().toString());
+                item = items.next().toString();
+                ObjectName oname = new ObjectName(item);
+                hostAttr = oname.getKeyProperty("name");
+                if (hostAttr.startsWith(hostPrefix)) {
+                    list.add(item);
+                }
             }
         } catch (Exception e) {
             getServlet().log

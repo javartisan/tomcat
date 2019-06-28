@@ -45,7 +45,7 @@ import org.apache.catalina.util.StringManager;
  *
  * @author Craig R. McClanahan
  * @author Remy Maucherat
- * @version $Revision: 717959 $ $Date: 2008-11-16 01:26:59 +0000 (Sun, 16 Nov 2008) $
+ * @version $Id: CoyoteAdapter.java 939522 2010-04-30 00:26:15Z kkolinko $
  */
 
 final class CoyoteAdapter

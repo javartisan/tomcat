@@ -23,13 +23,13 @@ import java.util.Locale;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+import org.apache.struts.action.ActionMessages;
+
 import javax.management.Attribute;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -42,7 +42,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * updated User database entry.</p>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveUserDatabaseAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -50,12 +50,6 @@ public final class SaveUserDatabaseAction extends Action {
 
 
     // ----------------------------------------------------- Instance Variables
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     /**
      * The MBeanServer we will be interacting with.
@@ -95,11 +89,8 @@ public final class SaveUserDatabaseAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
 
         // Has this transaction been cancelled?
         if (isCancelled(request)) {
@@ -132,11 +123,26 @@ public final class SaveUserDatabaseAction extends Action {
             ObjectName oname = null;
 
             try {
-
+                String domain = userDatabaseForm.getDomain();
+                oname = new ObjectName( domain + 
+                            ResourceUtils.RESOURCE_TYPE + 
+                            ResourceUtils.GLOBAL_TYPE +
+                            ",class=" + ResourceUtils.USERDB_CLASS + 
+                            ",name=" + params[0]);
+                            
+                if (mserver.isRegistered(oname)) {
+                    ActionMessages errors = new ActionMessages();
+                    errors.add("name",
+                               new ActionMessage("resources.invalid.name"));
+                    saveErrors(request, errors);
+                    return (new ActionForward(mapping.getInput()));
+                }   
+                
                 // Construct the MBean Name for the naming source
-                oname = new ObjectName(ResourceUtils.NAMINGRESOURCES_TYPE + 
-                                                    ResourceUtils.GLOBAL_TYPE);
-
+                oname = new ObjectName(domain + 
+                            ResourceUtils.NAMINGRESOURCES_TYPE + 
+                            ResourceUtils.GLOBAL_TYPE);
+ 
                 // Create the new object and associated MBean
                 objectName = (String) mserver.invoke(oname, "addResource",
                                                      params, signature);

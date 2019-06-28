@@ -26,16 +26,13 @@ import javax.management.MBeanServer;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
 import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
-
+import org.apache.webapp.admin.TomcatTreeBuilder;
 
 /**
  * <p>Retrieve the set of MBean names for all currently defined data sources,
@@ -47,7 +44,8 @@ import org.apache.webapp.admin.ApplicationServlet;
  * </ul>
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Amy Roh
+ * @version $Id: ListDataSourcesAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -59,12 +57,6 @@ public class ListDataSourcesAction extends Action {
      * The MBeanServer we will be interacting with.
      */
     private MBeanServer mserver = null;
-
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
 
 
     // --------------------------------------------------------- Public Methods
@@ -96,28 +88,25 @@ public class ListDataSourcesAction extends Action {
         if (mserver == null) {
             mserver = ((ApplicationServlet) getServlet()).getServer();
         }
-        if (resources == null) {
-            resources = getResources(request);
-        }
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
+        MessageResources resources = getResources(request);
+        Locale locale = getLocale(request);
         
         String resourcetype = request.getParameter("resourcetype");
         String path = request.getParameter("path");
         String host = request.getParameter("host");
-        String service = request.getParameter("service");
+        String domain = request.getParameter("domain");
         
         if (resourcetype != null) {
-            resourcetype = URLDecoder.decode(resourcetype);
+            resourcetype = URLDecoder.decode(resourcetype,TomcatTreeBuilder.URL_ENCODING);
         }
         if (path != null) {
-            path = URLDecoder.decode(path);
+            path = URLDecoder.decode(path,TomcatTreeBuilder.URL_ENCODING);
         }
         if (host != null) {
-            host = URLDecoder.decode(host);
+            host = URLDecoder.decode(host,TomcatTreeBuilder.URL_ENCODING);
         }
-        if (service != null) {
-            service = URLDecoder.decode(service);
+        if (domain != null) {
+            domain = URLDecoder.decode(domain,TomcatTreeBuilder.URL_ENCODING);
         }
         
         // Create a form bean containing the requested MBean Names
@@ -125,7 +114,7 @@ public class ListDataSourcesAction extends Action {
         try {
               dataSourcesForm = 
                 ResourceUtils.getDataSourcesForm(mserver, resourcetype,
-                                        path, host, service);
+                                        path, host, domain);
         } catch (Exception e) {
             getServlet().log(resources.getMessage
                              (locale,
@@ -140,7 +129,7 @@ public class ListDataSourcesAction extends Action {
         request.setAttribute("dataSourcesForm", dataSourcesForm);
         saveToken(request);
         String forward =
-            URLDecoder.decode(request.getParameter("forward"));
+            URLDecoder.decode(request.getParameter("forward"),TomcatTreeBuilder.URL_ENCODING);
         
         return (mapping.findForward(forward));
     }

@@ -26,7 +26,7 @@ import javax.naming.NameNotFoundException;
  * properly populated exceptions.
  * 
  * @author <a href="mailto:remm@apache.org">Remy Maucherat</a>
- * @version $Revision: 466595 $
+ * @version $Revision: 1061405 $
  */
 public class ImmutableNameNotFoundException
     extends NameNotFoundException {
@@ -37,4 +37,8 @@ public class ImmutableNameNotFoundException
     public void setResolverName(Name name) {}
     public void setRootCause(Throwable e) {}
 
+    public synchronized Throwable fillInStackTrace() {
+        // This class does not provide a stack trace
+        return this;
+    }
 }

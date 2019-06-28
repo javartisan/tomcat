@@ -19,17 +19,18 @@
 package org.apache.webapp.admin.context;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
+
 import java.util.List;
 
 /**
  * Form bean for the context page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ContextForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class ContextForm extends ActionForm {
@@ -77,11 +78,6 @@ public final class ContextForm extends ActionForm {
     private String crossContext = "false";
     
     /**
-     * The text for the debug level.
-     */
-    private String debugLvl = "0";
-    
-    /**
      * The text for the document Base.
      */
     private String docBase = null;
@@ -92,7 +88,7 @@ public final class ContextForm extends ActionForm {
     private String override = "false";
     
     /**
-     * The value of privileged.
+     * The text for privileged boolean.
      */
     private String privileged = "false";
     
@@ -127,11 +123,6 @@ public final class ContextForm extends ActionForm {
     private String ldrCheckInterval = "15";
     
     /**
-     * The text for the loader Debug level.
-     */
-    private String ldrDebugLvl = "0";
-    
-    /**
      * The text for the boolean value of loader reloadable.
      */
     private String ldrReloadable = "false";
@@ -141,10 +132,6 @@ public final class ContextForm extends ActionForm {
      */
     private String mgrCheckInterval = "60";
     
-    /**
-     * The text for the session manager Debug level.
-     */
-    private String mgrDebugLvl = "0";
     
     /**
      * The text for the session mgr session ID initializer.
@@ -157,15 +144,15 @@ public final class ContextForm extends ActionForm {
     private String mgrMaxSessions = "0";
     
     /**
+     * The text for the anti resource locking flag.
+     */
+    private String antiResourceLocking = "false";
+
+    /**
      * The text for the anti jar locking flag.
      */
     private String antiJarLocking = "false";
 
-    /**
-     * Set of valid values for debug level.
-     */
-    private List debugLvlVals = null;
-    
     /*
      * Represent boolean (true, false) values for cookies etc.
      */
@@ -284,24 +271,6 @@ public final class ContextForm extends ActionForm {
     
     
     /**
-     * Return the debugVals.
-     */
-    public List getDebugLvlVals() {
-        
-        return this.debugLvlVals;
-        
-    }
-    
-    /**
-     * Set the debugVals.
-     */
-    public void setDebugLvlVals(List debugLvlVals) {
-        
-        this.debugLvlVals = debugLvlVals;
-        
-    }
-    
-    /**
      * Return the booleanVals.
      */
     public List getBooleanVals() {
@@ -360,26 +329,6 @@ public final class ContextForm extends ActionForm {
     
     
     /**
-     * Return the Debug Level Text.
-     */
-    
-    public String getDebugLvl() {
-        
-        return this.debugLvl;
-        
-    }
-    
-    /**
-     * Set the Debug Level Text.
-     */
-    public void setDebugLvl(String debugLvl) {
-        
-        this.debugLvl = debugLvl;
-        
-    }
-    
-    
-    /**
      * Return the Document Base Text.
      */
     
@@ -420,7 +369,7 @@ public final class ContextForm extends ActionForm {
     
     
     /**
-     * Return the privileged value.
+     * Return the privileged boolean value.
      */
     
     public String getPrivileged() {
@@ -437,6 +386,8 @@ public final class ContextForm extends ActionForm {
         this.privileged = privileged;
         
     }
+    
+    
     /**
      * Return the context path.
      */
@@ -460,28 +411,28 @@ public final class ContextForm extends ActionForm {
     /**
      * Return the reloadable boolean value.
      */
-
+    
     public String getReloadable() {
         
         return this.reloadable;
-
+        
     }
-
+    
     /**
      * Set the reloadable value.
      */
     public void setReloadable(String reloadable) {
-
+        
         this.reloadable = reloadable;
-
+        
     }
-
+    
     /**
      * Return the swallowOutput boolean value.
      */
 
     public String getSwallowOutput() {
-        
+
         return this.swallowOutput;
 
     }
@@ -551,24 +502,6 @@ public final class ContextForm extends ActionForm {
         
     }
     
-    /**
-     * Return the Loader Debug Level Text.
-     */
-    
-    public String getLdrDebugLvl() {
-        
-        return this.ldrDebugLvl;
-        
-    }
-    
-    /**
-     * Set the Loader Debug Level Text.
-     */
-    public void setLdrDebugLvl(String ldrDebugLvl) {
-        
-        this.ldrDebugLvl = ldrDebugLvl;
-        
-    }
     
     /**
      * Return the loader reloadable boolean value.
@@ -603,25 +536,6 @@ public final class ContextForm extends ActionForm {
     public void setMgrCheckInterval(String mgrCheckInterval) {
         
         this.mgrCheckInterval = mgrCheckInterval;
-        
-    }
-    
-    /**
-     * Return the session mgr Debug Level Text.
-     */
-    
-    public String getMgrDebugLvl() {
-        
-        return this.mgrDebugLvl;
-        
-    }
-    
-    /**
-     * Set the session mgr Debug Level Text.
-     */
-    public void setMgrDebugLvl(String mgrDebugLvl) {
-        
-        this.mgrDebugLvl = mgrDebugLvl;
         
     }
     
@@ -661,7 +575,22 @@ public final class ContextForm extends ActionForm {
         this.mgrMaxSessions = mgrMaxSessions;
         
     }
-        
+
+    /**
+     * Get the anti resouce locking flag
+     */
+    public String getAntiResourceLocking() {
+        return antiResourceLocking;
+    }
+
+    /**
+     * Set the anti resource locking flag
+     */
+    public void setAntiResourceLocking(String arl) {
+	antiResourceLocking = arl;
+    }
+
+
     /**
      * Get the anti jar locking flag
      */
@@ -694,22 +623,20 @@ public final class ContextForm extends ActionForm {
         // context properties
         this.cookies = "false";
         this.crossContext = "false";
-        this.debugLvl = "0";
         this.docBase = null;
         this.override= "false";
         this.path = null;
         this.reloadable = "false";
-        this.swallowOutput = "false";        
+        this.swallowOutput = "false";
+        this.antiResourceLocking = "false";
         this.antiJarLocking = "false";
-        
+
         // loader properties
         this.ldrCheckInterval = "15";
-        this.ldrDebugLvl = "0";
         this.ldrReloadable = "true";
         
         // session manager properties
         this.mgrCheckInterval = "60";
-        this.mgrDebugLvl = "0";
         this.mgrSessionIDInit = "0";
         this.mgrMaxSessions = "-1";
     }
@@ -721,8 +648,6 @@ public final class ContextForm extends ActionForm {
 
         StringBuffer sb = new StringBuffer("ContextForm[adminAction=");
         sb.append(adminAction);
-        sb.append(",debugLvl=");
-        sb.append(debugLvl);
         sb.append(",docBase=");
         sb.append(docBase);
         sb.append(",path=");
@@ -737,16 +662,13 @@ public final class ContextForm extends ActionForm {
         sb.append(reloadable);
         sb.append(",swallowOutput=");
         sb.append(swallowOutput);
+
         // loader properties
         sb.append(",ldrCheckInterval=");
         sb.append(ldrCheckInterval);        
-        sb.append(",ldrDebugLvl=");
-        sb.append(ldrDebugLvl);
         sb.append(",ldrReloadable=");
         sb.append(ldrReloadable);
         // manager properties
-        sb.append(",mgrDebugLvl=");
-        sb.append(mgrDebugLvl);
         sb.append(",mgrCheckInterval=");
         sb.append(mgrCheckInterval);
         sb.append(",mgrSessionIDInit=");
@@ -784,38 +706,26 @@ public final class ContextForm extends ActionForm {
         
         errors = new ActionErrors();
         
-        String submit = request.getParameter("submit");
-        
         // front end validation when save is clicked.
-        if (submit != null) {
             
-            // docBase cannot be null
-            if ((docBase == null) || (docBase.length() < 1)) {
-                errors.add("docBase", new ActionMessage("error.docBase.required"));
-            }
-            
-            // if path is empty, it's root context
-            // validate context starting with "/" only at the time of context creation.
-            if ("Create".equalsIgnoreCase(adminAction) && !path.startsWith("/")) {
-                errors.add("path", new ActionMessage("error.path.prefix"));                
-            }
-                        
-            //if ((workDir == null) || (workDir.length() < 1)) {
-            //    errors.add("workDir", new ActionMessage("error.workDir.required"));
-            //}
-            
-            // loader properties
-            // FIXME-- verify if these ranges are ok.
-            numberCheck("ldrCheckInterval", ldrCheckInterval  , true, 0, 10000);
-            
-            // session manager properties            
-            numberCheck("mgrCheckInterval",  mgrCheckInterval, true, 0, 10000);
-            numberCheck("mgrMaxSessions",  mgrMaxSessions, false, -1, 100);
-            
-            //if ((mgrSessionIDInit == null) || (mgrSessionIDInit.length() < 1)) {
-            //    errors.add("mgrSessionIDInit", new ActionMessage("error.mgrSessionIDInit.required"));
-            //}
+        // docBase cannot be null
+        if ((docBase == null) || (docBase.length() < 1)) {
+            errors.add("docBase", new ActionMessage("error.docBase.required"));
         }
+        
+        // if path is empty, it's root context
+        // validate context starting with "/" only at the time of context creation.
+        if ("Create".equalsIgnoreCase(adminAction) && !path.startsWith("/")) {
+            errors.add("path", new ActionMessage("error.path.prefix"));                
+        }
+                        
+        // loader properties
+        // FIXME-- verify if these ranges are ok.
+        numberCheck("ldrCheckInterval", ldrCheckInterval  , true, 0, 10000);
+        
+        // session manager properties            
+        numberCheck("mgrCheckInterval",  mgrCheckInterval, true, 0, 10000);
+        numberCheck("mgrMaxSessions",  mgrMaxSessions, false, -1, 100);
         
         return errors;
     }

@@ -1,27 +1,28 @@
 <?xml version="1.0" encoding="ISO-8859-1" ?>
-
 <!--
-   Licensed to the Apache Software Foundation (ASF) under one or more
-   contributor license agreements.  See the NOTICE file distributed with
-   this work for additional information regarding copyright ownership.
-   The ASF licenses this file to You under the Apache License, Version 2.0
-   (the "License"); you may not use this file except in compliance with
-   the License.  You may obtain a copy of the License at
-  
-       http://www.apache.org/licenses/LICENSE-2.0
-  
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
 -->
 
 <!DOCTYPE struts-config PUBLIC
           "-//Apache Software Foundation//DTD Struts Configuration 1.2//EN"
           "http://struts.apache.org/dtds/struts-config_1_2.dtd">
 
+
 <struts-config>
+
 
   <!-- ========== Data Source Configuration =============================== -->
 
@@ -61,14 +62,6 @@
     <form-bean      name="aliasesForm"
                     type="org.apache.webapp.admin.host.AliasesForm"/>
 
-   <!-- ============= Logger Module ============= -->
-
-    <form-bean      name="loggerForm"
-                    type="org.apache.webapp.admin.logger.LoggerForm"/>
-                    
-    <form-bean      name="loggersForm"
-                    type="org.apache.webapp.admin.logger.LoggersForm"/>
-
     <!-- ============= Realm Module ============= -->
 
     <form-bean      name="dataSourceRealmForm"
@@ -96,15 +89,9 @@
                     
     <form-bean      name="contextsForm"
                     type="org.apache.webapp.admin.context.ContextsForm"/>
-
-    <!-- ============= DefaultContext Module ============= -->
-
-    <form-bean      name="defaultContextForm"
-                    type="org.apache.webapp.admin.defaultcontext.DefaultContextForm"/>
                     
-    <form-bean      name="defaultContextsForm"
-                    type="org.apache.webapp.admin.defaultcontext.DefaultContextsForm"/>
-
+    <!-- ============= DefaultContext Module ============= -->
+                                        
     <!-- ============= Connector Module ============= -->
 
     <form-bean      name="connectorForm"
@@ -217,6 +204,10 @@
     <forward        name="Save Successful"
                     path="/saved.jsp"
                 redirect="false"/>
+
+    <forward        name="Save Unsuccessful"
+                    path="/savefail.jsp"
+                redirect="false"/>
                 
     <forward        name="Blank"
                     path="/blank.jsp"
@@ -260,15 +251,6 @@
                     path="/host/aliases.jsp"
                 redirect="false"/>
 
-    <!-- ============ Logger Module ============== -->
-
-    <forward        name="Logger"
-                    path="/logger/logger.jsp"
-                redirect="false"/>
-
-    <forward        name="Loggers"
-                    path="/logger/loggers.jsp"
-                redirect="false"/>
 
     <!-- ============ Context Module ============== -->
 
@@ -280,17 +262,7 @@
                     path="/context/contexts.jsp"
                 redirect="false"/>
 
-
     <!-- ============ DefaultContext Module ============== -->
-
-    <forward        name="DefaultContext"
-                    path="/defaultcontext/defaultcontext.jsp"
-                redirect="false"/>
-
-    <forward        name="DefaultContexts"
-                    path="/defaultcontext/defaultcontexts.jsp"
-                redirect="false"/>
-
 
     <!-- ============ Connector Module ============== -->
 
@@ -307,7 +279,7 @@
     <forward        name="DataSourceRealm"
                     path="/realm/dataSourceRealm.jsp"
                 redirect="false"/>
-                
+
     <forward        name="JDBCRealm"
                     path="/realm/jdbcRealm.jsp"
                 redirect="false"/>
@@ -328,6 +300,15 @@
                     path="/realm/realms.jsp"
                 redirect="false"/>
 
+    <!-- ============ Context Module ============== -->
+
+    <forward        name="Context"
+                    path="/context/context.jsp"
+                redirect="false"/>
+
+    <forward        name="Contexts"
+                    path="/context/contexts.jsp"
+                redirect="false"/>
 
     <!-- ============ Valve Module ============== -->
 
@@ -704,42 +685,6 @@
               input="/realm/memoryRealm.jsp"
                scope="session"/>
                
-    <!-- ============= Logger Module ============== -->
-
-    <!-- Set up Add Logger transaction -->
-    <action    path="/AddLogger"
-               type="org.apache.webapp.admin.logger.AddLoggerAction">
-    </action>
-
-    <!-- Set up Add Logger transaction -->
-    <action    path="/logger/AddLogger"
-               type="org.apache.webapp.admin.logger.AddLoggerAction">
-    </action>
-
-    <!-- Set up Delete Loggers transaction -->
-    <action    path="/DeleteLogger"
-               type="org.apache.webapp.admin.logger.DeleteLoggerAction"
-               name="loggersForm"
-               scope="request"/>
-
-    <!-- Perform Delete Loggers transaction -->
-    <action    path="/DeleteLoggers"
-               type="org.apache.webapp.admin.logger.DeleteLoggersAction"
-               name="loggersForm"
-               scope="request"/>
-
-    <!-- Set up Edit Logger transaction -->
-    <action    path="/EditLogger"
-               type="org.apache.webapp.admin.logger.EditLoggerAction">
-    </action>
-
-    <!-- Perform Save Logger transaction -->
-    <action    path="/SaveLogger"
-               type="org.apache.webapp.admin.logger.SaveLoggerAction"
-               name="loggerForm"
-              input="/logger/logger.jsp"
-               scope="session"/>
-
    <!-- ============= Context Module ============== -->
 
     <!-- Set up Add Context transaction -->
@@ -770,37 +715,8 @@
                name="contextForm"
               input="/context/context.jsp"
                scope="session"/>
-
+               
    <!-- ============= DefaultContext Module ============== -->
-
-    <!-- Set up Add DefaultContext transaction -->
-    <action    path="/AddDefaultContext"
-               type="org.apache.webapp.admin.defaultcontext.AddDefaultContextAction">
-    </action>
-
-    <!-- Set up Delete DefaultContexts transaction -->
-    <action    path="/DeleteDefaultContext"
-               type="org.apache.webapp.admin.defaultcontext.DeleteDefaultContextAction"
-               name="defaultContextsForm"
-               scope="request"/>
-
-    <!-- Perform Delete DefaultContexts transaction -->
-    <action    path="/DeleteDefaultContexts"
-               type="org.apache.webapp.admin.defaultcontext.DeleteDefaultContextsAction"
-               name="defaultContextsForm"
-               scope="request"/>
-
-    <!-- Set up Edit DefaultContext transaction -->
-    <action    path="/EditDefaultContext"
-               type="org.apache.webapp.admin.defaultcontext.EditDefaultContextAction">
-    </action>
-
-    <!-- Perform Save DefaultContext transaction -->
-    <action    path="/SaveDefaultContext"
-               type="org.apache.webapp.admin.defaultcontext.SaveDefaultContextAction"
-               name="defaultContextForm"
-               input="/defaultcontext/defaultcontext.jsp"
-               scope="session"/>
 
    <!-- ============= Connector Module ============== -->
 
@@ -1063,9 +979,8 @@
 
   </action-mappings>  
 
-  <!-- ========== Controller Configuration ================================ -->
-  <controller locale="true" nocache="true"/>
-  
-  <message-resources parameter="org.apache.webapp.admin.ApplicationResources"/>
-    
+  <controller locale="true" nocache="true" />
+ 
+  <message-resources parameter="org.apache.webapp.admin.ApplicationResources" />
+
 </struts-config>

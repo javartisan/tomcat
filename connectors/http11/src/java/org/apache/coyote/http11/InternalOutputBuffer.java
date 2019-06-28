@@ -449,13 +449,14 @@ public class InternalOutputBuffer
 
         // Write message
         String message = null;
-        if (org.apache.coyote.Constants.USE_CUSTOM_STATUS_MSG_IN_HEADER) {
+        if (Constants.USE_CUSTOM_STATUS_MSG_IN_HEADER &&
+                HttpMessages.isSafeInHttpHeader(response.getMessage())) {
             message = response.getMessage();
         } 
         if (message == null) {
             write(getMessage(status));
         } else {
-            write(message.replace('\n', ' ').replace('\r', ' '));
+            write(message);
         }
 
         // End the response status line
@@ -669,9 +670,7 @@ public class InternalOutputBuffer
             // but is the only consistent approach within the current
             // servlet framework.  It must suffice until servlet output
             // streams properly encode their output.
-            if ((c <= 31) && (c != 9)) {
-                c = ' ';
-            } else if (c == 127) {
+            if (((c <= 31) && (c != 9)) || c == 127 || c > 255) {
                 c = ' ';
             }
             buf[pos++] = (byte) c;
@@ -716,9 +715,7 @@ public class InternalOutputBuffer
             // but is the only consistent approach within the current
             // servlet framework.  It must suffice until servlet output
             // streams properly encode their output.
-            if ((c <= 31) && (c != 9)) {
-                c = ' ';
-            } else if (c == 127) {
+            if (((c <= 31) && (c != 9)) || c == 127 || c > 255) {
                 c = ' ';
             }
             buf[pos++] = (byte) c;

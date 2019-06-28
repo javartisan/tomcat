@@ -1,9 +1,10 @@
 /*
- * Copyright 1999,2004 The Apache Software Foundation.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  * 
  *      http://www.apache.org/licenses/LICENSE-2.0
  * 
@@ -12,84 +13,86 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */ 
+ */
 package org.apache.jasper.compiler;
 
 import java.util.Stack;
+import java.net.URL;
+import java.net.MalformedURLException;
+import org.apache.jasper.JspCompilationContext;
 
 /**
  * Mark represents a point in the JSP input. 
  *
  * @author Anil K. Vijendran
  */
-public final class Mark {
-    int cursor, line, col;        // position within current stream
-    int fileid;                        // fileid of current stream
-    String fileName;            // name of the current file
-    String baseDir;                // directory of file for current stream
-    char[] stream = null;        // current stream
-    Stack includeStack = null;        // stack of stream and stream state of streams
-                                //   that have included current stream
-    String encoding = null;        // encoding of current file
-    private JspReader reader;        // reader that owns this mark 
-                                //   (so we can look up fileid's)
+final class Mark {
 
+    // position within current stream
+    int cursor, line, col;
 
-    /**
-     * Keep track of parser before parsing an included file.
-     * This class keeps track of the parser before we switch to parsing an
-     * included file. In other words, it's the parser's continuation to be
-     * reinstalled after the included file parsing is done.
+    // directory of file for current stream
+    String baseDir;
+
+    // current stream
+    char[] stream = null;
+
+    // fileid of current stream
+    private int fileId;
+
+    // name of the current file
+    private String fileName;
+
+    /*
+     * stack of stream and stream state of streams that have included
+     * current stream
      */
-    class IncludeState {
-        int cursor, line, col;
-        int fileid;
-        String fileName;
-        String baseDir;
-        String encoding;
-        char[] stream = null;
+    private Stack includeStack = null;
 
-        IncludeState(int inCursor, int inLine, int inCol, int inFileid, 
-                     String name, String inBaseDir, String inEncoding,
-                     char[] inStream) 
-        {
-            cursor = inCursor;
-            line = inLine;
-            col = inCol;
-            fileid = inFileid;
-            fileName = name;
-            baseDir = inBaseDir;
-            encoding = inEncoding;
-            stream = inStream;
-        }
-    }
+    // encoding of current file
+    private String encoding = null;
 
+    // reader that owns this mark (so we can look up fileid's)
+    private JspReader reader;
+
+    private JspCompilationContext ctxt;
 
     /**
-    * Creates a new mark
-    * @param inReader JspReader this mark belongs to
-    * @param inStream current stream for this mark
-    * @param inFileid id of requested jsp file
-    * @param inEncoding encoding of current file
-    * @param inBaseDir base directory of requested jsp file
-    */
-    Mark(JspReader reader, char[] inStream, int fileid, String name,
-         String inBaseDir, String inEncoding) 
-    {
+     * Constructor
+     *
+     * @param reader JspReader this mark belongs to
+     * @param inStream current stream for this mark
+     * @param fileId id of requested jsp file
+     * @param name JSP file name
+     * @param inBaseDir base directory of requested jsp file
+     * @param inEncoding encoding of current file
+     */
+    Mark(JspReader reader, char[] inStream, int fileId, String name,
+         String inBaseDir, String inEncoding) {
+
         this.reader = reader;
+        this.ctxt = reader.getJspCompilationContext();
         this.stream = inStream;
-        this.cursor = this.line = this.col = 0;
-        this.fileid = fileid;
+        this.cursor = 0;
+        this.line = 1;
+        this.col = 1;
+        this.fileId = fileId;
         this.fileName = name;
         this.baseDir = inBaseDir;
         this.encoding = inEncoding;
         this.includeStack = new Stack();
     }
-        
+
+
+    /**
+     * Constructor
+     */
     Mark(Mark other) {
+
         this.reader = other.reader;
+        this.ctxt = other.reader.getJspCompilationContext();
         this.stream = other.stream;
-        this.fileid = other.fileid;
+        this.fileId = other.fileId;
         this.fileName = other.fileName;
         this.cursor = other.cursor;
         this.line = other.line;
@@ -100,44 +103,52 @@ public final class Mark {
         // clone includeStack without cloning contents
         includeStack = new Stack();
         for ( int i=0; i < other.includeStack.size(); i++ ) {
-              includeStack.addElement( other.includeStack.elementAt(i) );
+            includeStack.addElement( other.includeStack.elementAt(i) );
         }
     }
-            
-    Mark(String filename, int line, int col) {
-        //System.out.println("MARK: filename is: " + filename);
+
+
+    /**
+     * Constructor
+     */    
+    Mark(JspCompilationContext ctxt, String filename, int line, int col) {
+
         this.reader = null;
+        this.ctxt = ctxt;
         this.stream = null;
         this.cursor = 0;
         this.line = line;
         this.col = col;
-        this.fileid = -1;
+        this.fileId = -1;
         this.fileName = filename;
         this.baseDir = "le-basedir";
         this.encoding = "le-endocing";
         this.includeStack = null;
     }
 
-    /** Sets this mark's state to a new stream.
+
+    /**
+     * Sets this mark's state to a new stream.
      * It will store the current stream in it's includeStack.
+     *
      * @param inStream new stream for mark
-     * @param inFileid id of new file from which stream comes from
+     * @param inFileId id of new file from which stream comes from
      * @param inBaseDir directory of file
-         * @param inEncoding encoding of new file
+     * @param inEncoding encoding of new file
      */
-    public void pushStream(char[] inStream, int inFileid, String name,
+    public void pushStream(char[] inStream, int inFileId, String name,
                            String inBaseDir, String inEncoding) 
     {
-
         // store current state in stack
-        includeStack.push(new IncludeState(cursor, line, col, fileid, fileName, baseDir, 
-                                           encoding, stream) );
+        includeStack.push(new IncludeState(cursor, line, col, fileId,
+                                           fileName, baseDir, 
+					   encoding, stream) );
 
         // set new variables
         cursor = 0;
-        line = 0;
-        col = 0;
-        fileid = inFileid;
+        line = 1;
+        col = 1;
+        fileId = inFileId;
         fileName = name;
         baseDir = inBaseDir;
         encoding = inEncoding;
@@ -145,12 +156,16 @@ public final class Mark {
     }
 
 
-
-    /** Restores this mark's state to a previously stored stream.
+    /**
+     * Restores this mark's state to a previously stored stream.
+     * @return The previous Mark instance when the stream was pushed, or null
+     * if there is no previous stream
      */
-    public boolean popStream() {
+    public Mark popStream() {
         // make sure we have something to pop
-        if ( includeStack.size() <= 0 ) return false;
+        if ( includeStack.size() <= 0 ) {
+            return null;
+        }
 
         // get previous state in stack
         IncludeState state = (IncludeState) includeStack.pop( );
@@ -159,12 +174,13 @@ public final class Mark {
         cursor = state.cursor;
         line = state.line;
         col = state.col;
-        fileid = state.fileid;
+        fileId = state.fileId;
         fileName = state.fileName;
         baseDir = state.baseDir;
         stream = state.stream;
-        return true;
+        return this;
     }
+
 
     // -------------------- Locator interface --------------------
 
@@ -185,25 +201,82 @@ public final class Mark {
     }
 
     public String toString() {
-        return getFile()+"("+line+","+col+")";
+	return getFile()+"("+line+","+col+")";
     }
 
     public String getFile() {
         return this.fileName;
     }
-    
+
+    /**
+     * Gets the URL of the resource with which this Mark is associated
+     *
+     * @return URL of the resource with which this Mark is associated
+     *
+     * @exception MalformedURLException if the resource pathname is incorrect
+     */
+    public URL getURL() throws MalformedURLException {
+        return ctxt.getResource(getFile());
+    }
+
     public String toShortString() {
         return "("+line+","+col+")";
     }
 
     public boolean equals(Object other) {
-        if (other instanceof Mark) {
-            Mark m = (Mark) other;
-            return this.reader == m.reader && this.fileid == m.fileid 
-                && this.cursor == m.cursor && this.line == m.line 
-                && this.col == m.col;
-        } 
-        return false;
+	if (other instanceof Mark) {
+	    Mark m = (Mark) other;
+	    return this.reader == m.reader && this.fileId == m.fileId 
+		&& this.cursor == m.cursor && this.line == m.line 
+		&& this.col == m.col;
+	} 
+	return false;
     }
+
+    /**
+     * @return true if this Mark is greather than the <code>other</code>
+     * Mark, false otherwise.
+     */
+    public boolean isGreater(Mark other) {
+
+        boolean greater = false;
+
+        if (this.line > other.line) {
+            greater = true;
+        } else if (this.line == other.line && this.col > other.col) {
+            greater = true;
+        }
+
+        return greater;
+    }
+
+    /**
+     * Keep track of parser before parsing an included file.
+     * This class keeps track of the parser before we switch to parsing an
+     * included file. In other words, it's the parser's continuation to be
+     * reinstalled after the included file parsing is done.
+     */
+    class IncludeState {
+        int cursor, line, col;
+        int fileId;
+        String fileName;
+        String baseDir;
+        String encoding;
+        char[] stream = null;
+
+        IncludeState(int inCursor, int inLine, int inCol, int inFileId, 
+                     String name, String inBaseDir, String inEncoding,
+                     char[] inStream) {
+            cursor = inCursor;
+            line = inLine;
+            col = inCol;
+            fileId = inFileId;
+            fileName = name;
+            baseDir = inBaseDir;
+            encoding = inEncoding;
+            stream = inStream;
+        }
+    }
+
 }
 

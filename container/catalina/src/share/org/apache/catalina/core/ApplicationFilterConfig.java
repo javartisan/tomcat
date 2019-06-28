@@ -19,17 +19,22 @@
 package org.apache.catalina.core;
 
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Map;
+
 import javax.servlet.Filter;
 import javax.servlet.FilterConfig;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
+
 import org.apache.catalina.Context;
 import org.apache.catalina.deploy.FilterDef;
+import org.apache.catalina.security.SecurityUtil;
 import org.apache.catalina.util.Enumerator;
 import org.apache.tomcat.util.log.SystemLogHandler;
+
 
 /**
  * Implementation of a <code>javax.servlet.FilterConfig</code> useful in
@@ -37,10 +42,10 @@ import org.apache.tomcat.util.log.SystemLogHandler;
  * is first started.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: ApplicationFilterConfig.java 939525 2010-04-30 00:36:35Z kkolinko $
  */
 
-final class ApplicationFilterConfig implements FilterConfig {
+final class ApplicationFilterConfig implements FilterConfig, Serializable {
 
 
     // ----------------------------------------------------------- Constructors
@@ -87,7 +92,7 @@ final class ApplicationFilterConfig implements FilterConfig {
     /**
      * The application Filter we are configured for.
      */
-    private Filter filter = null;
+    private transient Filter filter = null;
 
 
     /**
@@ -198,9 +203,6 @@ final class ApplicationFilterConfig implements FilterConfig {
         else
             classLoader = context.getLoader().getClassLoader();
 
-        ClassLoader oldCtxClassLoader =
-            Thread.currentThread().getContextClassLoader();
-
         // Instantiate a new instance of this filter and return it
         Class clazz = classLoader.loadClass(filterClass);
         this.filter = (Filter) clazz.newInstance();
@@ -239,8 +241,18 @@ final class ApplicationFilterConfig implements FilterConfig {
      */
     void release() {
 
-        if (this.filter != null)
-            filter.destroy();
+        if (this.filter != null){
+             if( System.getSecurityManager() != null) {
+                try{
+                    SecurityUtil.doAsPrivilege("destroy", filter); 
+                } catch(java.lang.Exception ex){                    
+                    context.getLogger().error("ApplicationFilterConfig.doAsPrivilege", ex);
+                }
+                SecurityUtil.remove(filter);
+            } else { 
+                filter.destroy();
+            }
+        }
         this.filter = null;
 
      }
@@ -270,14 +282,24 @@ final class ApplicationFilterConfig implements FilterConfig {
         if (filterDef == null) {
 
             // Release any previously allocated filter instance
-            if (this.filter != null)
-                this.filter.destroy();
+            if (this.filter != null){
+                 if( System.getSecurityManager() != null) {
+                    try{
+                        SecurityUtil.doAsPrivilege("destroy", filter);  
+                    } catch(java.lang.Exception ex){    
+                        context.getLogger().error("ApplicationFilterConfig.doAsPrivilege", ex);
+                    }
+                    SecurityUtil.remove(filter);
+                } else { 
+                    filter.destroy();
+                }
+            }
             this.filter = null;
 
         } else {
 
             // Allocate a new filter instance
-            Filter filter = getFilter();
+            getFilter();
 
         }
 

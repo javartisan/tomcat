@@ -17,7 +17,11 @@
 
 package org.apache.catalina.util;
 
-import java.io.*;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.io.Writer;
+
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
@@ -327,5 +331,19 @@ public class DOMWriter {
       return (str.toString());
 
    } // normalize(String):String
+
+   private static void printValidJavaEncoding() {
+      System.err.println( "    ENCODINGS:" );
+      System.err.print( "   " );
+      for( int i = 0;
+                     i < MIME2JAVA_ENCODINGS.length; i++) {
+         System.err.print( MIME2JAVA_ENCODINGS[i] + " " );
+      if( (i % 7 ) == 0 ){
+         System.err.println();
+         System.err.print( "   " );
+         }
+      }
+
+   } // printJavaEncoding()
 
 }

@@ -280,13 +280,12 @@ public class JkInputStream implements InputBuffer, OutputBuffer {
         outputMsg.appendInt( res.getStatus() );
         
         String message = null;
-        if (org.apache.coyote.Constants.USE_CUSTOM_STATUS_MSG_IN_HEADER) {
+        if (AjpConstants.USE_CUSTOM_STATUS_MSG_IN_HEADER &&
+                HttpMessages.isSafeInHttpHeader(res.getMessage())) {
             message = res.getMessage();
         } 
-        if( message==null ){
+        if (message == null) {
             message= HttpMessages.getMessage(res.getStatus());
-        } else {
-            message = message.replace('\n', ' ').replace('\r', ' ');
         }
         if (message == null) {
             // mod_jk + httpd 2.x fails with a null status message - bug 45026
@@ -317,11 +316,9 @@ public class JkInputStream implements InputBuffer, OutputBuffer {
             MessageBytes hN=headers.getName(i);
             // no header to sc conversion - there's little benefit
             // on this direction
-            c2b.convert ( hN );
             outputMsg.appendBytes( hN );
                         
             MessageBytes hV=headers.getValue(i);
-            c2b.convert( hV );
             outputMsg.appendBytes( hV );
         }
         mc.getSource().send( outputMsg, mc );

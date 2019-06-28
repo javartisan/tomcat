@@ -28,26 +28,26 @@ import org.apache.catalina.authenticator.Constants;
  * reauthentications when SingleSignOn is in use.
  *
  * @author  B Stansberry, based on work by Craig R. McClanahan
- * @version $Revision: 466595 $
+ * @version $Revision: 795018 $
  *
  * @see SingleSignOn
  * @see AuthenticatorBase#reauthenticateFromSSO
  */
-class SingleSignOnEntry
+public class SingleSignOnEntry
 {
     // ------------------------------------------------------  Instance Fields
 
-    private String authType = null;
+    protected String authType = null;
 
-    private String password = null;
+    protected String password = null;
 
-    private Principal principal = null;
+    protected Principal principal = null;
 
-    private Session sessions[] = new Session[0];
+    protected Session sessions[] = new Session[0];
 
-    private String username = null;
+    protected String username = null;
 
-    private boolean canReauthenticate = false;
+    protected boolean canReauthenticate = false;
 
     // ---------------------------------------------------------  Constructors
 
@@ -56,15 +56,18 @@ class SingleSignOnEntry
      *
      * @param principal the <code>Principal</code> returned by the latest
      *                  call to <code>Realm.authenticate</code>.
-     * @param authType  the type of authenticator used (BASIC, CLIENT-CERT,
+     * @param authType  the type of authenticator used (BASIC, CLIENT_CERT,
      *                  DIGEST or FORM)
      * @param username  the username (if any) used for the authentication
      * @param password  the password (if any) used for the authentication
      */
-    SingleSignOnEntry(Principal principal, String authType,
-                        String username, String password) {        
+    public SingleSignOnEntry(Principal principal, String authType,
+                             String username, String password) {
         super();
         updateCredentials(principal, authType, username, password);
+    }
+
+    public SingleSignOnEntry() {
     }
 
     // ------------------------------------------------------- Package Methods
@@ -77,7 +80,7 @@ class SingleSignOnEntry
      *                  the SSO session.
      * @param session   The <code>Session</code> being associated with the SSO.
      */
-    synchronized void addSession(SingleSignOn sso, Session session) {
+    public synchronized void addSession(SingleSignOn sso, Session session) {
         for (int i = 0; i < sessions.length; i++) {
             if (session == sessions[i])
                 return;
@@ -95,7 +98,7 @@ class SingleSignOnEntry
      *
      * @param session  the <code>Session</code> to remove.
      */
-    synchronized void removeSession(Session session) {
+    public synchronized void removeSession(Session session) {
         Session[] nsessions = new Session[sessions.length - 1];
         for (int i = 0, j = 0; i < sessions.length; i++) {
             if (session == sessions[i])
@@ -108,17 +111,31 @@ class SingleSignOnEntry
     /**
      * Returns the <code>Session</code>s associated with this SSO.
      */
-    synchronized Session[] findSessions() {
+    public synchronized Session[] findSessions() {
         return (this.sessions);
+    }
+
+    /**
+     * Is <code>Session</code> associated with this SSO?
+     *
+     * @param session The session.
+     * @return session exists
+     */
+    public synchronized boolean sessionExists(Session session) {
+        for (int i = 0; i < sessions.length; i++) {
+            if (session == sessions[i])
+                return true;
+        }
+        return false ;
     }
 
     /**
      * Gets the name of the authentication type originally used to authenticate
      * the user associated with the SSO.
      *
-     * @return "BASIC", "CLIENT-CERT", "DIGEST", "FORM" or "NONE"
+     * @return "BASIC", "CLIENT_CERT", "DIGEST", "FORM" or "NONE"
      */
-    String getAuthType() {
+    public String getAuthType() {
         return (this.authType);
     }
 
@@ -129,7 +146,7 @@ class SingleSignOnEntry
      * @return  <code>true</code> if <code>getAuthType</code> returns
      *          "BASIC" or "FORM", <code>false</code> otherwise.
      */
-    boolean getCanReauthenticate() {
+    public boolean getCanReauthenticate() {
         return (this.canReauthenticate);
     }
 
@@ -140,7 +157,7 @@ class SingleSignOnEntry
      *          <code>null</code> if the original authentication type
      *          does not involve a password.
      */
-    String getPassword() {
+    public String getPassword() {
         return (this.password);
     }
 
@@ -148,7 +165,7 @@ class SingleSignOnEntry
      * Gets the <code>Principal</code> that has been authenticated by
      * the SSO.
      */
-    Principal getPrincipal() {
+    public Principal getPrincipal() {
         return (this.principal);
     }
 
@@ -156,7 +173,7 @@ class SingleSignOnEntry
      * Gets the username provided by the user as part of the authentication
      * process.
      */
-    String getUsername() {
+    public String getUsername() {
         return (this.username);
     }
 
@@ -167,13 +184,13 @@ class SingleSignOnEntry
      *
      * @param principal the <code>Principal</code> returned by the latest
      *                  call to <code>Realm.authenticate</code>.
-     * @param authType  the type of authenticator used (BASIC, CLIENT-CERT,
+     * @param authType  the type of authenticator used (BASIC, CLIENT_CERT,
      *                  DIGEST or FORM)
      * @param username  the username (if any) used for the authentication
      * @param password  the password (if any) used for the authentication
      */
-    void updateCredentials(Principal principal, String authType,
-                String username, String password) {
+    public void updateCredentials(Principal principal, String authType,
+                                  String username, String password) {
 
         this.principal = principal;
         this.authType = authType;

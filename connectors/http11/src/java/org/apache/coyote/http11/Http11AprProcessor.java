@@ -77,6 +77,12 @@ public class Http11AprProcessor implements ActionHook {
     protected static StringManager sm =
         StringManager.getManager(Constants.Package);
 
+    /*
+     * Tracks how many internal filters are in the filter library so they
+     * are skipped when looking for pluggable filters. 
+     */
+    private int pluggableFilterIndex = Integer.MAX_VALUE;
+
 
     // ----------------------------------------------------------- Constructors
 
@@ -107,7 +113,7 @@ public class Http11AprProcessor implements ActionHook {
         initializeFilters();
 
         // Cause loading of HexUtils
-        int foo = HexUtils.DEC[0];
+        HexUtils.getDec('0');
 
         // Cause loading of FastHttpDateFormat
         FastHttpDateFormat.getCurrentDate();
@@ -797,6 +803,8 @@ public class Http11AprProcessor implements ActionHook {
                 if (!disableUploadTimeout) {
                     Socket.timeoutSet(socket, timeout * 1000);
                 }
+                // Set this every time in case limit has been changed via JMX
+                request.getMimeHeaders().setLimit(endpoint.getMaxHeaderCount());
                 inputBuffer.parseHeaders();
             } catch (IOException e) {
                 error = true;
@@ -901,7 +909,18 @@ public class Http11AprProcessor implements ActionHook {
                 sendfileData.socket = socket;
                 sendfileData.keepAlive = keepAlive;
                 if (!endpoint.getSendfile().add(sendfileData)) {
-                    openSocket = true;
+                    if (sendfileData.socket == 0) {
+                        // Didn't send all the data but the socket is no longer
+                        // set. Something went wrong. Close the connection.
+                        // Too late to set status code.
+                        if (log.isDebugEnabled()) {
+                            log.debug(sm.getString(
+                                    "http11processor.sendfile.error"));
+                        }
+                        openSocket = false;
+                    } else {
+                        openSocket = true;
+                    }
                     break;
                 }
             }
@@ -1040,6 +1059,9 @@ public class Http11AprProcessor implements ActionHook {
                 try {
                     long sa = Address.get(Socket.APR_REMOTE, socket);
                     remoteHost = Address.getnameinfo(sa, 0);
+                    if (remoteHost == null) {
+                        remoteHost = Address.getip(sa);
+                    }
                 } catch (Exception e) {
                     log.warn(sm.getString("http11processor.socket.info"), e);
                 }
@@ -1095,37 +1117,34 @@ public class Http11AprProcessor implements ActionHook {
                     // Cipher suite
                     Object sslO = SSLSocket.getInfoS(socket, SSL.SSL_INFO_CIPHER);
                     if (sslO != null) {
-                        request.setAttribute
-                            (AprEndpoint.CIPHER_SUITE_KEY, sslO);
+                        request.setAttribute(AprEndpoint.CIPHER_SUITE_KEY, sslO);
                     }
-                    // Client certificate chain if present
+                    // Get client certificate and the certificate chain if present
+                    // certLength == -1 indicates an error
                     int certLength = SSLSocket.getInfoI(socket, SSL.SSL_INFO_CLIENT_CERT_CHAIN);
+                    byte[] clientCert = SSLSocket.getInfoB(socket, SSL.SSL_INFO_CLIENT_CERT);
                     X509Certificate[] certs = null;
-                    if (certLength > 0) {
-                        certs = new X509Certificate[certLength];
+                    if (clientCert != null  && certLength > -1) {
+                        certs = new X509Certificate[certLength + 1];
+                        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                        certs[0] = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(clientCert));
                         for (int i = 0; i < certLength; i++) {
                             byte[] data = SSLSocket.getInfoB(socket, SSL.SSL_INFO_CLIENT_CERT_CHAIN + i);
-                            CertificateFactory cf =
-                                CertificateFactory.getInstance("X.509");
-                            ByteArrayInputStream stream = new ByteArrayInputStream(data);
-                            certs[i] = (X509Certificate) cf.generateCertificate(stream);
+                            certs[i+1] = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(data));
                         }
                     }
                     if (certs != null) {
-                        request.setAttribute
-                            (AprEndpoint.CERTIFICATE_KEY, certs);
+                        request.setAttribute(AprEndpoint.CERTIFICATE_KEY, certs);
                     }
                     // User key size
                     sslO = new Integer(SSLSocket.getInfoI(socket, SSL.SSL_INFO_CIPHER_USEKEYSIZE));
                     if (sslO != null) {
-                        request.setAttribute
-                            (AprEndpoint.KEY_SIZE_KEY, sslO);
+                        request.setAttribute(AprEndpoint.KEY_SIZE_KEY, sslO);
                     }
                     // SSL session ID
                     sslO = SSLSocket.getInfoS(socket, SSL.SSL_INFO_SESSION_ID);
                     if (sslO != null) {
-                        request.setAttribute
-                            (AprEndpoint.SESSION_ID_KEY, sslO);
+                        request.setAttribute(AprEndpoint.SESSION_ID_KEY, sslO);
                     }
                 } catch (Exception e) {
                     log.warn(sm.getString("http11processor.socket.ssl"), e);
@@ -1135,32 +1154,35 @@ public class Http11AprProcessor implements ActionHook {
         } else if (actionCode == ActionCode.ACTION_REQ_SSL_CERTIFICATE) {
 
             if (ssl && (socket != 0)) {
-                 // Consume and buffer the request body, so that it does not
-                 // interfere with the client's handshake messages
+                // Consume and buffer the request body, so that it does not
+                // interfere with the client's handshake messages
                 InputFilter[] inputFilters = inputBuffer.getFilters();
-                ((BufferedInputFilter) inputFilters[Constants.BUFFERED_FILTER])
-                    .setLimit(maxSavePostSize);
-                inputBuffer.addActiveFilter
-                    (inputFilters[Constants.BUFFERED_FILTER]);
+                ((BufferedInputFilter) inputFilters[Constants.BUFFERED_FILTER]).setLimit(maxSavePostSize);
+                inputBuffer.addActiveFilter(inputFilters[Constants.BUFFERED_FILTER]);
                 try {
-                    // Renegociate certificates
-                    SSLSocket.renegotiate(socket);
-                    // Client certificate chain if present
-                    int certLength = SSLSocket.getInfoI(socket, SSL.SSL_INFO_CLIENT_CERT_CHAIN);
-                    X509Certificate[] certs = null;
-                    if (certLength > 0) {
-                        certs = new X509Certificate[certLength];
-                        for (int i = 0; i < certLength; i++) {
-                            byte[] data = SSLSocket.getInfoB(socket, SSL.SSL_INFO_CLIENT_CERT_CHAIN + i);
-                            CertificateFactory cf =
-                                CertificateFactory.getInstance("X.509");
-                            ByteArrayInputStream stream = new ByteArrayInputStream(data);
-                            certs[i] = (X509Certificate) cf.generateCertificate(stream);
+                    // Configure connection to require a certificate
+                    SSLSocket.setVerify(socket, SSL.SSL_CVERIFY_REQUIRE,
+                            endpoint.getSSLVerifyDepth());
+                    // Renegotiate certificates
+                    if (SSLSocket.renegotiate(socket) == 0) {
+                        // Don't look for certs unless we know renegotiation worked.
+                        // Get client certificate and the certificate chain if present
+                        // certLength == -1 indicates an error 
+                        int certLength = SSLSocket.getInfoI(socket,SSL.SSL_INFO_CLIENT_CERT_CHAIN);
+                        byte[] clientCert = SSLSocket.getInfoB(socket, SSL.SSL_INFO_CLIENT_CERT);
+                        X509Certificate[] certs = null;
+                        if (clientCert != null && certLength > -1) {
+                            certs = new X509Certificate[certLength + 1];
+                            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                            certs[0] = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(clientCert));
+                            for (int i = 0; i < certLength; i++) {
+                                byte[] data = SSLSocket.getInfoB(socket, SSL.SSL_INFO_CLIENT_CERT_CHAIN + i);
+                                certs[i+1] = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(data));
+                            }
                         }
-                    }
-                    if (certs != null) {
-                        request.setAttribute
-                            (AprEndpoint.CERTIFICATE_KEY, certs);
+                        if (certs != null) {
+                            request.setAttribute(AprEndpoint.CERTIFICATE_KEY, certs);
+                        }
                     }
                 } catch (Exception e) {
                     log.warn(sm.getString("http11processor.socket.ssl"), e);
@@ -1439,7 +1461,7 @@ public class Http11AprProcessor implements ActionHook {
             int port = 0;
             int mult = 1;
             for (int i = valueL - 1; i > colonPos; i--) {
-                int charValue = HexUtils.DEC[(int) valueB[i + valueS]];
+                int charValue = HexUtils.getDec(valueB[i + valueS]);
                 if (charValue == -1) {
                     // Invalid character
                     error = true;
@@ -1603,7 +1625,7 @@ public class Http11AprProcessor implements ActionHook {
                 (outputFilters[Constants.IDENTITY_FILTER]);
             contentDelimitation = true;
         } else {
-            if (entityBody && http11 && keepAlive) {
+            if (entityBody && http11) {
                 outputBuffer.addActiveFilter
                     (outputFilters[Constants.CHUNKED_FILTER]);
                 contentDelimitation = true;
@@ -1659,8 +1681,10 @@ public class Http11AprProcessor implements ActionHook {
 
         // Add server header
         if (server != null) {
+            // Always overrides anything the app might set
             headers.setValue("Server").setString(server);
-        } else {
+        } else if (headers.getValue("Server") == null) {
+            // If app didn't set the header, use the default
             outputBuffer.write(Constants.SERVER_BYTES);
         }
 
@@ -1697,6 +1721,8 @@ public class Http11AprProcessor implements ActionHook {
         //inputBuffer.addFilter(new GzipInputFilter());
         outputBuffer.addFilter(new GzipOutputFilter());
 
+        pluggableFilterIndex = inputBuffer.filterLibrary.length;
+
     }
 
 
@@ -1715,7 +1741,7 @@ public class Http11AprProcessor implements ActionHook {
                 (inputFilters[Constants.CHUNKED_FILTER]);
             contentDelimitation = true;
         } else {
-            for (int i = 2; i < inputFilters.length; i++) {
+            for (int i = pluggableFilterIndex; i < inputFilters.length; i++) {
                 if (inputFilters[i].getEncodingName()
                     .toString().equals(encodingName)) {
                     inputBuffer.addActiveFilter(inputFilters[i]);

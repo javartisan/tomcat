@@ -18,6 +18,8 @@
 
 package org.apache.catalina.deploy;
 
+import java.io.Serializable;
+
 
 /**
  * Representation of a resource link for a web application, as
@@ -25,44 +27,16 @@ package org.apache.catalina.deploy;
  * server configuration file.
  *
  * @author Remy Maucherat
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @author Peter Rossbach (Peter Rossbach (pero@apache.org))
+ * @version $Id: ContextResourceLink.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
-public final class ContextResourceLink {
+public class ContextResourceLink extends ResourceBase implements Serializable {
 
 
     // ------------------------------------------------------------- Properties
 
-
-    /**
-     * The name of this resource.
-     */
-    private String name = null;
-
-    public String getName() {
-        return (this.name);
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-
-    /**
-     * The type of this resource.
-     */
-    private String type = null;
-
-    public String getType() {
-        return (this.type);
-    }
-
-    public void setType(String type) {
-        this.type = type;
-    }
-
-
-    /**
+   /**
      * The global name of this resource.
      */
     private String global = null;
@@ -86,36 +60,18 @@ public final class ContextResourceLink {
 
         StringBuffer sb = new StringBuffer("ContextResourceLink[");
         sb.append("name=");
-        sb.append(name);
-        if (type != null) {
+        sb.append(getName());
+        if (getType() != null) {
             sb.append(", type=");
-            sb.append(type);
+            sb.append(getType());
         }
-        if (global != null) {
+        if (getGlobal() != null) {
             sb.append(", global=");
-            sb.append(global);
+            sb.append(getGlobal());
         }
         sb.append("]");
         return (sb.toString());
 
     }
-
-
-    // -------------------------------------------------------- Package Methods
-
-
-    /**
-     * The NamingResources with which we are associated (if any).
-     */
-    protected NamingResources resources = null;
-
-    public NamingResources getNamingResources() {
-        return (this.resources);
-    }
-
-    void setNamingResources(NamingResources resources) {
-        this.resources = resources;
-    }
-
 
 }

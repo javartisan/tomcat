@@ -23,11 +23,8 @@ import java.util.Locale;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpSession;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -41,7 +38,7 @@ import org.apache.webapp.admin.ApplicationServlet;
  * transactions.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: DeleteAliasesAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class DeleteAliasesAction extends Action {
@@ -60,12 +57,6 @@ public class DeleteAliasesAction extends Action {
      */
     private MBeanServer mBServer = null;
     
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-
 
     // --------------------------------------------------------- Public Methods
     
@@ -93,11 +84,8 @@ public class DeleteAliasesAction extends Action {
         
         
         // Look up the components we will be using as needed
-        HttpSession session = request.getSession();
-        Locale locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
 
         // Acquire a reference to the MBeanServer containing our MBeans
         try {

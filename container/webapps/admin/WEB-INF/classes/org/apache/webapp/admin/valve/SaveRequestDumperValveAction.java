@@ -22,12 +22,10 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
 import org.apache.struts.action.ActionMapping;
-import org.apache.struts.util.MessageResources;
 import org.apache.webapp.admin.ApplicationServlet;
 
 /**
@@ -35,19 +33,11 @@ import org.apache.webapp.admin.ApplicationServlet;
  * <em>Edit Valve</em> transactions for Request Dumper valve.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: SaveRequestDumperValveAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public final class SaveRequestDumperValveAction extends Action {
 
-
-    // ----------------------------------------------------- Instance Variables
-
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-    
     // --------------------------------------------------------- Public Methods
     
     
@@ -74,9 +64,6 @@ public final class SaveRequestDumperValveAction extends Action {
         
         // Acquire the resources that we need
         HttpSession session = request.getSession();
-        if (resources == null) {
-            resources = getResources(request);
-        }
         
         // Identify the requested action
         RequestDumperValveForm vform = (RequestDumperValveForm) form;
@@ -88,13 +75,10 @@ public final class SaveRequestDumperValveAction extends Action {
         if ("Create".equals(adminAction)) {
         
             ValveUtil.createValve(parent, valveType, response, request, mapping,
-                    (ApplicationServlet) getServlet());
+                                (ApplicationServlet) getServlet());
            
         }
 
-        // Perform attribute updates as requested
-        // No attributes to be updated.
-        
         // Forward to the success reporting page
         session.removeAttribute(mapping.getAttribute());
         return (mapping.findForward("Save Successful"));

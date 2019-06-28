@@ -31,7 +31,7 @@ import java.util.HashMap;
  *
  * @author Jazmin Jonson
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: TreeControl.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class TreeControl implements Serializable {

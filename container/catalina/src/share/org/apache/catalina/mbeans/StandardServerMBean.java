@@ -32,7 +32,7 @@ import org.apache.commons.modeler.BaseModelMBean;
  * <code>org.apache.catalina.core.StandardServer</code> component.</p>
  *
  * @author Amy Roh
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: StandardServerMBean.java 939527 2010-04-30 00:43:48Z kkolinko $
  */
 
 public class StandardServerMBean extends BaseModelMBean {
@@ -81,7 +81,7 @@ public class StandardServerMBean extends BaseModelMBean {
         Server server = ServerFactory.getServer();
         if (server instanceof StandardServer) {
             try {
-                ((StandardServer) server).store();
+                ((StandardServer) server).storeConfig();
             } catch (Exception e) {
                 throw new MBeanException(e, "Error updating conf/server.xml");
             }

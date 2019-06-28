@@ -40,7 +40,7 @@ import java.util.TimeZone;
  *
  * @author Bip Thelin
  * @author Dan Sandberg
- * @version $Revision: 466595 $, $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Strftime.java 939526 2010-04-30 00:39:28Z kkolinko $
  */
 public class Strftime {
     protected static Properties translate;
@@ -120,8 +120,8 @@ public class Strftime {
     /**
      * Create an instance of this date formatting class
      * 
-     * @param origFormat The strftime-style formatting string
-     * @param locale The locale to use for locale-specific conversions
+     * @param origFormat the strftime-style formatting string
+     * @param locale the locale to use for locale-specific conversions
      */
     public Strftime( String origFormat, Locale locale ) {
         String convertedFormat = convertDateFormat( origFormat );
@@ -150,7 +150,7 @@ public class Strftime {
     /**
      * Change the timezone used to format dates
      *
-     * @see java.util.TimeZone
+     * @see SimpleDateFormat#setTimeZone
      */
     public void setTimeZone( TimeZone timeZone ) {
         simpleDateFormat.setTimeZone( timeZone );
@@ -222,11 +222,14 @@ public class Strftime {
     }
 
     /**
-     * try to get the Java Date/Time formating associated with
-     * the C standard provided
+     * Try to get the Java Date/Time formatting associated with
+     * the C standard provided.
      *
-     * @param pattern The C equivalent to translate
-     * @return The Java formatting rule to use
+     * @param buf The buffer
+     * @param pattern The date/time pattern
+     * @param index The char index
+     * @param oldInside Flag value
+     * @return True if new is inside buffer
      */
     protected boolean translateCommand( StringBuffer buf, String pattern, int index, boolean oldInside ) {
         char firstChar = pattern.charAt( index );

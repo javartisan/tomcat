@@ -1,21 +1,19 @@
 #!/bin/sh
 
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-#  Licensed to the Apache Software Foundation (ASF) under one or more
-#  contributor license agreements.  See the NOTICE file distributed with
-#  this work for additional information regarding copyright ownership.
-#  The ASF licenses this file to You under the Apache License, Version 2.0
-#  (the "License"); you may not use this file except in compliance with
-#  the License.  You may obtain a copy of the License at
-# 
-#      http://www.apache.org/licenses/LICENSE-2.0
-# 
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 # -----------------------------------------------------------------------------
 # Script for Jasper compiler
@@ -32,13 +30,15 @@
 #   JAVA_OPTS     (Optional) Java runtime options used when the "start",
 #                 "stop", or "run" command is executed.
 #
-# $Id: jasper.sh 743377 2009-02-11 16:37:50Z markt $
+# $Id: jasper.sh 966908 2010-07-22 23:57:08Z rjung $
 # -----------------------------------------------------------------------------
 
 # OS specific support.  $var _must_ be set to either true or false.
 cygwin=false
+os400=false
 case "`uname`" in
 CYGWIN*) cygwin=true;;
+OS400*) os400=true;;
 esac
 
 # resolve links - $0 may be a softlink
@@ -105,6 +105,16 @@ if [ "$1" = "jspc" ] ; then
   exec "$_RUNJAVA" $JAVA_OPTS $JASPER_OPTS \
     -Djava.endorsed.dirs="$JAVA_ENDORSED_DIRS" -classpath "$CLASSPATH" \
     -Djasper.home="$JASPER_HOME" \
+    -Dcatalina.home="$JASPER_HOME" \
+    org.apache.jasper.JspC "$@"
+
+elif [ "$1" = "debug" ] ; then
+
+  shift
+  exec "$_RUNJDB" $JAVA_OPTS $JASPER_OPTS \
+    -Djava.endorsed.dirs="$JAVA_ENDORSED_DIRS" -classpath "$CLASSPATH" \
+    -Djasper.home="$JASPER_HOME" \
+    -Dcatalina.home="$JASPER_HOME" \
     org.apache.jasper.JspC "$@"
 
 else

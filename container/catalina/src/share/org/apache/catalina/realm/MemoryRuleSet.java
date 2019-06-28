@@ -19,9 +19,9 @@
 package org.apache.catalina.realm;
 
 
-import org.apache.commons.digester.Digester;
-import org.apache.commons.digester.Rule;
-import org.apache.commons.digester.RuleSetBase;
+import org.apache.tomcat.util.digester.Digester;
+import org.apache.tomcat.util.digester.Rule;
+import org.apache.tomcat.util.digester.RuleSetBase;
 import org.xml.sax.Attributes;
 
 
@@ -30,7 +30,7 @@ import org.xml.sax.Attributes;
  * XML file processed by <code>MemoryRealm</code>.</p>
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: MemoryRuleSet.java 939529 2010-04-30 00:51:34Z kkolinko $
  */
 
 public class MemoryRuleSet extends RuleSetBase {
@@ -104,11 +104,19 @@ final class MemoryUserRule extends Rule {
 
 
     /**
+     * Construct a new instance of this <code>Rule</code>.
+     */
+    public MemoryUserRule() {
+    }
+
+
+    /**
      * Process a <code>&lt;user&gt;</code> element from the XML database file.
      *
      * @param attributes The attribute list for this element
      */
-    public void begin(Attributes attributes) throws Exception {
+    public void begin(String namespace, String name, Attributes attributes)
+        throws Exception {
 
         String username = attributes.getValue("name");
         if (username == null) {

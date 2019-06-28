@@ -23,8 +23,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-
-import org.apache.struts.Globals;
 import org.apache.struts.action.Action;
 import org.apache.struts.action.ActionForm;
 import org.apache.struts.action.ActionForward;
@@ -42,7 +40,7 @@ import org.apache.webapp.admin.Lists;
  * Valve </em> transactions, based on the type of Valve.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: EditValveAction.java 939536 2010-04-30 01:21:08Z kkolinko $
  */
 
 public class EditValveAction extends Action {
@@ -54,15 +52,6 @@ public class EditValveAction extends Action {
     private MBeanServer mBServer = null;
     
 
-    /**
-     * The MessageResources we will be retrieving messages from.
-     */
-    private MessageResources resources = null;
-    
-    private HttpSession session = null;
-    private Locale locale = null;
-    private String parent = null;
-    
     // --------------------------------------------------------- Public Methods
     
     /**
@@ -87,11 +76,8 @@ public class EditValveAction extends Action {
         throws IOException, ServletException {
         
         // Acquire the resources that we need
-        session = request.getSession();
-        locale = (Locale) session.getAttribute(Globals.LOCALE_KEY);
-        if (resources == null) {
-            resources = getResources(request);
-        }
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
         
         // Acquire a reference to the MBeanServer containing our MBeans
         try {
@@ -107,14 +93,13 @@ public class EditValveAction extends Action {
             vname = new ObjectName(request.getParameter("select"));
         } catch (Exception e) {
             String message =
-                resources.getMessage("error.valveName.bad",
+                resources.getMessage(locale, "error.valveName.bad",
                                      request.getParameter("select"));
             getServlet().log(message);
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, message);
             return (null);
         }
         
-       parent = request.getParameter("parent");
        String valveType = null;
        String attribute = null;
        
@@ -139,15 +124,15 @@ public class EditValveAction extends Action {
 
         // Forward to the appropriate valve display page        
         if ("AccessLogValve".equalsIgnoreCase(valveType)) {
-               setUpAccessLogValve(vname, response);
+               setUpAccessLogValve(vname, request, response);
         } else if ("RemoteAddrValve".equalsIgnoreCase(valveType)) {
-               setUpRemoteAddrValve(vname, response);
+               setUpRemoteAddrValve(vname, request, response);
         } else if ("RemoteHostValve".equalsIgnoreCase(valveType)) {
-                setUpRemoteHostValve(vname, response);
+                setUpRemoteHostValve(vname, request, response);
         } else if ("RequestDumperValve".equalsIgnoreCase(valveType)) {
-               setUpRequestDumperValve(vname, response);
+               setUpRequestDumperValve(vname, request, response);
         } else if ("SingleSignOn".equalsIgnoreCase(valveType)) {
-               setUpSingleSignOnValve(vname, response);
+               setUpSingleSignOnValve(vname, request, response);
         }
        
         
@@ -155,10 +140,14 @@ public class EditValveAction extends Action {
                 
     }
 
-    private void setUpAccessLogValve(ObjectName vname,
+    private void setUpAccessLogValve(ObjectName vname, HttpServletRequest request,
                                         HttpServletResponse response) 
     throws IOException {
         // Fill in the form values for display and editing
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
+        String parent = request.getParameter("parent");
         AccessLogValveForm valveFm = new AccessLogValveForm();
         session.setAttribute("accessLogValveForm", valveFm);
         valveFm.setAdminAction("Edit");
@@ -177,15 +166,11 @@ public class EditValveAction extends Action {
         sb.append("Valve");
         valveFm.setNodeLabel(sb.toString());
         valveFm.setValveType(valveType);
-        valveFm.setDebugLvlVals(Lists.getDebugLevels());
         valveFm.setBooleanVals(Lists.getBooleanValues());
         String attribute = null;
         try {
             
             // Copy scalar properties
-            attribute = "debug";
-            valveFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(vname, attribute)).toString());
             attribute = "directory";
             valveFm.setDirectory
                 ((String) mBServer.getAttribute(vname, attribute));
@@ -216,10 +201,12 @@ public class EditValveAction extends Action {
         }     
     }
 
-    private void setUpRequestDumperValve(ObjectName vname,
+    private void setUpRequestDumperValve(ObjectName vname, HttpServletRequest request,
                                         HttpServletResponse response) 
     throws IOException {
         // Fill in the form values for display and editing
+        HttpSession session = request.getSession();
+        String parent = request.getParameter("parent");
         RequestDumperValveForm valveFm = new RequestDumperValveForm();
         session.setAttribute("requestDumperValveForm", valveFm);
         valveFm.setAdminAction("Edit");
@@ -233,10 +220,12 @@ public class EditValveAction extends Action {
         valveFm.setValveType(valveType);
     }
 
-    private void setUpSingleSignOnValve(ObjectName vname,
+    private void setUpSingleSignOnValve(ObjectName vname, HttpServletRequest request,
                                         HttpServletResponse response) 
     throws IOException {
         // Fill in the form values for display and editing
+        HttpSession session = request.getSession();
+        String parent = request.getParameter("parent");
         SingleSignOnValveForm valveFm = new SingleSignOnValveForm();
         session.setAttribute("singleSignOnValveForm", valveFm);
         valveFm.setAdminAction("Edit");
@@ -248,30 +237,17 @@ public class EditValveAction extends Action {
         sb.append(")");
         valveFm.setNodeLabel(sb.toString());
         valveFm.setValveType(valveType);
-        valveFm.setDebugLvlVals(Lists.getDebugLevels());
-        String attribute = null;
-        try {
-            
-            // Copy scalar properties
-            attribute = "debug";
-            valveFm.setDebugLvl
-                (((Integer) mBServer.getAttribute(vname, attribute)).toString());
-        } catch (Throwable t) {
-            getServlet().log
-                (resources.getMessage(locale, "users.error.attribute.get",
-                                      attribute), t);
-            response.sendError
-                (HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-                 resources.getMessage(locale, "users.error.attribute.get",
-                                      attribute));
-        }     
     }
 
 
-    private void setUpRemoteAddrValve(ObjectName vname,
+    private void setUpRemoteAddrValve(ObjectName vname, HttpServletRequest request,
                                         HttpServletResponse response) 
     throws IOException {
         // Fill in the form values for display and editing
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
+        String parent = request.getParameter("parent");
         RemoteAddrValveForm valveFm = new RemoteAddrValveForm();
         session.setAttribute("remoteAddrValveForm", valveFm);
         valveFm.setAdminAction("Edit");
@@ -305,10 +281,14 @@ public class EditValveAction extends Action {
         }     
     }
 
-    private void setUpRemoteHostValve(ObjectName vname,
+    private void setUpRemoteHostValve(ObjectName vname, HttpServletRequest request,
                                         HttpServletResponse response) 
     throws IOException {
         // Fill in the form values for display and editing
+        HttpSession session = request.getSession();
+        Locale locale = getLocale(request);
+        MessageResources resources = getResources(request);
+        String parent = request.getParameter("parent");
         RemoteHostValveForm valveFm = new RemoteHostValveForm();
         session.setAttribute("remoteHostValveForm", valveFm);
         valveFm.setAdminAction("Edit");

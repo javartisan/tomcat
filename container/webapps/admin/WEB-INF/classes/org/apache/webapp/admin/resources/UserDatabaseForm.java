@@ -18,15 +18,15 @@
 package org.apache.webapp.admin.resources;
 
 import javax.servlet.http.HttpServletRequest;
-import org.apache.struts.action.ActionMessage;
 import org.apache.struts.action.ActionErrors;
 import org.apache.struts.action.ActionMapping;
+import org.apache.struts.action.ActionMessage;
 
 /**
  * Form bean for the individual user database page.
  *
  * @author Manveen Kaur
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: UserDatabaseForm.java 939536 2010-04-30 01:21:08Z kkolinko $
  * @since 4.1
  */
 
@@ -38,6 +38,24 @@ public final class UserDatabaseForm extends BaseForm {
 
     // ------------------------------------------------------------- Properties
 
+    /**
+     * The domain of this data source.
+     */
+    private String domain = null;
+    
+    /**
+     * Return the domain of the data source this bean refers to.
+     */
+    public String getDomain() {
+        return this.domain;
+    }
+
+    /**
+     * Set the domain of the data source this bean refers to.
+     */
+    public void setDomain(String domain) {
+        this.domain = domain;
+    }
 
     /**
      * The name of the associated entry.

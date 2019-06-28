@@ -27,7 +27,7 @@ import org.apache.tools.ant.BuildException;
  * Tomcat manager application.
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: RolesTask.java 939523 2010-04-30 00:28:42Z kkolinko $
  * @since 4.1
  */
 public class RolesTask extends AbstractCatalinaTask {

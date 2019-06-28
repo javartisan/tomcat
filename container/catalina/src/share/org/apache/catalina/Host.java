@@ -19,6 +19,7 @@
 package org.apache.catalina;
 
 
+
 /**
  * A <b>Host</b> is a Container that represents a virtual host in the
  * Catalina servlet engine.  It is useful in the following types of scenarios:
@@ -40,7 +41,7 @@ package org.apache.catalina;
  * of Context (representing an individual servlet context).
  *
  * @author Craig R. McClanahan
- * @version $Revision: 466595 $ $Date: 2006-10-21 23:24:41 +0100 (Sat, 21 Oct 2006) $
+ * @version $Id: Host.java 939531 2010-04-30 00:54:41Z kkolinko $
  */
 
 public interface Host extends Container {
@@ -85,7 +86,7 @@ public interface Host extends Container {
     /**
      * Return the value of the auto deploy flag.  If true, it indicates that 
      * this host's child webapps should be discovred and automatically 
-     * deployed.
+     * deployed dynamically.
      */
     public boolean getAutoDeploy();
 
@@ -99,18 +100,35 @@ public interface Host extends Container {
 
 
     /**
-     * Set the DefaultContext
+     * Return the Java class name of the context configuration class
+     * for new web applications.
+     */
+    public String getConfigClass();
+
+    
+    /**
+     * Set the Java class name of the context configuration class
      * for new web applications.
      *
-     * @param defaultContext The new DefaultContext
+     * @param configClass The new context configuration class
      */
-    public void addDefaultContext(DefaultContext defaultContext);
+    public void setConfigClass(String configClass);
+
+        
+    /**
+     * Return the value of the deploy on startup flag.  If true, it indicates 
+     * that this host's child webapps should be discovred and automatically 
+     * deployed.
+     */
+    public boolean getDeployOnStartup();
 
 
     /**
-     * Retrieve the DefaultContext for new web applications.
+     * Set the deploy on startup flag value for this host.
+     * 
+     * @param deployOnStartup The new deploy on startup flag
      */
-    public DefaultContext getDefaultContext();
+    public void setDeployOnStartup(boolean deployOnStartup);
 
 
     /**
@@ -131,15 +149,39 @@ public interface Host extends Container {
     public void setName(String name);
 
 
-    // --------------------------------------------------------- Public Methods
+    /**
+     * Get the server.xml &lt;host&gt; attribute's xmlNamespaceAware.
+     * @return true if namespace awarenes is enabled.
+     *
+     */
+    public boolean getXmlNamespaceAware();
 
 
     /**
-     * Import the DefaultContext config into a web application context.
+     * Get the server.xml &lt;host&gt; attribute's xmlValidation.
+     * @return true if validation is enabled.
      *
-     * @param context web application context to import default context
      */
-    public void importDefaultContext(Context context);
+    public boolean getXmlValidation();
+
+
+    /**
+     * Set the validation feature of the XML parser used when
+     * parsing xml instances.
+     * @param xmlValidation true to enable xml instance validation
+     */
+    public void setXmlValidation(boolean xmlValidation);
+
+
+   /**
+     * Set the namespace aware feature of the XML parser used when
+     * parsing xml instances.
+     * @param xmlNamespaceAware true to enable namespace awareness
+     */
+    public void setXmlNamespaceAware(boolean xmlNamespaceAware);
+
+
+    // --------------------------------------------------------- Public Methods
 
 
     /**

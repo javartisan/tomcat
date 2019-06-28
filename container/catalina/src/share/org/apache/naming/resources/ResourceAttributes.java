@@ -17,22 +17,24 @@
 
 package org.apache.naming.resources;
 
-import java.util.Vector;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.text.SimpleDateFormat;
-import java.text.ParseException;
-import javax.naming.NamingException;
+import java.util.TimeZone;
+import java.util.Vector;
+
 import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
+import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.BasicAttribute;
-import javax.naming.directory.Attribute;
 
 /**
  * Attributes implementation.
  * 
  * @author <a href="mailto:remm@apache.org">Remy Maucherat</a>
- * @version $Revision: 466595 $
+ * @version $Revision: 466608 $
  */
 public class ResourceAttributes implements Attributes {
     
@@ -138,12 +140,28 @@ public class ResourceAttributes implements Attributes {
      */
     protected static final SimpleDateFormat formats[] = {
         new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US),
-        new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", Locale.US),
         new SimpleDateFormat("EEEEEE, dd-MMM-yy HH:mm:ss zzz", Locale.US),
         new SimpleDateFormat("EEE MMMM d HH:mm:ss yyyy", Locale.US)
     };
     
     
+    protected final static TimeZone gmtZone = TimeZone.getTimeZone("GMT");
+
+
+    /**
+     * GMT timezone - all HTTP dates are on GMT
+     */
+    static {
+
+        format.setTimeZone(gmtZone);
+
+        formats[0].setTimeZone(gmtZone);
+        formats[1].setTimeZone(gmtZone);
+        formats[2].setTimeZone(gmtZone);
+
+    }
+
+
     // ----------------------------------------------------------- Constructors
     
     
@@ -200,6 +218,18 @@ public class ResourceAttributes implements Attributes {
      */
     protected Date lastModifiedDate = null;
 
+    
+    /**
+     * Last modified date in HTTP format.
+     */
+    protected String lastModifiedHttp = null;
+    
+
+    /**
+     * MIME type.
+     */
+    protected String mimeType = null;
+    
 
     /**
      * Name.
@@ -230,8 +260,6 @@ public class ResourceAttributes implements Attributes {
 
     /**
      * Is collection.
-     * 
-     * @return value of the collection flag
      */
     public boolean isCollection() {
         if (attributes != null) {
@@ -244,6 +272,8 @@ public class ResourceAttributes implements Attributes {
     
     /**
      * Set collection flag.
+     *
+     * @param collection New flag value
      */
     public void setCollection(boolean collection) {
         this.collection = collection;
@@ -555,6 +585,50 @@ public class ResourceAttributes implements Attributes {
     
     
     /**
+     * @return Returns the lastModifiedHttp.
+     */
+    public String getLastModifiedHttp() {
+        if (lastModifiedHttp != null)
+            return lastModifiedHttp;
+        Date modifiedDate = getLastModifiedDate();
+        if (modifiedDate == null) {
+            modifiedDate = getCreationDate();
+        }
+        if (modifiedDate == null) {
+            modifiedDate = new Date();
+        }
+        synchronized (format) {
+            lastModifiedHttp = format.format(modifiedDate);
+        }
+        return lastModifiedHttp;
+    }
+    
+    
+    /**
+     * @param lastModifiedHttp The lastModifiedHttp to set.
+     */
+    public void setLastModifiedHttp(String lastModifiedHttp) {
+        this.lastModifiedHttp = lastModifiedHttp;
+    }
+    
+    
+    /**
+     * @return Returns the mimeType.
+     */
+    public String getMimeType() {
+        return mimeType;
+    }
+    
+    
+    /**
+     * @param mimeType The mimeType to set.
+     */
+    public void setMimeType(String mimeType) {
+        this.mimeType = mimeType;
+    }
+
+    
+    /**
      * Get name.
      * 
      * @return Name value
@@ -679,6 +753,18 @@ public class ResourceAttributes implements Attributes {
             attributes.put(ETAG, eTag);
     }
 
+    
+    /**
+     * Return the canonical path of the resource, to possibly be used for 
+     * direct file serving. Implementations which support this should override
+     * it to return the file path.
+     * 
+     * @return The canonical path of the resource
+     */
+    public String getCanonicalPath() {
+        return null;
+    }
+    
     
     // ----------------------------------------------------- Attributes Methods
 
